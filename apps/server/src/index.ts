@@ -1,10 +1,12 @@
 import { sql } from "drizzle-orm";
 import { db } from "../../../packages/db/src/index.js";
+import { rooms } from "../../../packages/db/src/schema.js";
 // import { logError, logInfo, logWarn } from "./logger.js";
 import { app } from "./app.js";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import { setupSocketIO } from "./socket.js";
+import cron from "node-cron";
 
 const startupStart = Date.now();
 const PORT = Number(process.env.PORT) || 3003;
@@ -18,6 +20,16 @@ const io = new Server(server, {
 });
 
 setupSocketIO(io);
+
+// Schedule room cleanup every hour
+cron.schedule('0 * * * *', async () => {
+  try {
+    await db.execute(sql`update rooms set deleted_at = now() where created_at < now() - interval '24 hours' and deleted_at is null`);
+    console.log('Room cleanup completed');
+  } catch (error) {
+    console.error('Error cleaning up rooms:', error);
+  }
+});
 
 server.listen(PORT, "0.0.0.0", async () => {
   // Configuration validation

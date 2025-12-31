@@ -113,8 +113,8 @@
 | Bluetooth headset output routing (Audio Output API) | High     | Completed    | You            |
 | Live chat-like UI with bubbles (You / Other) | High     | Completed    | You            |
 | Mobile-responsive conversation screen      | High     | Completed    | You            |
-| Reconnection handling + status indicators | Medium   | Not started  | Kilo           |
-| Room expiration (24h auto-cleanup)         | Medium   | Not started  | Kilo           |
+| Reconnection handling + status indicators | Medium   | Completed    | Kilo           |
+| Room expiration (24h auto-cleanup)         | Medium   | Completed    | Kilo           |
 
 ## Next Steps (MVP Roadmap)
 

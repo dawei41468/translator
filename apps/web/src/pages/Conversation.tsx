@@ -18,7 +18,7 @@ const Conversation = () => {
   const navigate = useNavigate();
   const [socket, setSocket] = useState<Socket | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [isConnected, setIsConnected] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected' | 'reconnecting'>('connecting');
   const [isRecording, setIsRecording] = useState(false);
   const [audioEnabled, setAudioEnabled] = useState(true);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
@@ -44,13 +44,26 @@ const Conversation = () => {
     });
 
     socketInstance.on('connect', () => {
-      setIsConnected(true);
+      setConnectionStatus('connected');
       // Join the room
       socketInstance.emit('join-room', code);
     });
 
     socketInstance.on('disconnect', () => {
-      setIsConnected(false);
+      setConnectionStatus('disconnected');
+    });
+
+    socketInstance.on('reconnect_attempt', () => {
+      setConnectionStatus('reconnecting');
+    });
+
+    socketInstance.on('reconnect', () => {
+      setConnectionStatus('connected');
+      toast.success('Reconnected to conversation');
+    });
+
+    socketInstance.on('connect_error', () => {
+      setConnectionStatus('disconnected');
     });
 
     socketInstance.on('joined-room', (_data: any) => {
@@ -63,6 +76,10 @@ const Conversation = () => {
 
     socketInstance.on('user-left', (_data: any) => {
       toast.info('Other participant left');
+    });
+
+    socketInstance.on('user-reconnected', (_data: any) => {
+      toast.success('Other participant reconnected');
     });
 
     socketInstance.on('translated-message', (data: any) => {
@@ -206,8 +223,14 @@ const Conversation = () => {
       {/* Header */}
       <div className="bg-white border-b p-4 sm:p-6 flex items-center justify-between">
         <div className="flex items-center space-x-2">
-          <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+          <div className={`w-3 h-3 rounded-full ${
+            connectionStatus === 'connected' ? 'bg-green-500' :
+            connectionStatus === 'connecting' ? 'bg-yellow-500' :
+            connectionStatus === 'reconnecting' ? 'bg-orange-500' :
+            'bg-red-500'
+          }`}></div>
           <span className="font-medium">Room: {roomData.code}</span>
+          {connectionStatus === 'reconnecting' && <span className="text-sm text-orange-600">Reconnecting...</span>}
         </div>
         <div className="flex items-center space-x-2">
           <button
@@ -261,7 +284,7 @@ const Conversation = () => {
         <div className="flex justify-center">
           <button
             onClick={toggleRecording}
-            disabled={!isConnected}
+            disabled={connectionStatus !== 'connected'}
             className={`px-6 py-3 sm:px-8 sm:py-4 rounded-full font-medium ${
               isRecording
                 ? 'bg-red-500 text-white animate-pulse'

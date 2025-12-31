@@ -5,8 +5,7 @@ import { eq } from "drizzle-orm";
 import { db } from "../../../../packages/db/src/index.js";
 import { users } from "../../../../packages/db/src/schema.js";
 import { authenticate, parseCookies } from "../middleware/auth.js";
-import { sanitizeInput } from "../middleware/sanitizeInput.js";
-import { logError, logInfo, getRequestContext } from "../logger.js";
+// import { logError, logInfo, getRequestContext } from "../logger.js";
 
 const router = express.Router();
 
@@ -41,17 +40,17 @@ router.get("/", async (req, res) => {
       return res.json({ user: null });
     }
 
-    if (!user.isActive) {
-      return res.json({ user: null });
-    }
+    // if (!user.isActive) {
+    //   return res.json({ user: null });
+    // }
 
     return res.json({
       user: {
         id: user.id,
         name: user.name,
         email: user.email,
-        businessUnit: user.businessUnit,
-        role: user.role,
+        // businessUnit: user.businessUnit,
+        // role: user.role,
         language: user.language,
       },
     });
@@ -60,8 +59,8 @@ router.get("/", async (req, res) => {
   }
 });
 
-router.put("/language", authenticate, sanitizeInput, async (req, res) => {
-  const context = getRequestContext(req);
+router.put("/language", authenticate, async (req, res) => {
+  // const context = getRequestContext(req);
   try {
     const { language } = req.body;
     if (!language || typeof language !== "string" || !["en", "zh"].includes(language)) {
@@ -70,11 +69,11 @@ router.put("/language", authenticate, sanitizeInput, async (req, res) => {
 
     await db.update(users).set({ language }).where(eq(users.id, req.user!.id));
 
-    logInfo("User updated language", { ...context, language });
+    // logInfo("User updated language", { ...context, language });
 
     res.json({ message: "Language updated" });
   } catch (err) {
-    logError("Update language error", err as Error, context);
+    // logError("Update language error", err as Error, context);
     res.status(500).json({ error: "Server error" });
   }
 });

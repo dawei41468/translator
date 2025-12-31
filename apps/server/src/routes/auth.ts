@@ -6,7 +6,7 @@ import { z, ZodError } from "zod";
 import { eq } from "drizzle-orm";
 import { db } from "../../../../packages/db/src/index.js";
 import { users } from "../../../../packages/db/src/schema.js";
-import { logInfo, logWarn, logError, getRequestContext } from "../logger.js";
+// import { logInfo, logWarn, logError, getRequestContext } from "../middleware/logger.js";
 import { authenticate } from "../middleware/auth.js";
 
 const router = express.Router();
@@ -41,18 +41,18 @@ router.post("/login", async (req, res) => {
     typeof body === "object" && body !== null && typeof (body as { password?: unknown }).password === "string"
       ? (body as { password: string }).password
       : undefined;
-  const context = getRequestContext(req);
+  // const context = getRequestContext(req);
 
   if (!email || !password) {
     const passwordLength = typeof password === "string" ? password.length : null;
-    logWarn("Login attempt with missing fields", {
-      ...context,
-      email,
-      contentType: req.headers["content-type"],
-      bodyKeys: typeof body === "object" && body !== null ? Object.keys(body as Record<string, unknown>) : null,
-      passwordType: typeof password,
-      passwordLength,
-    });
+    // logWarn("Login attempt with missing fields", {
+    //   ...context,
+    //   email,
+    //   contentType: req.headers["content-type"],
+    //   bodyKeys: typeof body === "object" && body !== null ? Object.keys(body as Record<string, unknown>) : null,
+    //   passwordType: typeof password,
+    //   passwordLength,
+    // });
     return res.status(400).json({ error: "Missing fields" });
   }
 
@@ -62,18 +62,18 @@ router.post("/login", async (req, res) => {
     });
 
     if (matchingUsers.length > 1) {
-      logError(
-        "Duplicate email detected during login",
-        new Error("Duplicate email"),
-        { ...context, email }
-      );
+      // logError(
+      //   "Duplicate email detected during login",
+      //   new Error("Duplicate email"),
+      //   { ...context, email }
+      // );
       return res.status(409).json({ error: "Multiple accounts share this email. Contact an admin." });
     }
 
     const user = matchingUsers[0];
 
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
-      logWarn("Failed login attempt", { ...context, email });
+      // logWarn("Failed login attempt", { ...context, email });
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
@@ -97,7 +97,7 @@ router.post("/login", async (req, res) => {
       path: "/",
     });
 
-    logInfo("User logged in successfully", { ...context, userId: user.id });
+    // logInfo("User logged in successfully", { ...context, userId: user.id });
 
     res.json({
       user: {
@@ -108,7 +108,87 @@ router.post("/login", async (req, res) => {
       },
     });
   } catch (err) {
-    logError("Login error", err as Error, context);
+    // logError("Login error", err as Error, context);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+router.post("/register", async (req, res) => {
+  const body: unknown = req.body ?? {};
+  const email =
+    typeof body === "object" && body !== null && typeof (body as { email?: unknown }).email === "string"
+      ? (body as { email: string }).email
+      : undefined;
+  const password =
+    typeof body === "object" && body !== null && typeof (body as { password?: unknown }).password === "string"
+      ? (body as { password: string }).password
+      : undefined;
+  const name =
+    typeof body === "object" && body !== null && typeof (body as { name?: unknown }).name === "string"
+      ? (body as { name: string }).name
+      : undefined;
+
+  if (!email || !password || !name) {
+    return res.status(400).json({ error: "Missing fields" });
+  }
+
+  if (password.length < 8) {
+    return res.status(400).json({ error: "Password must be at least 8 characters" });
+  }
+
+  try {
+    // Check if user already exists
+    const existingUser = await db.query.users.findFirst({
+      where: eq(users.email, email.toLowerCase()),
+    });
+
+    if (existingUser) {
+      return res.status(409).json({ error: "User already exists" });
+    }
+
+    // Hash password
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    // Create user
+    const newUser = await db.insert(users).values({
+      email: email.toLowerCase(),
+      name: name.trim(),
+      passwordHash,
+      language: "en",
+    }).returning();
+
+    const user = newUser[0];
+
+    // Generate token
+    const token = jwt.sign(
+      {
+        userId: user.id,
+        email: user.email,
+        name: user.name,
+        language: user.language,
+      },
+      JWT_SECRET,
+      { expiresIn: "30d" }
+    );
+
+    const isProd = process.env.NODE_ENV === "production";
+    res.cookie(AUTH_COOKIE_NAME, token, {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: "lax",
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+      path: "/",
+    });
+
+    res.json({
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        language: user.language,
+      },
+    });
+  } catch (err) {
     res.status(500).json({ error: "Server error" });
   }
 });
@@ -126,7 +206,7 @@ router.post("/logout", (req, res) => {
 });
 
 router.post("/change-password", authenticate, async (req, res) => {
-  const context = getRequestContext(req);
+  // const context = getRequestContext(req);
   try {
     const data = changePasswordSchema.parse(req.body);
 
@@ -166,13 +246,13 @@ router.post("/change-password", authenticate, async (req, res) => {
       path: "/",
     });
 
-    logInfo("User changed password", { ...context, userId: user.id });
+    // logInfo("User changed password", { ...context, userId: user.id });
     return res.json({ message: "Password updated" });
   } catch (err) {
     if (err instanceof ZodError) {
       return res.status(400).json({ error: "Invalid input", details: (err as ZodError).errors });
     }
-    logError("Change password error", err as Error, context);
+    // logError("Change password error", err as Error, context);
     return res.status(500).json({ error: "Server error" });
   }
 });

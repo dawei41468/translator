@@ -1,19 +1,11 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { apiClient } from "./api";
-import i18n from "./i18n";
-
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  businessUnit: string;
-  role: string;
-  language: string;
-}
+import type { AuthUser } from "./types";
 
 interface AuthContextType {
-  user: User | null;
+  user: AuthUser | null;
   login: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string, name: string) => Promise<void>;
   logout: () => void;
   isLoading: boolean;
   isAuthenticated: boolean;
@@ -22,7 +14,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -31,9 +23,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .getMe()
       .then(({ user }) => {
         setUser(user);
-        if (user?.language) {
-          i18n.changeLanguage(user.language);
-        }
       })
       .catch(() => {
         setUser(null);
@@ -47,9 +36,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const { user } = await apiClient.login({ email, password });
       setUser(user);
-      if (user.language) {
-        i18n.changeLanguage(user.language);
-      }
+    } catch (error) {
+      throw error;
+    }
+  };
+
+  const register = async (email: string, password: string, name: string) => {
+    try {
+      const { user } = await apiClient.register({ email, password, name });
+      setUser(user);
     } catch (error) {
       throw error;
     }
@@ -63,6 +58,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const value: AuthContextType = {
     user,
     login,
+    register,
     logout,
     isLoading,
     isAuthenticated: !!user,

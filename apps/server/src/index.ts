@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { db } from "../../../packages/db/src/index.js";
-import { logError, logInfo, logWarn } from "./logger.js";
+// import { logError, logInfo, logWarn } from "./logger.js";
 import { app } from "./app.js";
 
 const startupStart = Date.now();
@@ -18,7 +18,7 @@ app.listen(PORT, "0.0.0.0", async () => {
     dbStatus = 'connected';
   } catch (error) {
     dbStatus = 'failed';
-    logError('Database connection failed during startup', error as Error);
+    console.error('Database connection failed during startup', error);
   }
 
   // Service status
@@ -27,7 +27,7 @@ app.listen(PORT, "0.0.0.0", async () => {
   // Startup time
   const startupTime = Date.now() - startupStart;
 
-  logInfo('Server started successfully', {
+  console.log('Server started successfully', {
     version: '1.0.0',
     environment: process.env.NODE_ENV || 'development',
     port: PORT,
@@ -56,9 +56,9 @@ app.listen(PORT, "0.0.0.0", async () => {
 
   // Log warnings for missing config
   if (missingVars.length > 0) {
-    logWarn('Server started with missing configuration', { missingVars });
+    console.warn('Server started with missing configuration', { missingVars });
   }
   if (dbStatus === 'failed') {
-    logError('Server started but database connection failed');
+    console.error('Server started but database connection failed');
   }
 });

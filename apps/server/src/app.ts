@@ -3,9 +3,6 @@ import cors from "cors";
 import { json } from "express";
 import path from "path";
 
-import { requestLogger } from "./middleware/logger.js";
-import { apiLimiter } from "./middleware/rateLimiters.js";
-
 import { authRouter } from "./routes/auth.js";
 import { meRouter } from "./routes/me.js";
 
@@ -42,7 +39,6 @@ export const app = express();
 app.use(cors({ origin: true, credentials: true }));
 app.use(json({ limit: "10kb" }));
 app.use(express.urlencoded({ extended: true, limit: "10kb" }));
-app.use(requestLogger);
 
 app.use(
   "/assets",
@@ -69,7 +65,6 @@ app.use(
 // ────── AUTH ENDPOINTS ──────
 app.use("/api/auth", authRouter);
 
-app.use("/api/me", apiLimiter);
 app.use("/api/me", meRouter);
 
 app.get("/api/health", (_, res) => res.json({ status: "ok" }));

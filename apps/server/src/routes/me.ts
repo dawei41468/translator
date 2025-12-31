@@ -63,7 +63,7 @@ router.put("/language", authenticate, async (req, res) => {
   // const context = getRequestContext(req);
   try {
     const { language } = req.body;
-    if (!language || typeof language !== "string" || !["en", "zh"].includes(language)) {
+    if (!language || typeof language !== "string" || !["en", "zh", "it", "de", "nl"].includes(language)) {
       return res.status(400).json({ error: "Invalid language" });
     }
 

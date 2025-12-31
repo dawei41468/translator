@@ -1,7 +1,7 @@
 import express from "express";
 import { db } from "../../../../packages/db/src/index.js";
 import { rooms, roomParticipants } from "../../../../packages/db/src/schema.js";
-import { eq } from "drizzle-orm";
+import { eq, lt, sql } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 
 const router = express.Router();
@@ -72,9 +72,9 @@ router.post("/join/:code", async (req, res) => {
       });
     }
 
-    // Check room capacity (max 2 for MVP)
+    // Check room capacity (max 10 for multi-user support)
     const participantCount = await db.$count(roomParticipants, eq(roomParticipants.roomId, room.id));
-    if (participantCount >= 2) {
+    if (participantCount >= 10) {
       return res.status(400).json({ error: "Room is full" });
     }
 
@@ -93,14 +93,14 @@ router.post("/join/:code", async (req, res) => {
   }
 });
 
-// Get room info
-router.get("/:id", async (req, res) => {
+// Get room info by code
+router.get("/:code", async (req, res) => {
   try {
-    const roomId = req.params.id;
+    const roomCode = req.params.code.toUpperCase();
     const userId = req.user!.id;
 
     const room = await db.query.rooms.findFirst({
-      where: eq(rooms.id, roomId),
+      where: eq(rooms.code, roomCode),
       with: {
         participants: {
           with: {
@@ -132,6 +132,26 @@ router.get("/:id", async (req, res) => {
   } catch (error) {
     console.error("Error getting room:", error);
     res.status(500).json({ error: "Failed to get room" });
+  }
+});
+
+// Cleanup expired rooms (24h old)
+router.delete("/cleanup", async (req, res) => {
+  try {
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    // Delete rooms older than 24 hours
+    const deletedRooms = await db.delete(rooms)
+      .where(lt(rooms.createdAt, twentyFourHoursAgo))
+      .returning();
+
+    res.json({
+      message: `Cleaned up ${deletedRooms.length} expired rooms`,
+      deletedCount: deletedRooms.length
+    });
+  } catch (error) {
+    console.error("Error cleaning up rooms:", error);
+    res.status(500).json({ error: "Failed to cleanup rooms" });
   }
 });
 

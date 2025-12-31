@@ -87,6 +87,31 @@ class ApiClient {
       body: JSON.stringify({ language }),
     });
   }
+
+  // Room endpoints
+  async createRoom() {
+    return this.request<{ roomId: string; roomCode: string }>("/api/rooms", {
+      method: "POST",
+    });
+  }
+
+  async joinRoom(code: string) {
+    return this.request<{ roomId: string; roomCode: string; alreadyJoined?: boolean }>(`/api/rooms/join/${code}`, {
+      method: "POST",
+    });
+  }
+
+  async getRoom(roomCode: string) {
+    return this.request<{
+      id: string;
+      code: string;
+      participants: Array<{
+        id: string;
+        name: string | null;
+        language: string | null;
+      }>;
+    }>(`/api/rooms/${roomCode}`);
+  }
 }
 
 export const apiClient = new ApiClient(API_BASE_URL);

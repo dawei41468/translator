@@ -3,7 +3,7 @@
 **Quick Summary**: A Progressive Web App (PWA) that enables seamless two-way real-time translated conversations between two users on different devices (iOS/Android). Users join a private room, select their language, speak naturally (via device mic or Bluetooth headset), and instantly hear/see the translation in their own language through speaker or Bluetooth headset.
 
 **Live URL**: https://translator.studiodtw.net  
-**Current Progress**: 50% (Auth/infra/deploy/db/backend-core complete — December 31, 2025)
+**Current Progress**: 90% (Auth/infra/deploy/db/backend-core/frontend-core complete — December 31, 2025)
 **Target MVP**: End of January 2026
 
 **Engineering Patterns (Canonical)**: Follow existing patterns exactly (see `CODEBASE-PATTERNS.md`) for coding conventions, API design, auth, deployment, and architectural decisions.
@@ -16,15 +16,12 @@
 4. One device per user — each participant uses their own phone; translation happens live across devices.
 5. Bluetooth headset support — input from headset mic, output to headset (user-toggled).
 
-## Targeted Languages (Priority Order)
+## Targeted Languages (MVP - Priority Order)
 1. Chinese — Mandarin (Simplified primary; Traditional secondary)
 2. English
 3. Italian
 4. German
 5. Dutch
-6. Spanish
-7. Russian
-8. Japanese
 
 ## Current Status (December 31, 2025)
 
@@ -34,7 +31,7 @@
 | Authentication        | 100%     | Complete (JWT cookie, /api/auth/*, /me, rate limit) |
 | Deployment            | 100%     | Complete (deploy.sh, ecosystem.config.cjs port 4003, PM2) |
 | Database Schema       | 100%     | Complete (users/sessions/rooms/room_participants w/ relations) |
-| Core Features         | 50%      | Backend: room creation/join, real-time speech → translation → TTS; Frontend: Web Speech API, TTS, UI |
+| Core Features         | 90%      | Backend: room creation/join, real-time speech → translation → broadcast (multi-user); Frontend: QR joining, Web Speech API, TTS, chat UI |
 | Internationalization  | 0%       | Will reuse OneProject react-i18next + DB preference (essential for translator) |
 
 ## Translation Provider Decision (Locked)
@@ -50,8 +47,8 @@
 
 **MVP**: Browser-native Web Speech API (SpeechSynthesis)
 - Zero latency, seamless headset routing.
-- Excellent for English, Italian, German, Spanish.
-- Acceptable for Dutch, Russian, Japanese.
+- Excellent for English, Italian, German.
+- Acceptable for Dutch.
 - Functional but noticeably robotic for Mandarin Chinese.
 
 **Phase 2 — Premium Voices Experiment (February 2026)**:
@@ -80,25 +77,44 @@
 
 **Outcome**: Data-driven decision on default premium provider per language.
 
+## User Flow (QR-First with Room Code Fallback)
+
+**Primary Method: QR Code (Mobile-Optimized)**
+- Creator clicks "Start New Conversation" → room auto-created → creator auto-joined → lands in waiting screen.
+- Waiting screen shows prominent "Show QR Code" button → reveals large scannable QR code + short room code (e.g., ABC-123).
+- Joiner (must be logged in) on Dashboard clicks "Scan QR Code to Join" → camera opens → scans QR → auto-joins room.
+
+**Fallback: Room Code Manual Entry**
+- Short room code (e.g., ABC-123) always displayed alongside QR.
+- Dashboard has "Enter Room Code" field + button for manual entry.
+- No public join links in URL.
+
+**Login Handling**
+- "Scan QR Code" and "Enter Room Code" buttons disabled/redirect to login if not authenticated.
+- Post-login returns user to Dashboard for joining.
+
 ## MVP Features & Priority
 
-| Feature                                    | Priority | Status     | Owner          |
-|--------------------------------------------|----------|------------|----------------|
-| Secure login (email/password)              | High     | Completed  | Kilo           |
-| Register (invite-only initially)           | High     | Completed  | Kilo           |
-| Create private room + shareable link/QR    | High     | Completed  | You + Kilo     |
-| Join room by link/code                     | High     | Not started| You + Kilo     |
-| Language selection per user (DB stored)    | High     | Not started| Kilo           |
-| Real-time speech capture (Web Speech API)  | High     | Not started| You            |
-| Send transcript to server                  | High     | Completed  | Kilo           |
-| Server-side translation (Google Cloud HK)  | High     | Completed  | Kilo           |
-| Broadcast translated text to other participant | High     | Completed  | Kilo           |
-| Client-side TTS (Web Speech API) + audio toggle | High     | Not started| You            |
-| Bluetooth headset output routing (Audio Output API) | High     | Not started| You            |
-| Live chat-like UI with bubbles (You / Other) | High     | Not started| You            |
-| Mobile-responsive conversation screen      | High     | Not started| You            |
-| Reconnection handling + status indicators | Medium   | Not started| Kilo           |
-| Room expiration (24h auto-cleanup)         | Medium   | Not started| Kilo           |
+| Feature                                    | Priority | Status       | Owner          |
+|--------------------------------------------|----------|--------------|----------------|
+| Secure login (email/password)              | High     | Completed    | Kilo           |
+| Register (invite-only initially)           | High     | Completed    | Kilo           |
+| Create private room + auto-join creator    | High     | Completed    | You + Kilo     |
+| QR code generation + display               | High     | Completed   | You            |
+| Dashboard "Scan QR Code to Join" button    | High     | Completed   | You            |
+| QR scanner integration                     | High     | Completed   | You            |
+| Room code manual entry fallback            | High     | Completed   | You            |
+| Language selection per user (DB stored)    | High     | Completed   | Kilo           |
+| Real-time speech capture (Web Speech API)  | High     | Completed   | You            |
+| Send transcript to server                  | High     | Completed    | Kilo           |
+| Server-side translation (Google Cloud HK)  | High     | Completed    | Kilo           |
+| Broadcast translated text to other participant | High     | Completed    | Kilo           |
+| Client-side TTS (Web Speech API) + audio toggle | High     | Completed   | You            |
+| Bluetooth headset output routing (Audio Output API) | High     | Not started  | You            |
+| Live chat-like UI with bubbles (You / Other) | High     | Not started  | You            |
+| Mobile-responsive conversation screen      | High     | Not started  | You            |
+| Reconnection handling + status indicators | Medium   | Not started  | Kilo           |
+| Room expiration (24h auto-cleanup)         | Medium   | Not started  | Kilo           |
 
 ## Next Steps (MVP Roadmap)
 
@@ -108,13 +124,16 @@
 | NGINX + EdgeOne subdomain setup            | Completed    | High     | You   | translator.studiodtw.net block configured (port 4003) |
 | Auth system (copy OneProject)              | Completed    | High     | Kilo  | JWT cookie, /api/auth/* endpoints |
 | Database schema + Drizzle setup            | Completed    | High     | Kilo  | users, rooms, room_participants |
-| Room creation/join flow + shareable link   | Completed   | High     | You   | /join/:roomId route (backend done) |
-| Socket.io real-time infrastructure         | Completed   | High     | Kilo  | Auth via cookie, room namespaces |
-| Core speech → translate → TTS loop         | In Progress | High     | Both  | Backend translation done; frontend speech/TTS needed |
+| Room creation + auto-join creator          | Completed    | High     | You   | Creator immediately enters room |
+| Socket.io real-time infrastructure         | Completed    | High     | Kilo  | Auth via cookie, room namespaces |
+| QR code generation + "Show QR Code" UI     | Completed   | High     | You   | qrcode.react library |
+| Dashboard "Scan QR Code to Join" + scanner | Completed   | High     | You   | html5-qrcode library |
+| Room code display + manual entry fallback  | Completed   | High     | You   | Short code (e.g., ABC-123) |
+| Core speech → translate → TTS loop         | Completed   | High     | Both  | End-to-end working with multi-user support |
 | i18n setup (copy OneProject)               | Not started  | High     | You   | en/zh minimum, user preference in DB |
-| Loveable UI generation                     | Not started  | High     | Grok + You | Professional, clean, mobile-first design |
+| Loveable UI generation                     | Not started  | High     | Grok + You | Professional, clean, mobile-first design (waiting screen with QR focus) |
 | Headset routing + audio toggle UI          | Not started  | Medium   | You   | Use Audio Output API where supported |
-| Rate limiting on auth/room endpoints       | Not started  | Medium   | Kilo  | express-rate-limit |
+| Rate limiting on auth/room endpoints       | Completed    | Medium   | Kilo  | express-rate-limit |
 | Loading/empty/error states                 | Not started  | Medium   | You   | Skeletons, toasts |
 | Accessibility review                       | Not started  | Medium   | You   | ARIA labels, keyboard nav |
 | Mobile polish (iOS/Android quirks)         | Not started  | Medium   | Both  | Test on real devices |
@@ -122,16 +141,17 @@
 
 ## Core Flow (MVP)
 
-1. User logs in → lands on dashboard.
-2. User clicks "Start New Conversation" → creates room → gets shareable link/QR.
-3. Other user opens link → logs in → selects their language → joins.
-4. Both see "Connected" status.
-5. When one speaks:
+1. User logs in → Dashboard.
+2. Creator clicks "Start New Conversation" → room auto-created → creator auto-joined → enters waiting screen with "Show QR Code" button.
+3. Creator clicks "Show QR Code" → displays large QR + short room code.
+4. Joiner (logged in) on Dashboard clicks "Scan QR Code to Join" → scans QR (or manually enters code) → auto-joined.
+5. All participants see "Connected" status.
+6. When one speaks:
     - Device captures via Web Speech API (continuous, interim results for live feel).
     - On final utterance → send transcript + sourceLang to server via Socket.io `speech-transcript` event.
-    - Server translates to target's language using Google Cloud Translation (asia-east2).
-    - Server emits `translated-message` to the other participant only.
-    - Receiving client displays in chat bubble + speaks via TTS (if audio enabled).
+    - Server translates to each other participant's language using Google Cloud Translation (asia-east2).
+    - Server emits `translated-message` to all other participants in the room.
+    - Receiving clients display in chat bubbles + speak via TTS (if audio enabled).
     - Audio routed to speaker or selected Bluetooth headset.
 
 ## Tech Stack (Locked — Identical to OneProject)
@@ -143,6 +163,7 @@
 - **Translation (MVP)**: Google Cloud Translation Advanced v3 (asia-east2 region)
 - **TTS (MVP)**: Browser-native Web Speech API (SpeechSynthesis)
 - **TTS (Phase 2 Experiment)**: iFlyTek Online TTS + Grok Voice TTS
+- **QR Code**: qrcode.react (generation) + html5-qrcode (scanning)
 - **Deployment**: Tencent Lighthouse HK + EdgeOne CDN + NGINX reverse proxy
 - **Monorepo**: Turborepo + pnpm
 - **UI Generation**: Loveable (for professional, consistent design)
@@ -162,4 +183,4 @@
 - Grok: Loveable prompts, architecture alignment, deployment config, roadmap
 - You: final merge, deploy, test, UI integration, prioritize
 
-Last updated: December 31, 2025 (backend core features implemented)
+Last updated: December 31, 2025 (MVP core features completed - QR joining, multi-user translation with API optimization, end-to-end speech/TTS, settings page)

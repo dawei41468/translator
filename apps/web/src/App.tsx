@@ -1,10 +1,13 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/lib/auth";
+import { Toaster } from "sonner";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import Dashboard from "@/pages/Dashboard";
 import Settings from "@/pages/Settings";
+import Join from "@/pages/Join";
+import Conversation from "@/pages/Conversation";
 import Layout from "@/components/Layout";
 
 const queryClient = new QueryClient();
@@ -38,6 +41,16 @@ export const AppRoutes = () => (
         <Settings />
       </ProtectedRoute>
     } />
+    <Route path="/join/:code?" element={
+      <ProtectedRoute>
+        <Join />
+      </ProtectedRoute>
+    } />
+    <Route path="/room/:code" element={
+      <ProtectedRoute>
+        <Conversation />
+      </ProtectedRoute>
+    } />
   </Routes>
 );
 
@@ -46,6 +59,7 @@ const App = () => (
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <AuthProvider>
         <AppRoutes />
+        <Toaster />
       </AuthProvider>
     </BrowserRouter>
   </QueryClientProvider>

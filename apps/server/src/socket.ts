@@ -94,7 +94,7 @@ export function setupSocketIO(io: Server) {
       if (!socket.roomId || !socket.userId) return;
 
       try {
-        // Get target user's language
+        // Get all other participants
         const participants = await db.query.roomParticipants.findMany({
           where: eq(roomParticipants.roomId, socket.roomId),
           with: {
@@ -102,22 +102,43 @@ export function setupSocketIO(io: Server) {
           },
         });
 
-        const targetUser = participants.find(p => p.userId !== socket.userId);
-        if (!targetUser) return;
+        const otherParticipants = participants.filter(p => p.userId !== socket.userId);
+        if (otherParticipants.length === 0) return;
 
-        const targetLang = targetUser.user.language || "en";
+        // Group participants by language to avoid redundant translations
+        const participantsByLanguage = new Map<string, typeof otherParticipants>();
 
-        // Translate
-        const translatedText = await translateText(data.transcript, data.sourceLang, targetLang);
+        for (const participant of otherParticipants) {
+          const lang = participant.user.language || "en";
+          if (!participantsByLanguage.has(lang)) {
+            participantsByLanguage.set(lang, []);
+          }
+          participantsByLanguage.get(lang)!.push(participant);
+        }
 
-        // Broadcast to target user
-        socket.to(socket.roomId).emit("translated-message", {
-          originalText: data.transcript,
-          translatedText,
-          sourceLang: data.sourceLang,
-          targetLang,
-          fromUserId: socket.userId,
-        });
+        // Translate once per unique language
+        const translationPromises = Array.from(participantsByLanguage.entries()).map(
+          async ([targetLang, participants]) => {
+            const translatedText = await translateText(data.transcript, data.sourceLang, targetLang);
+            return { targetLang, translatedText, participants };
+          }
+        );
+
+        const translations = await Promise.all(translationPromises);
+
+        // Emit to all participants in each language group
+        for (const { targetLang, translatedText, participants } of translations) {
+          for (const participant of participants) {
+            socket.to(socket.roomId).emit("translated-message", {
+              originalText: data.transcript,
+              translatedText,
+              sourceLang: data.sourceLang,
+              targetLang,
+              fromUserId: socket.userId,
+              toUserId: participant.userId,
+            });
+          }
+        }
       } catch (error) {
         console.error("Error processing speech transcript:", error);
         socket.emit("error", "Translation failed");

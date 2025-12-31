@@ -2,8 +2,8 @@
 
 const Dashboard = () => {
   return (
-    <div className="flex min-h-screen items-center justify-center">
-      <div className="text-center max-w-md">
+    <div className="container mx-auto px-4 py-8">
+      <div className="text-center max-w-md mx-auto">
         <h1 className="mb-4 text-4xl font-bold">Welcome to Dashboard</h1>
         <p className="text-xl mb-8">Your translation dashboard</p>
         <p className="text-sm mb-6">

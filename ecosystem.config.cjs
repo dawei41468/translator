@@ -10,7 +10,7 @@ module.exports = {
       exec_mode: "fork",
       watch: false,
       env: {
-        PORT: 4005,
+        PORT: 4003,
         NODE_ENV: "production",
       },
       error_file: "/var/log/pm2/translator.err.log",

@@ -4,6 +4,8 @@ import { AuthProvider, useAuth } from "@/lib/auth";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import Dashboard from "@/pages/Dashboard";
+import Settings from "@/pages/Settings";
+import Layout from "@/components/Layout";
 
 const queryClient = new QueryClient();
 
@@ -18,7 +20,7 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/login" replace />;
   }
 
-  return <>{children}</>;
+  return <Layout>{children}</Layout>;
 }
 
 export const AppRoutes = () => (
@@ -29,6 +31,11 @@ export const AppRoutes = () => (
     <Route path="/dashboard" element={
       <ProtectedRoute>
         <Dashboard />
+      </ProtectedRoute>
+    } />
+    <Route path="/settings" element={
+      <ProtectedRoute>
+        <Settings />
       </ProtectedRoute>
     } />
   </Routes>

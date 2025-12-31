@@ -68,3 +68,7 @@ playwright/.cache/
 apps/*/test-results/
 apps/*/playwright-report/
 apps/*/playwright/.cache/
+
+# Secrets & Keys
+keys/
+!keys/.gitkeep

@@ -5,7 +5,6 @@ import { useAuth } from "@/lib/auth";
 import { useMe, useUpdateLanguage } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "react-i18next";
-import { toast } from "sonner";
 import {
   Select,
   SelectContent,
@@ -38,11 +37,6 @@ const Settings = () => {
     }
   });
 
-  const audioOutputSupported =
-    typeof navigator !== "undefined" &&
-    "mediaDevices" in navigator &&
-    "selectAudioOutput" in navigator.mediaDevices;
-
   // Get current user data using centralized hook
   const { data: userData } = useMe();
 
@@ -63,20 +57,6 @@ const Settings = () => {
       }
       return next;
     });
-  };
-
-  const handleSelectAudioOutput = async () => {
-    if (!audioOutputSupported) {
-      toast.error(t("error.audioSelectNotSupported"));
-      return;
-    }
-
-    try {
-      await (navigator.mediaDevices as any).selectAudioOutput();
-      toast.success(t("conversation.outputDeviceSelected"));
-    } catch {
-      toast.error(t("error.audioSelectFailed"));
-    }
   };
 
   return (
@@ -119,21 +99,6 @@ const Settings = () => {
             </div>
             <Button type="button" variant={ttsEnabled ? "default" : "outline"} onClick={handleToggleTts}>
               {ttsEnabled ? t("settings.tts.enabled") : t("settings.tts.disabled")}
-            </Button>
-          </div>
-        </div>
-
-        <div>
-          <h2 className="text-lg font-semibold mb-2">{t('settings.audio.title')}</h2>
-          <p className="text-sm text-muted-foreground mb-4">
-            {t('settings.audio.description')}
-          </p>
-          <div className="flex items-center justify-between gap-4">
-            <div className="text-xs text-muted-foreground">
-              {audioOutputSupported ? t("settings.audio.supported") : t("settings.audio.notSupported")}
-            </div>
-            <Button type="button" variant="outline" disabled={!audioOutputSupported} onClick={handleSelectAudioOutput}>
-              {t("settings.audio.select")}
             </Button>
           </div>
         </div>

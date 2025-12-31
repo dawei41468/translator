@@ -247,20 +247,6 @@ const Conversation = () => {
     });
   };
 
-  const selectOutputDevice = async () => {
-    if (!("mediaDevices" in navigator) || !("selectAudioOutput" in navigator.mediaDevices)) {
-      toast.error(t('error.audioSelectNotSupported'));
-      return;
-    }
-    try {
-      await (navigator.mediaDevices as any).selectAudioOutput();
-      toast.success(t('conversation.outputDeviceSelected'));
-    } catch (error) {
-      console.error('Error selecting output device:', error);
-      toast.error(t('error.audioSelectFailed'));
-    }
-  };
-
   if (isLoading) {
     return (
       <div className="flex flex-col h-screen bg-gray-50">
@@ -313,16 +299,6 @@ const Conversation = () => {
             title={audioEnabled ? t('conversation.audioOn') : t('conversation.audioOff')}
           >
             🔊
-          </button>
-          <button
-            onClick={selectOutputDevice}
-            disabled={!("mediaDevices" in navigator) || !("selectAudioOutput" in navigator.mediaDevices)}
-            className="p-2 rounded bg-gray-200 hover:bg-gray-300 disabled:opacity-50"
-            title={!("mediaDevices" in navigator) || !("selectAudioOutput" in navigator.mediaDevices)
-              ? t('error.audioSelectNotSupported')
-              : t('conversation.selectOutput')}
-          >
-            🎧
           </button>
           <button
             onClick={() => navigate('/dashboard')}

@@ -1,29 +1,21 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useMutation } from "@tanstack/react-query";
-import { apiClient } from "@/lib/api";
+import { useJoinRoom } from "@/lib/hooks";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 
 const Join = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { code } = useParams<{ code: string }>();
   const [roomCode, setRoomCode] = useState(code || "");
 
-  const joinRoomMutation = useMutation({
-    mutationFn: (code: string) => apiClient.joinRoom(code),
-    onSuccess: (data) => {
-      // Navigate to the conversation page
-      navigate(`/room/${data.roomCode}`);
-    },
-    onError: (error: any) => {
-      toast.error(error.message || "Failed to join room");
-    },
-  });
+  const joinRoomMutation = useJoinRoom();
 
   const handleJoin = (e: React.FormEvent) => {
     e.preventDefault();
     if (!roomCode.trim()) {
-      toast.error("Please enter a room code");
+      toast.error(t('error.enterCode'));
       return;
     }
     joinRoomMutation.mutate(roomCode.toUpperCase());
@@ -32,17 +24,17 @@ const Join = () => {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="text-center max-w-md mx-auto">
-        <h1 className="mb-4 text-3xl font-bold">Join Conversation</h1>
-        <p className="text-lg mb-8">Enter the room code to join the conversation</p>
+        <h1 className="mb-4 text-3xl font-bold">{t('room.enterTitle')}</h1>
+        <p className="text-lg mb-8">{t('room.enterPrompt')}</p>
 
         <form onSubmit={handleJoin} className="space-y-4">
           <input
             type="text"
             value={roomCode}
             onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
-            placeholder="Enter room code"
+            placeholder={t('room.enterCodePlaceholder')}
             className="w-full p-3 border border-gray-300 rounded-lg text-center text-lg font-mono tracking-wider"
-            maxLength={6}
+            maxLength={7}
             disabled={joinRoomMutation.isPending}
           />
 
@@ -51,7 +43,7 @@ const Join = () => {
             disabled={joinRoomMutation.isPending || !roomCode.trim()}
             className="w-full p-3 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium disabled:opacity-50"
           >
-            {joinRoomMutation.isPending ? "Joining..." : "Join Conversation"}
+            {joinRoomMutation.isPending ? t('room.joining') : t('room.join')}
           </button>
         </form>
 
@@ -60,7 +52,7 @@ const Join = () => {
             onClick={() => navigate("/dashboard")}
             className="text-blue-500 hover:text-blue-600"
           >
-            ← Back to Dashboard
+            ← {t('common.backToDashboard')}
           </button>
         </div>
       </div>

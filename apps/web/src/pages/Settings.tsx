@@ -1,9 +1,11 @@
 // Live Translator Settings
 
+import { useState } from "react";
 import { useAuth } from "@/lib/auth";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiClient } from "@/lib/api";
+import { useMe, useUpdateLanguage } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
+import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
 import {
   Select,
   SelectContent,
@@ -11,7 +13,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { toast } from "sonner";
+
+const TTS_ENABLED_STORAGE_KEY = "translator_tts_enabled";
 
 const LANGUAGES = [
   { code: "en", name: "English" },
@@ -22,41 +25,69 @@ const LANGUAGES = [
 ];
 
 const Settings = () => {
-  const { logout, user } = useAuth();
-  const queryClient = useQueryClient();
+  const { t } = useTranslation();
+  const { logout } = useAuth();
 
-  // Get current user data
-  const { data: userData } = useQuery({
-    queryKey: ["me"],
-    queryFn: () => apiClient.getMe(),
-    enabled: !!user,
+  const [ttsEnabled, setTtsEnabled] = useState(() => {
+    try {
+      const stored = localStorage.getItem(TTS_ENABLED_STORAGE_KEY);
+      if (stored === null) return true;
+      return stored === "true";
+    } catch {
+      return true;
+    }
   });
 
-  // Update language mutation
-  const updateLanguageMutation = useMutation({
-    mutationFn: (language: string) => apiClient.updateLanguage(language),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["me"] });
-      toast.success("Language updated successfully");
-    },
-    onError: (error: any) => {
-      toast.error(error.message || "Failed to update language");
-    },
-  });
+  const audioOutputSupported =
+    typeof navigator !== "undefined" &&
+    "mediaDevices" in navigator &&
+    "selectAudioOutput" in navigator.mediaDevices;
+
+  // Get current user data using centralized hook
+  const { data: userData } = useMe();
+
+  // Update language mutation using centralized hook
+  const updateLanguageMutation = useUpdateLanguage();
 
   const handleLanguageChange = (languageCode: string) => {
     updateLanguageMutation.mutate(languageCode);
   };
 
+  const handleToggleTts = () => {
+    setTtsEnabled((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(TTS_ENABLED_STORAGE_KEY, String(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAudioOutput = async () => {
+    if (!audioOutputSupported) {
+      toast.error(t("error.audioSelectNotSupported"));
+      return;
+    }
+
+    try {
+      await (navigator.mediaDevices as any).selectAudioOutput();
+      toast.success(t("conversation.outputDeviceSelected"));
+    } catch {
+      toast.error(t("error.audioSelectFailed"));
+    }
+  };
+
   return (
     <div className="container mx-auto px-4 py-8 pb-20">
-      <h1 className="text-2xl font-bold mb-6">Settings</h1>
+      <h1 className="text-2xl font-bold mb-6">{t('nav.settings')}</h1>
 
       <div className="space-y-6">
         <div>
-          <h2 className="text-lg font-semibold mb-2">Language</h2>
+          <h2 className="text-lg font-semibold mb-2">{t('settings.language.title')}</h2>
           <p className="text-sm text-muted-foreground mb-4">
-            Select your preferred language for translations. This will be used when others speak in the conversation.
+            {t('settings.language.description')}
           </p>
           <Select
             value={userData?.user?.language || ""}
@@ -64,7 +95,7 @@ const Settings = () => {
             disabled={updateLanguageMutation.isPending}
           >
             <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select your language" />
+              <SelectValue placeholder={t('settings.language.placeholder')} />
             </SelectTrigger>
             <SelectContent>
               {LANGUAGES.map((lang) => (
@@ -77,21 +108,34 @@ const Settings = () => {
         </div>
 
         <div>
-          <h2 className="text-lg font-semibold mb-2">Text-to-Speech</h2>
+          <h2 className="text-lg font-semibold mb-2">{t('settings.tts.title')}</h2>
           <p className="text-sm text-muted-foreground mb-4">
-            Configure audio output settings.
+            {t('settings.tts.description')}
           </p>
-          {/* TODO: TTS toggles */}
-          <p className="text-sm">Coming soon...</p>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <div className="text-sm font-medium">{t("settings.tts.enable")}</div>
+              <div className="text-xs text-muted-foreground">{t("settings.tts.enableDescription")}</div>
+            </div>
+            <Button type="button" variant={ttsEnabled ? "default" : "outline"} onClick={handleToggleTts}>
+              {ttsEnabled ? t("settings.tts.enabled") : t("settings.tts.disabled")}
+            </Button>
+          </div>
         </div>
 
         <div>
-          <h2 className="text-lg font-semibold mb-2">Audio Output</h2>
+          <h2 className="text-lg font-semibold mb-2">{t('settings.audio.title')}</h2>
           <p className="text-sm text-muted-foreground mb-4">
-            Choose where audio is played.
+            {t('settings.audio.description')}
           </p>
-          {/* TODO: Audio output selection */}
-          <p className="text-sm">Coming soon...</p>
+          <div className="flex items-center justify-between gap-4">
+            <div className="text-xs text-muted-foreground">
+              {audioOutputSupported ? t("settings.audio.supported") : t("settings.audio.notSupported")}
+            </div>
+            <Button type="button" variant="outline" disabled={!audioOutputSupported} onClick={handleSelectAudioOutput}>
+              {t("settings.audio.select")}
+            </Button>
+          </div>
         </div>
 
         <div className="pt-6 border-t">
@@ -100,7 +144,7 @@ const Settings = () => {
             onClick={logout}
             className="w-full"
           >
-            Logout
+            {t('auth.logout')}
           </Button>
         </div>
       </div>

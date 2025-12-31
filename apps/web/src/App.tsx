@@ -1,6 +1,7 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/lib/auth";
+import { queryClient } from "@/lib/api";
 import { Toaster } from "sonner";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
@@ -9,8 +10,6 @@ import Settings from "@/pages/Settings";
 import Join from "@/pages/Join";
 import Conversation from "@/pages/Conversation";
 import Layout from "@/components/Layout";
-
-const queryClient = new QueryClient();
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();

@@ -51,18 +51,14 @@ This document codifies the existing patterns in the Live Translator codebase so 
 ### Database access (Drizzle)
 
 - DB access via `db` from `packages/db`.
-- Soft delete pattern:
-  - Tables use `deletedAt`
-  - Queries must filter on `isNull(table.deletedAt)`.
+- Room expiration:
+  - Rooms are hard-deleted after 24 hours via a server cron job.
 
 ### Logging
 
-- **Planned**: Server logging via `apps/server/src/logger.ts` (not yet implemented).
-  - Planned: `logInfo(message, context?)`, `logWarn(message, context?)`, `logError(message, error?, context?)`
-  - Planned: `getRequestContext(req)` enriches logs with `user` object and `ip`.
-  - Planned: Structured output with grouped context for `user`, `request`, `response`, and `error`.
-  - Planned: `requestLogger` middleware (in `apps/server/src/middleware/logger.ts`) for automatic API activity logging with duration and status codes.
-  - Planned: Human readable console output in development with visual hierarchy for metadata.
+- Implemented: Server logging via `apps/server/src/logger.ts`.
+  - `getRequestContext(req)` enriches logs with `user` and `request` info.
+  - `requestLogger` middleware (in `apps/server/src/middleware/logger.ts`) logs API activity with duration and status codes.
 
 ### Environment and configuration
 
@@ -80,7 +76,7 @@ This document codifies the existing patterns in the Live Translator codebase so 
 
 - `AuthProvider` is the source of truth.
   - On mount, it calls `apiClient.getMe()`.
-  - Planned: If user has `language`, call `i18n.changeLanguage(user.language)` (i18n not yet implemented).
+  - If user has `language`, it calls `i18n.changeLanguage(user.language)`.
 
 ### API access
 
@@ -92,7 +88,7 @@ This document codifies the existing patterns in the Live Translator codebase so 
 ### Server state and caching
 
 - Use TanStack Query.
-- Planned: All server state hooks in `apps/web/src/lib/hooks.ts` (not yet implemented):
+- All server state hooks in `apps/web/src/lib/hooks.ts`:
   - Read hooks via `useQuery`
   - Write hooks via `useMutation`
   - On success, invalidate related keys (list + detail).
@@ -105,8 +101,8 @@ This document codifies the existing patterns in the Live Translator codebase so 
 
 ### Loading & Empty States
 
-- **Planned**: Skeleton, EmptyState, ErrorState components (not yet implemented).
-  - Planned: Skeleton for loading states with customizable dimensions and animations.
+- Skeleton, EmptyState, ErrorState components live in `apps/web/src/components/ui/*`.
+  - Skeleton for loading states with customizable dimensions and animations.
     ```typescript
     // Basic usage
     <Skeleton className="h-4 w-1/2" />
@@ -115,7 +111,7 @@ This document codifies the existing patterns in the Live Translator codebase so 
     <Skeleton className="h-32 w-full rounded-lg" />
     ```
 
-  - Planned: EmptyState for empty data states with optional icon, title, description, and action.
+  - EmptyState for empty data states with optional icon, title, description, and action.
     ```typescript
     // Basic empty state
     <EmptyState
@@ -132,7 +128,7 @@ This document codifies the existing patterns in the Live Translator codebase so 
     />
     ```
 
-  - Planned: ErrorState for consistent error display with retry functionality.
+  - ErrorState for consistent error display with retry functionality.
     ```typescript
     // With retry action
     <ErrorState
@@ -157,8 +153,8 @@ This document codifies the existing patterns in the Live Translator codebase so 
 
 ### i18n
 
-- Planned: `i18next` initialized in `apps/web/src/lib/i18n.ts` (not yet implemented).
-- Planned: Languages supported: `en`, `zh`.
+- `i18next` is initialized in `apps/web/src/lib/i18n.ts`.
+- Languages supported: `en`, `zh`, `it`, `de`, `nl`.
 
 ## Data model patterns
 
@@ -166,7 +162,7 @@ This document codifies the existing patterns in the Live Translator codebase so 
 - Audit columns:
   - `createdAt`
   - `updatedAt` (`$onUpdate(() => sql\`now()\`)`)
-  - `deletedAt` for soft delete.
+  - `deletedAt` present in schema (not used for room expiration; rooms are hard-deleted after 24h).
 
 ## API response patterns
 

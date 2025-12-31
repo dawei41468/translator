@@ -1,14 +1,15 @@
 // Live Translator Dashboard
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useMutation } from "@tanstack/react-query";
-import { apiClient } from "@/lib/api";
+import { useCreateRoom, useJoinRoom } from "@/lib/hooks";
 import { toast } from "sonner";
 import { Html5QrcodeScanner } from "html5-qrcode";
 import { QRCodeCanvas } from "qrcode.react";
 import { useAuth } from "@/lib/auth";
+import { useTranslation } from "react-i18next";
 
 const Dashboard = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
   const [createdRoom, setCreatedRoom] = useState<{ code: string; id: string } | null>(null);
@@ -16,30 +17,16 @@ const Dashboard = () => {
   const [manualCode, setManualCode] = useState("");
   const scannerRef = useRef<Html5QrcodeScanner | null>(null);
 
-  const createRoomMutation = useMutation({
-    mutationFn: () => apiClient.createRoom(),
-    onSuccess: (data) => {
-      setCreatedRoom({ code: data.roomCode, id: data.roomId });
-      toast.success("Room created! Share the QR code below.");
-    },
-    onError: (error: any) => {
-      toast.error(error.message || "Failed to create room");
-    },
-  });
-
-  const joinRoomMutation = useMutation({
-    mutationFn: (code: string) => apiClient.joinRoom(code),
-    onSuccess: (data) => {
-      navigate(`/room/${data.roomCode}`);
-    },
-    onError: (error: any) => {
-      toast.error(error.message || "Failed to join room");
-      setShowScanner(false);
-    },
-  });
+  const createRoomMutation = useCreateRoom();
+  const joinRoomMutation = useJoinRoom();
 
   const handleStartConversation = () => {
-    createRoomMutation.mutate();
+    createRoomMutation.mutate(undefined, {
+      onSuccess: (data) => {
+        setCreatedRoom({ code: data.roomCode, id: data.roomId });
+        toast.success(t('room.created'));
+      }
+    });
   };
 
   const handleJoinConversation = () => {
@@ -62,7 +49,7 @@ const Dashboard = () => {
       return;
     }
     if (!manualCode.trim()) {
-      toast.error("Please enter a room code");
+      toast.error(t('error.enterCode'));
       return;
     }
     joinRoomMutation.mutate(manualCode.toUpperCase());
@@ -87,12 +74,16 @@ const Dashboard = () => {
       scannerRef.current.render(
         (decodedText) => {
           // Extract room code from URL
-          const url = new URL(decodedText);
-          const code = url.pathname.split('/').pop();
-          if (code) {
-            joinRoomMutation.mutate(code);
-          } else {
-            toast.error("Invalid QR code");
+          try {
+            const url = new URL(decodedText);
+            const code = url.pathname.split('/').pop();
+            if (code) {
+              joinRoomMutation.mutate(code);
+            } else {
+              toast.error(t('error.invalidQR'));
+            }
+          } catch (e) {
+            toast.error(t('error.invalidQR'));
           }
         },
         (error) => {
@@ -107,40 +98,40 @@ const Dashboard = () => {
         scannerRef.current = null;
       }
     };
-  }, [showScanner, joinRoomMutation]);
+  }, [showScanner, joinRoomMutation, t]);
 
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="text-center max-w-md mx-auto">
-        <h1 className="mb-4 text-4xl font-bold">Live Translator</h1>
-        <p className="text-xl mb-8">Real-time translated conversations</p>
+        <h1 className="mb-4 text-4xl font-bold">{t('app.name')}</h1>
+        <p className="text-xl mb-8">{t('app.description')}</p>
 
         {!createdRoom ? (
           <>
             <p className="text-sm mb-6">
-              Start a conversation and share the QR code with someone on another device for instant translation.
+              {t('room.startPrompt')}
             </p>
             <button
               onClick={handleStartConversation}
               disabled={createRoomMutation.isPending}
               className="w-full p-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium disabled:opacity-50 mb-8"
             >
-              {createRoomMutation.isPending ? "Creating..." : "Start New Conversation"}
+              {createRoomMutation.isPending ? t('room.creating') : t('room.create')}
             </button>
 
             <div className="border-t pt-6">
-              <h3 className="font-semibold mb-4">Join Existing Conversation</h3>
+              <h3 className="font-semibold mb-4">{t('room.joinExisting')}</h3>
 
               <button
                 onClick={handleScanQR}
                 disabled={!isAuthenticated}
                 className="w-full p-3 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium disabled:opacity-50 mb-4"
               >
-                📱 Scan QR Code to Join
+                {t('room.scan')}
               </button>
 
               <div className="text-center mb-4">
-                <span className="text-gray-500">OR</span>
+                <span className="text-gray-500">{t('common.or')}</span>
               </div>
 
               <div className="space-y-2">
@@ -148,7 +139,7 @@ const Dashboard = () => {
                   type="text"
                   value={manualCode}
                   onChange={(e) => setManualCode(e.target.value.toUpperCase())}
-                  placeholder="Enter room code (ABC-123)"
+                  placeholder={t('room.enterCodePlaceholder')}
                   className="w-full p-3 border border-gray-300 rounded-lg text-center font-mono"
                   maxLength={7}
                   disabled={!isAuthenticated}
@@ -158,13 +149,13 @@ const Dashboard = () => {
                   disabled={!isAuthenticated || !manualCode.trim() || joinRoomMutation.isPending}
                   className="w-full p-3 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-medium disabled:opacity-50"
                 >
-                  {joinRoomMutation.isPending ? "Joining..." : "Join by Code"}
+                  {joinRoomMutation.isPending ? t('room.joining') : t('room.joinByCode')}
                 </button>
               </div>
 
               {!isAuthenticated && (
                 <p className="text-sm text-gray-500 mt-4">
-                  Please log in to join conversations
+                  {t('auth.loginToJoin')}
                 </p>
               )}
             </div>
@@ -172,9 +163,9 @@ const Dashboard = () => {
         ) : (
           <div className="space-y-4">
             <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-              <h3 className="font-semibold text-green-800 mb-2">Room Created!</h3>
+              <h3 className="font-semibold text-green-800 mb-2">{t('room.createdTitle')}</h3>
               <p className="text-sm text-green-700 mb-3">
-                Show this QR code to the person you want to talk to:
+                {t('room.showQR')}
               </p>
 
               <div className="bg-white p-4 rounded-lg mb-3 flex justify-center">
@@ -182,7 +173,7 @@ const Dashboard = () => {
               </div>
 
               <div className="text-center mb-3">
-                <p className="text-sm text-gray-600 mb-1">Room Code:</p>
+                <p className="text-sm text-gray-600 mb-1">{t('room.code')}:</p>
                 <p className="font-mono text-lg font-bold">{createdRoom.code}</p>
               </div>
 
@@ -190,7 +181,7 @@ const Dashboard = () => {
                 onClick={handleJoinConversation}
                 className="w-full p-2 bg-blue-500 hover:bg-blue-600 text-white rounded font-medium"
               >
-                Enter Conversation
+                {t('room.enter')}
               </button>
             </div>
 
@@ -198,7 +189,7 @@ const Dashboard = () => {
               onClick={() => setCreatedRoom(null)}
               className="text-gray-500 hover:text-gray-700 text-sm"
             >
-              ← Start New Room
+              ← {t('room.startNew')}
             </button>
           </div>
         )}
@@ -206,13 +197,13 @@ const Dashboard = () => {
         {showScanner && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white p-4 rounded-lg max-w-sm w-full mx-4">
-              <h3 className="text-lg font-semibold mb-4 text-center">Scan QR Code</h3>
+              <h3 className="text-lg font-semibold mb-4 text-center">{t('room.scanTitle')}</h3>
               <div id="qr-reader" className="w-full"></div>
               <button
                 onClick={() => setShowScanner(false)}
                 className="w-full mt-4 p-2 bg-gray-500 text-white rounded"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
             </div>
           </div>

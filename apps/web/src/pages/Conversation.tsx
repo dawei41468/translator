@@ -1,9 +1,13 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { io, Socket } from "socket.io-client";
-import { useQuery } from "@tanstack/react-query";
-import { apiClient } from "@/lib/api";
+import { useRoom } from "@/lib/hooks";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ErrorState } from "@/components/ui/error-state";
+import { useAuth } from "@/lib/auth";
+import { useMe } from "@/lib/hooks";
 
 interface Message {
   id: string;
@@ -13,34 +17,71 @@ interface Message {
   timestamp: Date;
 }
 
+const TTS_ENABLED_STORAGE_KEY = "translator_tts_enabled";
+
+function getSocketBaseUrl(): string {
+  const base = import.meta.env.VITE_API_BASE_URL;
+  if (typeof window === "undefined") return "";
+  if (!base) return "http://localhost:4003";
+  if (base.startsWith("http")) return base.replace(/\/api\/?$/, "");
+  // Relative base URL (e.g. /api) means same origin
+  if (base.startsWith("/")) return window.location.origin;
+  return "http://localhost:4003";
+}
+
+function getSpeechRecognitionLocale(language: string | null | undefined): string {
+  switch ((language ?? "en").toLowerCase()) {
+    case "zh":
+      return "zh-CN";
+    case "it":
+      return "it-IT";
+    case "de":
+      return "de-DE";
+    case "nl":
+      return "nl-NL";
+    case "en":
+    default:
+      return "en-US";
+  }
+}
+
 const Conversation = () => {
+  const { t } = useTranslation();
   const { code } = useParams<{ code: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const { data: meData } = useMe();
   const [socket, setSocket] = useState<Socket | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected' | 'reconnecting'>('connecting');
   const [isRecording, setIsRecording] = useState(false);
-  const [audioEnabled, setAudioEnabled] = useState(true);
+  const [audioEnabled, setAudioEnabled] = useState(() => {
+    try {
+      const stored = localStorage.getItem(TTS_ENABLED_STORAGE_KEY);
+      if (stored === null) return true;
+      return stored === "true";
+    } catch {
+      return true;
+    }
+  });
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const synthRef = useRef<SpeechSynthesis | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [outputDeviceId, setOutputDeviceId] = useState<string>('');
+  const audioEnabledRef = useRef<boolean>(audioEnabled);
+
+  useEffect(() => {
+    audioEnabledRef.current = audioEnabled;
+  }, [audioEnabled]);
 
   // Get room info
-  const { data: roomData, isLoading } = useQuery({
-    queryKey: ["room", code],
-    queryFn: () => apiClient.getRoom(code!),
-    enabled: !!code,
-  });
+  const { data: roomData, isLoading, error, refetch } = useRoom(code);
 
   // Initialize Socket.io
   useEffect(() => {
     if (!code) return;
 
-    const socketInstance = io(import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'http://localhost:4003', {
-      auth: {
-        token: document.cookie.split('; ').find(row => row.startsWith('auth_token='))?.split('=')[1]
-      }
+    const socketInstance = io(getSocketBaseUrl(), {
+      withCredentials: true,
     });
 
     socketInstance.on('connect', () => {
@@ -59,7 +100,7 @@ const Conversation = () => {
 
     socketInstance.on('reconnect', () => {
       setConnectionStatus('connected');
-      toast.success('Reconnected to conversation');
+      toast.success(t('conversation.reconnected'));
     });
 
     socketInstance.on('connect_error', () => {
@@ -67,19 +108,19 @@ const Conversation = () => {
     });
 
     socketInstance.on('joined-room', (_data: any) => {
-      toast.success('Connected to conversation');
+      toast.success(t('conversation.connectedToast'));
     });
 
     socketInstance.on('user-joined', (_data: any) => {
-      toast.info('Other participant joined');
+      toast.info(t('conversation.userJoined'));
     });
 
     socketInstance.on('user-left', (_data: any) => {
-      toast.info('Other participant left');
+      toast.info(t('conversation.userLeft'));
     });
 
     socketInstance.on('user-reconnected', (_data: any) => {
-      toast.success('Other participant reconnected');
+      toast.success(t('conversation.userReconnected'));
     });
 
     socketInstance.on('translated-message', (data: any) => {
@@ -93,7 +134,7 @@ const Conversation = () => {
       setMessages(prev => [...prev, message]);
 
       // Speak the translated text if audio is enabled
-      if (audioEnabled && synthRef.current) {
+      if (audioEnabledRef.current && synthRef.current) {
         const utterance = new SpeechSynthesisUtterance(data.translatedText);
         synthRef.current.speak(utterance);
       }
@@ -108,7 +149,15 @@ const Conversation = () => {
     return () => {
       socketInstance.disconnect();
     };
-  }, [code, audioEnabled]);
+  }, [code, t]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(TTS_ENABLED_STORAGE_KEY, String(audioEnabled));
+    } catch {
+      // ignore
+    }
+  }, [audioEnabled]);
 
   // Initialize speech recognition
   useEffect(() => {
@@ -118,7 +167,7 @@ const Conversation = () => {
 
       recognition.continuous = true;
       recognition.interimResults = true;
-      recognition.lang = roomData?.participants.find(p => p.id !== 'current')?.language || 'en';
+      recognition.lang = getSpeechRecognitionLocale(meData?.user?.language ?? user?.language ?? "en");
 
       recognition.onresult = (event) => {
         let finalTranscript = '';
@@ -167,7 +216,7 @@ const Conversation = () => {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       synthRef.current = window.speechSynthesis;
     }
-  }, [socket, roomData]);
+  }, [socket, roomData, user?.language, meData?.user?.language]);
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -176,7 +225,7 @@ const Conversation = () => {
 
   const toggleRecording = () => {
     if (!recognitionRef.current) {
-      toast.error('Speech recognition not supported');
+      toast.error(t('error.speechNotSupported'));
       return;
     }
 
@@ -189,33 +238,58 @@ const Conversation = () => {
   };
 
   const toggleAudio = () => {
-    setAudioEnabled(!audioEnabled);
-    if (!audioEnabled && synthRef.current) {
-      synthRef.current.cancel(); // Stop any current speech
-    }
+    setAudioEnabled((prev) => {
+      const next = !prev;
+      if (!next && synthRef.current) {
+        synthRef.current.cancel();
+      }
+      return next;
+    });
   };
 
   const selectOutputDevice = async () => {
-    if ('selectAudioOutput' in navigator.mediaDevices) {
-      try {
-        const device = await (navigator.mediaDevices as any).selectAudioOutput();
-        setOutputDeviceId(device.deviceId);
-        toast.success('Output device selected');
-      } catch (error) {
-        console.error('Error selecting output device:', error);
-        toast.error('Failed to select output device');
-      }
-    } else {
-      toast.error('Audio output selection not supported on this device');
+    if (!("mediaDevices" in navigator) || !("selectAudioOutput" in navigator.mediaDevices)) {
+      toast.error(t('error.audioSelectNotSupported'));
+      return;
+    }
+    try {
+      await (navigator.mediaDevices as any).selectAudioOutput();
+      toast.success(t('conversation.outputDeviceSelected'));
+    } catch (error) {
+      console.error('Error selecting output device:', error);
+      toast.error(t('error.audioSelectFailed'));
     }
   };
 
   if (isLoading) {
-    return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
+    return (
+      <div className="flex flex-col h-screen bg-gray-50">
+        <div className="bg-white border-b p-4 sm:p-6 flex items-center justify-between">
+          <Skeleton className="h-6 w-32" />
+          <div className="flex space-x-2">
+            <Skeleton className="h-10 w-10" />
+            <Skeleton className="h-10 w-10" />
+            <Skeleton className="h-10 w-20" />
+          </div>
+        </div>
+        <div className="flex-1 p-4 sm:p-6 space-y-4">
+          <Skeleton className="h-12 w-3/4" />
+          <Skeleton className="h-12 w-1/2 ml-auto" />
+          <Skeleton className="h-12 w-2/3" />
+        </div>
+      </div>
+    );
   }
 
-  if (!roomData) {
-    return <div className="flex items-center justify-center min-h-screen">Room not found</div>;
+  if (error || !roomData) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <ErrorState 
+          message={error?.message || t('error.roomNotFound')} 
+          onRetry={() => refetch()}
+        />
+      </div>
+    );
   }
 
   return (
@@ -229,20 +303,24 @@ const Conversation = () => {
             connectionStatus === 'reconnecting' ? 'bg-orange-500' :
             'bg-red-500'
           }`}></div>
-          <span className="font-medium">Room: {roomData.code}</span>
-          {connectionStatus === 'reconnecting' && <span className="text-sm text-orange-600">Reconnecting...</span>}
+          <span className="font-medium">{t('room.code')}: {roomData.code}</span>
+          {connectionStatus === 'reconnecting' && <span className="text-sm text-orange-600">{t('conversation.reconnecting')}...</span>}
         </div>
         <div className="flex items-center space-x-2">
           <button
             onClick={toggleAudio}
             className={`p-2 rounded ${audioEnabled ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
+            title={audioEnabled ? t('conversation.audioOn') : t('conversation.audioOff')}
           >
             🔊
           </button>
           <button
             onClick={selectOutputDevice}
-            className="p-2 rounded bg-gray-200 hover:bg-gray-300"
-            title="Select audio output device"
+            disabled={!("mediaDevices" in navigator) || !("selectAudioOutput" in navigator.mediaDevices)}
+            className="p-2 rounded bg-gray-200 hover:bg-gray-300 disabled:opacity-50"
+            title={!("mediaDevices" in navigator) || !("selectAudioOutput" in navigator.mediaDevices)
+              ? t('error.audioSelectNotSupported')
+              : t('conversation.selectOutput')}
           >
             🎧
           </button>
@@ -250,7 +328,7 @@ const Conversation = () => {
             onClick={() => navigate('/dashboard')}
             className="px-3 py-1 bg-gray-500 text-white rounded"
           >
-            Leave
+            {t('common.leave')}
           </button>
         </div>
       </div>
@@ -291,7 +369,7 @@ const Conversation = () => {
                 : 'bg-green-500 text-white hover:bg-green-600'
             } disabled:opacity-50`}
           >
-            {isRecording ? 'Stop Speaking' : 'Start Speaking'}
+            {isRecording ? t('conversation.stopSpeaking') : t('conversation.startSpeaking')}
           </button>
         </div>
       </div>

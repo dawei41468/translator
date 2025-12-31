@@ -4,8 +4,11 @@ import { db } from "../../../packages/db/src/index.js";
 import { users, rooms, roomParticipants } from "../../../packages/db/src/schema.js";
 import { eq } from "drizzle-orm";
 import { translateText } from "./services/translation.js";
+import { logger } from "./logger.js";
+import { parseCookies } from "./middleware/auth.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
+const AUTH_COOKIE_NAME = "auth_token";
 
 interface AuthenticatedSocket extends Socket {
   userId?: string;
@@ -14,10 +17,9 @@ interface AuthenticatedSocket extends Socket {
 
 export function setupSocketIO(io: Server) {
   io.use(async (socket: AuthenticatedSocket, next) => {
-    const token = socket.handshake.auth.token;
-    if (!token) {
-      return next(new Error("Authentication error"));
-    }
+    const cookies = parseCookies(socket.handshake.headers.cookie);
+    const token = cookies[AUTH_COOKIE_NAME];
+    if (!token) return next(new Error("Authentication error"));
 
     try {
       const verified = jwt.verify(token, JWT_SECRET) as any;
@@ -41,7 +43,7 @@ export function setupSocketIO(io: Server) {
   });
 
   io.on("connection", (socket: AuthenticatedSocket) => {
-    console.log(`User ${socket.userId} connected`);
+    logger.info(`User connected to socket`, { userId: socket.userId });
 
     socket.on("join-room", async (roomCode: string) => {
       try {
@@ -77,7 +79,7 @@ export function setupSocketIO(io: Server) {
 
         socket.emit("joined-room", { roomId: room.id });
       } catch (error) {
-        console.error("Error joining room:", error);
+        logger.error("Error joining room", error, { roomCode, userId: socket.userId });
         socket.emit("error", "Failed to join room");
       }
     });
@@ -140,20 +142,24 @@ export function setupSocketIO(io: Server) {
           }
         }
       } catch (error) {
-        console.error("Error processing speech transcript:", error);
+        logger.error("Error processing speech transcript", error, { 
+          userId: socket.userId, 
+          roomId: socket.roomId,
+          transcript: data.transcript 
+        });
         socket.emit("error", "Translation failed");
       }
     });
 
     socket.on("disconnect", () => {
-      console.log(`User ${socket.userId} disconnected`);
+      logger.info(`User disconnected from socket`, { userId: socket.userId });
       if (socket.roomId) {
         socket.to(socket.roomId).emit("user-left", { userId: socket.userId });
       }
     });
 
     socket.on("reconnect", () => {
-      console.log(`User ${socket.userId} reconnected`);
+      logger.info(`User reconnected to socket`, { userId: socket.userId });
       if (socket.roomId) {
         socket.to(socket.roomId).emit("user-reconnected", { userId: socket.userId });
       }

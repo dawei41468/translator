@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { db } from "../../../packages/db/src/index.js";
 import { rooms } from "../../../packages/db/src/schema.js";
-// import { logError, logInfo, logWarn } from "./logger.js";
+import { logger } from "./logger.js";
 import { app } from "./app.js";
 import { createServer } from "http";
 import { Server } from "socket.io";
@@ -24,10 +24,10 @@ setupSocketIO(io);
 // Schedule room cleanup every hour
 cron.schedule('0 * * * *', async () => {
   try {
-    await db.execute(sql`update rooms set deleted_at = now() where created_at < now() - interval '24 hours' and deleted_at is null`);
-    console.log('Room cleanup completed');
+    await db.execute(sql`delete from rooms where created_at < now() - interval '24 hours'`);
+    logger.info('Room cleanup completed');
   } catch (error) {
-    console.error('Error cleaning up rooms:', error);
+    logger.error('Error cleaning up rooms', error);
   }
 });
 
@@ -43,16 +43,16 @@ server.listen(PORT, "0.0.0.0", async () => {
     dbStatus = 'connected';
   } catch (error) {
     dbStatus = 'failed';
-    console.error('Database connection failed during startup', error);
+    logger.error('Database connection failed during startup', error);
   }
 
   // Service status
-  const translationConfigured = !!process.env.GOOGLE_TRANSLATE_API_KEY;
+  const translationConfigured = !!process.env.GOOGLE_CLOUD_PROJECT_ID;
 
   // Startup time
   const startupTime = Date.now() - startupStart;
 
-  console.log('Server started successfully', {
+  logger.info('Server started successfully', {
     version: '1.0.0',
     environment: process.env.NODE_ENV || 'development',
     port: PORT,
@@ -75,15 +75,14 @@ server.listen(PORT, "0.0.0.0", async () => {
       jwtExpiration: '30 days',
       missingEnvVars: missingVars
     },
-    startupTime: `${startupTime}ms`,
-    timestamp: new Date().toISOString()
+    startupTime: `${startupTime}ms`
   });
 
   // Log warnings for missing config
   if (missingVars.length > 0) {
-    console.warn('Server started with missing configuration', { missingVars });
+    logger.warn('Server started with missing configuration', { missingVars });
   }
   if (dbStatus === 'failed') {
-    console.error('Server started but database connection failed');
+    logger.error('Server started but database connection failed');
   }
 });

@@ -100,16 +100,16 @@
 | Secure login (email/password)              | High     | Completed    | Kilo           |
 | Register (invite-only initially)           | High     | Completed    | Kilo           |
 | Create private room + auto-join creator    | High     | Completed    | You + Kilo     |
-| QR code generation + display               | High     | Completed   | You            |
-| Dashboard "Scan QR Code to Join" button    | High     | Completed   | You            |
-| QR scanner integration                     | High     | Completed   | You            |
-| Room code manual entry fallback            | High     | Completed   | You            |
-| Language selection per user (DB stored)    | High     | Completed   | Kilo           |
-| Real-time speech capture (Web Speech API)  | High     | Completed   | You            |
+| QR code generation + display               | High     | Completed    | You            |
+| Dashboard "Scan QR Code to Join" button    | High     | Completed    | You            |
+| QR scanner integration                     | High     | Completed    | You            |
+| Room code manual entry fallback            | High     | Completed    | You            |
+| Language selection per user (DB stored)    | High     | Completed    | Kilo           |
+| Real-time speech capture (Web Speech API)  | High     | Completed    | You            |
 | Send transcript to server                  | High     | Completed    | Kilo           |
 | Server-side translation (Google Cloud HK)  | High     | Completed    | Kilo           |
 | Broadcast translated text to other participant | High     | Completed    | Kilo           |
-| Client-side TTS (Web Speech API) + audio toggle | High     | Completed   | You            |
+| Client-side TTS (Web Speech API) + audio toggle | High     | Completed    | You            |
 | Bluetooth headset output routing (Audio Output API) | High     | Completed    | You            |
 | Live chat-like UI with bubbles (You / Other) | High     | Completed    | You            |
 | Mobile-responsive conversation screen      | High     | Completed    | You            |
@@ -126,18 +126,18 @@
 | Database schema + Drizzle setup            | Completed    | High     | Kilo  | users, rooms, room_participants |
 | Room creation + auto-join creator          | Completed    | High     | You   | Creator immediately enters room |
 | Socket.io real-time infrastructure         | Completed    | High     | Kilo  | Auth via cookie, room namespaces |
-| QR code generation + "Show QR Code" UI     | Completed   | High     | You   | qrcode.react library |
-| Dashboard "Scan QR Code to Join" + scanner | Completed   | High     | You   | html5-qrcode library |
-| Room code display + manual entry fallback  | Completed   | High     | You   | Short code (e.g., ABC-123) |
-| Core speech → translate → TTS loop         | Completed   | High     | Both  | End-to-end working with multi-user support |
-| i18n setup (copy OneProject)               | Not started  | High     | You   | en/zh minimum, user preference in DB |
-| Loveable UI generation                     | Not started  | High     | Grok + You | Professional, clean, mobile-first design (waiting screen with QR focus) |
-| Headset routing + audio toggle UI          | Not started  | Medium   | You   | Use Audio Output API where supported |
+| QR code generation + "Show QR Code" UI     | Completed    | High     | You   | qrcode.react library |
+| Dashboard "Scan QR Code to Join" + scanner | Completed    | High     | You   | html5-qrcode library |
+| Room code display + manual entry fallback  | Completed    | High     | You   | Short code (e.g., ABC-123) |
+| Core speech → translate → TTS loop         | Completed    | High     | Both  | End-to-end working with multi-user support |
+| i18n setup (copy OneProject)               | Completed    | High     | You   | en/zh/it/de/nl, separate JSONs, user preference in DB |
+| Loveable UI generation                     | In progress  | High     | Grok + You | Professional, clean, mobile-first design (waiting screen with QR focus) |
+| Headset routing + audio toggle UI          | Completed    | Medium   | You   | Audio Output API implemented in Conversation.tsx |
 | Rate limiting on auth/room endpoints       | Completed    | Medium   | Kilo  | express-rate-limit |
-| Loading/empty/error states                 | Not started  | Medium   | You   | Skeletons, toasts |
+| Loading/empty/error states                 | Completed    | Medium   | You   | Skeleton, ErrorState, EmptyState components |
 | Accessibility review                       | Not started  | Medium   | You   | ARIA labels, keyboard nav |
 | Mobile polish (iOS/Android quirks)         | Not started  | Medium   | Both  | Test on real devices |
-| Structured logging + basic monitoring      | Not started  | Low      | Kilo  | Winston or console for now |
+| Structured logging + basic monitoring      | Completed    | Low      | Kilo  | Winston structured logging implemented |
 
 ## Core Flow (MVP)
 

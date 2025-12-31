@@ -3,6 +3,7 @@ import { db } from "../../../../packages/db/src/index.js";
 import { rooms, roomParticipants } from "../../../../packages/db/src/schema.js";
 import { eq, lt, sql } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
+import { logger } from "../logger.js";
 
 const router = express.Router();
 
@@ -37,7 +38,7 @@ router.post("/", async (req, res) => {
       roomCode: newRoom.code,
     });
   } catch (error) {
-    console.error("Error creating room:", error);
+    logger.error("Error creating room", error, { userId: req.user?.id });
     res.status(500).json({ error: "Failed to create room" });
   }
 });
@@ -88,7 +89,7 @@ router.post("/join/:code", async (req, res) => {
       roomCode: room.code,
     });
   } catch (error) {
-    console.error("Error joining room:", error);
+    logger.error("Error joining room", error, { userId: req.user?.id, roomCode: req.params.code });
     res.status(500).json({ error: "Failed to join room" });
   }
 });
@@ -130,7 +131,7 @@ router.get("/:code", async (req, res) => {
       })),
     });
   } catch (error) {
-    console.error("Error getting room:", error);
+    logger.error("Error getting room", error, { userId: req.user?.id, roomCode: req.params.code });
     res.status(500).json({ error: "Failed to get room" });
   }
 });
@@ -150,7 +151,7 @@ router.delete("/cleanup", async (req, res) => {
       deletedCount: deletedRooms.length
     });
   } catch (error) {
-    console.error("Error cleaning up rooms:", error);
+    logger.error("Error cleaning up rooms", error);
     res.status(500).json({ error: "Failed to cleanup rooms" });
   }
 });

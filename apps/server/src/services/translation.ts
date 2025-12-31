@@ -1,4 +1,5 @@
 import { TranslationServiceClient } from "@google-cloud/translate";
+import { logger } from "../logger.js";
 
 const translationClient = new TranslationServiceClient();
 
@@ -27,7 +28,7 @@ export async function translateText(text: string, sourceLang: string, targetLang
 
     return response.translations[0].translatedText || text;
   } catch (error) {
-    console.error("Translation error:", error);
+    logger.error("Translation error", error, { text, sourceLang, targetLang });
     // Fallback: return original text
     return text;
   }

@@ -6,7 +6,7 @@ A Progressive Web App (PWA) for real-time cross-device conversation translation.
 
 - **Real-Time Translation**: Instant speech-to-text, translation, and text-to-speech across devices
 - **Private Rooms**: Shareable room links/QR codes for secure conversations
-- **Multi-Language Support**: Chinese (Mandarin), English, Italian, German, Dutch, Spanish, Russian, Japanese
+- **Multi-Language Support**: Chinese (Mandarin), English, Italian, German, Dutch
 - **Bluetooth Headset Integration**: Audio input/output routing to headsets
 - **PWA Ready**: Installable on mobile devices, works offline-ready
 - **User Authentication**: Secure login with JWT cookies
@@ -53,7 +53,7 @@ A Progressive Web App (PWA) for real-time cross-device conversation translation.
    Configure your environment variables:
    - `DATABASE_URL`: PostgreSQL connection string
    - `JWT_SECRET`: Secure JWT secret
-   - `GOOGLE_TRANSLATE_API_KEY`: Google Cloud Translation API key (optional for MVP)
+   - `GOOGLE_CLOUD_PROJECT_ID`: Google Cloud project ID (required for server-side translation)
 
 4. **Database Setup**
    ```bash

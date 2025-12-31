@@ -1,7 +1,7 @@
 import express from "express";
 import { db } from "../../../../packages/db/src/index.js";
 import { rooms, roomParticipants } from "../../../../packages/db/src/schema.js";
-import { eq, lt, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import { logger } from "../logger.js";
 
@@ -133,26 +133,6 @@ router.get("/:code", async (req, res) => {
   } catch (error) {
     logger.error("Error getting room", error, { userId: req.user?.id, roomCode: req.params.code });
     res.status(500).json({ error: "Failed to get room" });
-  }
-});
-
-// Cleanup expired rooms (24h old)
-router.delete("/cleanup", async (req, res) => {
-  try {
-    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-
-    // Delete rooms older than 24 hours
-    const deletedRooms = await db.delete(rooms)
-      .where(lt(rooms.createdAt, twentyFourHoursAgo))
-      .returning();
-
-    res.json({
-      message: `Cleaned up ${deletedRooms.length} expired rooms`,
-      deletedCount: deletedRooms.length
-    });
-  } catch (error) {
-    logger.error("Error cleaning up rooms", error);
-    res.status(500).json({ error: "Failed to cleanup rooms" });
   }
 });
 

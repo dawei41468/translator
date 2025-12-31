@@ -2,11 +2,24 @@ import { sql } from "drizzle-orm";
 import { db } from "../../../packages/db/src/index.js";
 // import { logError, logInfo, logWarn } from "./logger.js";
 import { app } from "./app.js";
+import { createServer } from "http";
+import { Server } from "socket.io";
+import { setupSocketIO } from "./socket.js";
 
 const startupStart = Date.now();
 const PORT = Number(process.env.PORT) || 3003;
 
-app.listen(PORT, "0.0.0.0", async () => {
+const server = createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: true,
+    credentials: true,
+  },
+});
+
+setupSocketIO(io);
+
+server.listen(PORT, "0.0.0.0", async () => {
   // Configuration validation
   const requiredEnvVars = ['DATABASE_URL', 'JWT_SECRET'];
   const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);

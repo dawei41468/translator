@@ -3,10 +3,10 @@
 **Quick Summary**: A Progressive Web App (PWA) that enables seamless two-way real-time translated conversations between two users on different devices (iOS/Android). Users join a private room, select their language, speak naturally (via device mic or Bluetooth headset), and instantly hear/see the translation in their own language through speaker or Bluetooth headset.
 
 **Live URL**: https://translator.studiodtw.net  
-**Current Progress**: 30% (Auth/infra/deploy/db complete — December 31, 2025)
+**Current Progress**: 50% (Auth/infra/deploy/db/backend-core complete — December 31, 2025)
 **Target MVP**: End of January 2026
 
-**Engineering Patterns (Canonical)**: Follow existing OneProject patterns exactly (see `CODEBASE-PATTERNS.md` in OneProject repo) for coding conventions, API design, auth, deployment, and architectural decisions.
+**Engineering Patterns (Canonical)**: Follow existing patterns exactly (see `CODEBASE-PATTERNS.md`) for coding conventions, API design, auth, deployment, and architectural decisions.
 
 ## Core Philosophy (User-First)
 
@@ -34,7 +34,7 @@
 | Authentication        | 100%     | Complete (JWT cookie, /api/auth/*, /me, rate limit) |
 | Deployment            | 100%     | Complete (deploy.sh, ecosystem.config.cjs port 4003, PM2) |
 | Database Schema       | 100%     | Complete (users/sessions/rooms/room_participants w/ relations) |
-| Core Features         | 0%       | Room creation/join, real-time speech → translation → TTS |
+| Core Features         | 50%      | Backend: room creation/join, real-time speech → translation → TTS; Frontend: Web Speech API, TTS, UI |
 | Internationalization  | 0%       | Will reuse OneProject react-i18next + DB preference (essential for translator) |
 
 ## Translation Provider Decision (Locked)
@@ -86,13 +86,13 @@
 |--------------------------------------------|----------|------------|----------------|
 | Secure login (email/password)              | High     | Completed  | Kilo           |
 | Register (invite-only initially)           | High     | Completed  | Kilo           |
-| Create private room + shareable link/QR    | High     | Not started| You + Kilo     |
+| Create private room + shareable link/QR    | High     | Completed  | You + Kilo     |
 | Join room by link/code                     | High     | Not started| You + Kilo     |
 | Language selection per user (DB stored)    | High     | Not started| Kilo           |
 | Real-time speech capture (Web Speech API)  | High     | Not started| You            |
-| Send transcript to server                  | High     | Not started| Kilo           |
-| Server-side translation (Google Cloud HK)  | High     | Not started| Kilo           |
-| Broadcast translated text to other participant | High     | Not started| Kilo           |
+| Send transcript to server                  | High     | Completed  | Kilo           |
+| Server-side translation (Google Cloud HK)  | High     | Completed  | Kilo           |
+| Broadcast translated text to other participant | High     | Completed  | Kilo           |
 | Client-side TTS (Web Speech API) + audio toggle | High     | Not started| You            |
 | Bluetooth headset output routing (Audio Output API) | High     | Not started| You            |
 | Live chat-like UI with bubbles (You / Other) | High     | Not started| You            |
@@ -108,9 +108,9 @@
 | NGINX + EdgeOne subdomain setup            | Completed    | High     | You   | translator.studiodtw.net block configured (port 4003) |
 | Auth system (copy OneProject)              | Completed    | High     | Kilo  | JWT cookie, /api/auth/* endpoints |
 | Database schema + Drizzle setup            | Completed    | High     | Kilo  | users, rooms, room_participants |
-| Room creation/join flow + shareable link   | Not started  | High     | You   | /join/:roomId route |
-| Socket.io real-time infrastructure         | Not started  | High     | Kilo  | Auth via cookie, room namespaces |
-| Core speech → translate → TTS loop         | Not started  | High     | Both  | End-to-end test on two devices |
+| Room creation/join flow + shareable link   | Completed   | High     | You   | /join/:roomId route (backend done) |
+| Socket.io real-time infrastructure         | Completed   | High     | Kilo  | Auth via cookie, room namespaces |
+| Core speech → translate → TTS loop         | In Progress | High     | Both  | Backend translation done; frontend speech/TTS needed |
 | i18n setup (copy OneProject)               | Not started  | High     | You   | en/zh minimum, user preference in DB |
 | Loveable UI generation                     | Not started  | High     | Grok + You | Professional, clean, mobile-first design |
 | Headset routing + audio toggle UI          | Not started  | Medium   | You   | Use Audio Output API where supported |
@@ -127,18 +127,18 @@
 3. Other user opens link → logs in → selects their language → joins.
 4. Both see "Connected" status.
 5. When one speaks:
-   - Device captures via Web Speech API (continuous, interim results for live feel).
-   - On final utterance → send transcript + sourceLang to server via Socket.io.
-   - Server translates to target's language using Google Cloud Translation (asia-east2).
-   - Server emits translated text to the other participant only.
-   - Receiving client displays in chat bubble + speaks via TTS (if audio enabled).
-   - Audio routed to speaker or selected Bluetooth headset.
+    - Device captures via Web Speech API (continuous, interim results for live feel).
+    - On final utterance → send transcript + sourceLang to server via Socket.io `speech-transcript` event.
+    - Server translates to target's language using Google Cloud Translation (asia-east2).
+    - Server emits `translated-message` to the other participant only.
+    - Receiving client displays in chat bubble + speaks via TTS (if audio enabled).
+    - Audio routed to speaker or selected Bluetooth headset.
 
 ## Tech Stack (Locked — Identical to OneProject)
 
 - **Frontend**: React 18 + TypeScript + Vite + Tailwind + shadcn/ui + TanStack Query + React Router + react-i18next
 - **Backend**: Node.js 20 + Express + Drizzle ORM + self-hosted PostgreSQL (local/prod servers)
-- **Real-Time**: Socket.io (authenticated via JWT cookie)
+- **Real-Time**: Socket.io (authenticated via JWT cookie, room namespaces)
 - **Auth**: JWT in httpOnly cookie
 - **Translation (MVP)**: Google Cloud Translation Advanced v3 (asia-east2 region)
 - **TTS (MVP)**: Browser-native Web Speech API (SpeechSynthesis)
@@ -162,4 +162,4 @@
 - Grok: Loveable prompts, architecture alignment, deployment config, roadmap
 - You: final merge, deploy, test, UI integration, prioritize
 
-Last updated: December 31, 2025 (auth/infra/db/deploy status updated)
+Last updated: December 31, 2025 (backend core features implemented)

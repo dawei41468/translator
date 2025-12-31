@@ -56,18 +56,10 @@ const Dashboard = () => {
     joinRoomMutation.mutate(manualCode.toUpperCase());
   };
 
-  const shareableLink = createdRoom
-    ? `${window.location.origin}/join/${createdRoom.code}`
-    : "";
-
   const clipboardSupported =
     typeof navigator !== "undefined" &&
     "clipboard" in navigator &&
     typeof navigator.clipboard?.writeText === "function";
-
-  const shareSupported =
-    typeof navigator !== "undefined" &&
-    typeof (navigator as any).share === "function";
 
   const handleCopy = async (text: string) => {
     if (!clipboardSupported) {
@@ -80,25 +72,6 @@ const Dashboard = () => {
       toast.success(t("toast.copied"));
     } catch {
       toast.error(t("toast.copyFailed"));
-    }
-  };
-
-  const handleShareInvite = async () => {
-    if (!createdRoom) return;
-
-    if (!shareSupported) {
-      await handleCopy(shareableLink);
-      return;
-    }
-
-    try {
-      await (navigator as any).share({
-        title: t("room.createdTitle"),
-        text: `${t("room.code")}: ${createdRoom.code}`,
-        url: shareableLink,
-      });
-    } catch {
-      toast.error(t("toast.shareFailed"));
     }
   };
 
@@ -116,18 +89,30 @@ const Dashboard = () => {
 
       scannerRef.current.render(
         (decodedText) => {
-          // Extract room code from URL
-          try {
-            const url = new URL(decodedText);
-            const code = url.pathname.split('/').pop();
-            if (code) {
-              joinRoomMutation.mutate(code);
-            } else {
-              toast.error(t('error.invalidQR'));
-            }
-          } catch (e) {
-            toast.error(t('error.invalidQR'));
+          const input = decodedText.trim();
+          if (!input) {
+            toast.error(t("error.invalidQR"));
+            return;
           }
+
+          // New: QR payload is the room code itself.
+          // Legacy support: tolerate older URL QR payloads by extracting the last path segment.
+          let code = input;
+          try {
+            const url = new URL(input);
+            const lastSegment = url.pathname.split("/").filter(Boolean).pop();
+            if (lastSegment) code = lastSegment;
+          } catch {
+            // not a URL
+          }
+
+          code = code.trim().toUpperCase();
+          if (!code) {
+            toast.error(t("error.invalidQR"));
+            return;
+          }
+
+          joinRoomMutation.mutate(code);
         },
         (error) => {
           console.log("QR scan error:", error);
@@ -222,21 +207,14 @@ const Dashboard = () => {
                 <div className="text-xs text-muted-foreground mb-1">{t("room.code")}</div>
                 <div className="font-mono text-2xl font-bold tracking-widest">{createdRoom.code}</div>
 
-                <div className="grid grid-cols-2 gap-2 mt-4">
+                <div className="mt-4">
                   <Button
                     type="button"
                     variant="outline"
                     onClick={() => handleCopy(createdRoom.code)}
+                    className="w-full"
                   >
                     {t("room.copyCode")}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleShareInvite}
-                    disabled={!shareSupported && !clipboardSupported}
-                  >
-                    {t("room.share")}
                   </Button>
                 </div>
               </div>
@@ -264,26 +242,20 @@ const Dashboard = () => {
               <p className="text-sm text-muted-foreground mb-4 text-center">{t("room.qrDescription")}</p>
 
               <div className="bg-white p-4 rounded-lg mb-4 flex justify-center border">
-                <QRCodeCanvas value={shareableLink} size={240} />
+                <QRCodeCanvas value={createdRoom.code} size={240} />
               </div>
 
               <div className="rounded-lg border bg-background p-4 text-center mb-4">
                 <div className="text-xs text-muted-foreground mb-1">{t("room.code")}</div>
                 <div className="font-mono text-xl font-bold tracking-widest">{createdRoom.code}</div>
-                <div className="grid grid-cols-2 gap-2 mt-3">
-                  <Button type="button" variant="outline" onClick={() => handleCopy(createdRoom.code)}>
+                <div className="mt-3">
+                  <Button type="button" variant="outline" onClick={() => handleCopy(createdRoom.code)} className="w-full">
                     {t("room.copyCode")}
-                  </Button>
-                  <Button type="button" variant="outline" onClick={() => handleCopy(shareableLink)} disabled={!clipboardSupported}>
-                    {t("room.copyLink")}
                   </Button>
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Button type="button" className="w-full" onClick={handleShareInvite} disabled={!shareSupported && !clipboardSupported}>
-                  {t("room.share")}
-                </Button>
                 <Button type="button" className="w-full" variant="secondary" onClick={() => setShowQr(false)}>
                   {t("common.cancel")}
                 </Button>

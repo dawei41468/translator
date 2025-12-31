@@ -7,7 +7,6 @@ import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import Dashboard from "@/pages/Dashboard";
 import Settings from "@/pages/Settings";
-import Join from "@/pages/Join";
 import Conversation from "@/pages/Conversation";
 import Layout from "@/components/Layout";
 
@@ -38,11 +37,6 @@ export const AppRoutes = () => (
     <Route path="/settings" element={
       <ProtectedRoute>
         <Settings />
-      </ProtectedRoute>
-    } />
-    <Route path="/join/:code?" element={
-      <ProtectedRoute>
-        <Join />
       </ProtectedRoute>
     } />
     <Route path="/room/:code" element={

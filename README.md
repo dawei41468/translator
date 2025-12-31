@@ -5,7 +5,7 @@ A Progressive Web App (PWA) for real-time cross-device conversation translation.
 ## 🌟 Features
 
 - **Real-Time Translation**: Instant speech-to-text, translation, and text-to-speech across devices
-- **Private Rooms**: Shareable room links/QR codes for secure conversations
+- **Private Rooms**: QR codes + short room codes for secure conversations
 - **Multi-Language Support**: Chinese (Mandarin), English, Italian, German, Dutch
 - **Bluetooth Headset Integration**: Audio input/output routing to headsets
 - **PWA Ready**: Installable on mobile devices, works offline-ready
@@ -94,7 +94,7 @@ The app is configured for PM2 deployment on Tencent Lighthouse HK:
 
 1. **Register/Login**: Create an account or sign in
 2. **Create Room**: Start a new conversation room
-3. **Share Link**: Send the room link/QR to another user
+3. **Invite**: Show the QR code or share the room code with the other user
 4. **Join & Speak**: Both users join, select languages, and speak naturally
 5. **Real-Time Translation**: Hear translations instantly through speakers or Bluetooth headsets
 

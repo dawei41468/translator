@@ -71,6 +71,7 @@ This document codifies the existing patterns in the Live Translator codebase so 
 
 - Routing uses React Router.
 - Private routes are gated via `ProtectedRoute` using `useAuth()`.
+- Room joining is QR-first with room code fallback (no public join links).
 
 ### Auth state
 

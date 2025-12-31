@@ -30,7 +30,7 @@
 
 | Area                  | Status   | Notes |
 |-----------------------|----------|-------|
-| Infrastructure        | 10%      | Turborepo + pnpm + TDSQL-C PostgreSQL + Express + React + shadcn/ui |
+| Infrastructure        | 10%      | Turborepo + pnpm + self-hosted PostgreSQL + Express + React + shadcn/ui |
 | Authentication        | 0%       | Will reuse OneProject JWT-in-httpOnly-cookie pattern |
 | Deployment            | 20%      | NGINX block planned (port 3005), EdgeOne subdomain ready to configure |
 | Database Schema       | 50%      | users/rooms/room_participants draft complete |
@@ -137,7 +137,7 @@
 ## Tech Stack (Locked — Identical to OneProject)
 
 - **Frontend**: React 18 + TypeScript + Vite + Tailwind + shadcn/ui + TanStack Query + React Router + react-i18next
-- **Backend**: Node.js 20 + Express + Drizzle ORM + TDSQL-C PostgreSQL (Tencent HK)
+- **Backend**: Node.js 20 + Express + Drizzle ORM + self-hosted PostgreSQL (local/prod servers)
 - **Real-Time**: Socket.io (authenticated via JWT cookie)
 - **Auth**: JWT in httpOnly cookie
 - **Translation (MVP)**: Google Cloud Translation Advanced v3 (asia-east2 region)
@@ -149,7 +149,7 @@
 
 ## Build & Deployment Notes
 
-- **PM2 config**: `ecosystem.config.cjs` running `./apps/server/dist/apps/server/src/index.js` on port 3005
+- **PM2 config**: `ecosystem.config.cjs` running `./apps/server/dist/apps/server/src/index.js` on port 4005
 - **Server build**: `pnpm -C apps/server build` (tsc)
 - **Web build**: `pnpm -C apps/web build` (vite)
 - Server serves built frontend from `apps/web/dist` + `/api/health`

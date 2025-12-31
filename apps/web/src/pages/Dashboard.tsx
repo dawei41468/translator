@@ -7,6 +7,7 @@ import { Html5QrcodeScanner } from "html5-qrcode";
 import { QRCodeCanvas } from "qrcode.react";
 import { useAuth } from "@/lib/auth";
 import { useTranslation } from "react-i18next";
+import { Button } from "@/components/ui/button";
 
 const Dashboard = () => {
   const { t } = useTranslation();
@@ -14,6 +15,7 @@ const Dashboard = () => {
   const { isAuthenticated } = useAuth();
   const [createdRoom, setCreatedRoom] = useState<{ code: string; id: string } | null>(null);
   const [showScanner, setShowScanner] = useState(false);
+  const [showQr, setShowQr] = useState(false);
   const [manualCode, setManualCode] = useState("");
   const scannerRef = useRef<Html5QrcodeScanner | null>(null);
 
@@ -24,7 +26,6 @@ const Dashboard = () => {
     createRoomMutation.mutate(undefined, {
       onSuccess: (data) => {
         setCreatedRoom({ code: data.roomCode, id: data.roomId });
-        toast.success(t('room.created'));
       }
     });
   };
@@ -58,6 +59,48 @@ const Dashboard = () => {
   const shareableLink = createdRoom
     ? `${window.location.origin}/join/${createdRoom.code}`
     : "";
+
+  const clipboardSupported =
+    typeof navigator !== "undefined" &&
+    "clipboard" in navigator &&
+    typeof navigator.clipboard?.writeText === "function";
+
+  const shareSupported =
+    typeof navigator !== "undefined" &&
+    typeof (navigator as any).share === "function";
+
+  const handleCopy = async (text: string) => {
+    if (!clipboardSupported) {
+      toast.error(t("toast.copyFailed"));
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(t("toast.copied"));
+    } catch {
+      toast.error(t("toast.copyFailed"));
+    }
+  };
+
+  const handleShareInvite = async () => {
+    if (!createdRoom) return;
+
+    if (!shareSupported) {
+      await handleCopy(shareableLink);
+      return;
+    }
+
+    try {
+      await (navigator as any).share({
+        title: t("room.createdTitle"),
+        text: `${t("room.code")}: ${createdRoom.code}`,
+        url: shareableLink,
+      });
+    } catch {
+      toast.error(t("toast.shareFailed"));
+    }
+  };
 
   // Initialize QR scanner
   useEffect(() => {
@@ -102,36 +145,42 @@ const Dashboard = () => {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="text-center max-w-md mx-auto">
-        <h1 className="mb-4 text-4xl font-bold">{t('app.name')}</h1>
-        <p className="text-xl mb-8">{t('app.description')}</p>
+      <div className="max-w-md mx-auto">
+        <div className="text-center">
+          <h1 className="mb-3 text-4xl font-bold tracking-tight">{t("app.name")}</h1>
+          <p className="text-base text-muted-foreground mb-8">{t("app.description")}</p>
+        </div>
 
         {!createdRoom ? (
           <>
-            <p className="text-sm mb-6">
-              {t('room.startPrompt')}
+            <p className="text-sm text-muted-foreground mb-6 text-center">
+              {t("room.startPrompt")}
             </p>
-            <button
+
+            <Button
               onClick={handleStartConversation}
               disabled={createRoomMutation.isPending}
-              className="w-full p-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium disabled:opacity-50 mb-8"
+              className="w-full"
+              size="lg"
             >
-              {createRoomMutation.isPending ? t('room.creating') : t('room.create')}
-            </button>
+              {createRoomMutation.isPending ? t("room.creating") : t("room.create")}
+            </Button>
 
-            <div className="border-t pt-6">
-              <h3 className="font-semibold mb-4">{t('room.joinExisting')}</h3>
+            <div className="border-t pt-6 mt-8">
+              <h3 className="font-semibold mb-4 text-center">{t("room.joinExisting")}</h3>
 
-              <button
+              <Button
                 onClick={handleScanQR}
                 disabled={!isAuthenticated}
-                className="w-full p-3 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium disabled:opacity-50 mb-4"
+                className="w-full"
+                variant="secondary"
+                size="lg"
               >
-                {t('room.scan')}
-              </button>
+                {t("room.scan")}
+              </Button>
 
               <div className="text-center mb-4">
-                <span className="text-gray-500">{t('common.or')}</span>
+                <span className="text-muted-foreground">{t("common.or")}</span>
               </div>
 
               <div className="space-y-2">
@@ -139,72 +188,122 @@ const Dashboard = () => {
                   type="text"
                   value={manualCode}
                   onChange={(e) => setManualCode(e.target.value.toUpperCase())}
-                  placeholder={t('room.enterCodePlaceholder')}
-                  className="w-full p-3 border border-gray-300 rounded-lg text-center font-mono"
+                  placeholder={t("room.enterCodePlaceholder")}
+                  className="w-full h-11 px-3 border border-input bg-background rounded-md text-center font-mono tracking-wider"
                   maxLength={7}
                   disabled={!isAuthenticated}
                 />
-                <button
+                <Button
                   onClick={handleManualJoin}
                   disabled={!isAuthenticated || !manualCode.trim() || joinRoomMutation.isPending}
-                  className="w-full p-3 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-medium disabled:opacity-50"
+                  className="w-full"
+                  size="lg"
                 >
-                  {joinRoomMutation.isPending ? t('room.joining') : t('room.joinByCode')}
-                </button>
+                  {joinRoomMutation.isPending ? t("room.joining") : t("room.joinByCode")}
+                </Button>
               </div>
 
               {!isAuthenticated && (
-                <p className="text-sm text-gray-500 mt-4">
-                  {t('auth.loginToJoin')}
+                <p className="text-sm text-muted-foreground mt-4 text-center">
+                  {t("auth.loginToJoin")}
                 </p>
               )}
             </div>
           </>
         ) : (
           <div className="space-y-4">
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-              <h3 className="font-semibold text-green-800 mb-2">{t('room.createdTitle')}</h3>
-              <p className="text-sm text-green-700 mb-3">
-                {t('room.showQR')}
-              </p>
-
-              <div className="bg-white p-4 rounded-lg mb-3 flex justify-center">
-                <QRCodeCanvas value={shareableLink} size={200} />
+            <div className="border rounded-xl bg-card text-card-foreground shadow-sm p-5">
+              <div className="text-center">
+                <h3 className="text-lg font-semibold mb-1">{t("room.createdTitle")}</h3>
+                <p className="text-sm text-muted-foreground mb-4">{t("room.waitingPrompt")}</p>
               </div>
 
-              <div className="text-center mb-3">
-                <p className="text-sm text-gray-600 mb-1">{t('room.code')}:</p>
-                <p className="font-mono text-lg font-bold">{createdRoom.code}</p>
+              <div className="rounded-lg border bg-background p-4 text-center">
+                <div className="text-xs text-muted-foreground mb-1">{t("room.code")}</div>
+                <div className="font-mono text-2xl font-bold tracking-widest">{createdRoom.code}</div>
+
+                <div className="grid grid-cols-2 gap-2 mt-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => handleCopy(createdRoom.code)}
+                  >
+                    {t("room.copyCode")}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleShareInvite}
+                    disabled={!shareSupported && !clipboardSupported}
+                  >
+                    {t("room.share")}
+                  </Button>
+                </div>
               </div>
 
-              <button
-                onClick={handleJoinConversation}
-                className="w-full p-2 bg-blue-500 hover:bg-blue-600 text-white rounded font-medium"
-              >
-                {t('room.enter')}
-              </button>
+              <div className="space-y-2 mt-4">
+                <Button type="button" className="w-full" size="lg" onClick={() => setShowQr(true)}>
+                  {t("room.showQrButton")}
+                </Button>
+                <Button type="button" className="w-full" variant="secondary" size="lg" onClick={handleJoinConversation}>
+                  {t("room.enter")}
+                </Button>
+              </div>
             </div>
 
-            <button
-              onClick={() => setCreatedRoom(null)}
-              className="text-gray-500 hover:text-gray-700 text-sm"
-            >
-              ← {t('room.startNew')}
-            </button>
+            <Button type="button" variant="ghost" onClick={() => setCreatedRoom(null)}>
+              ← {t("room.startNew")}
+            </Button>
+          </div>
+        )}
+
+        {createdRoom && showQr && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white p-5 rounded-xl max-w-sm w-full mx-4">
+              <h3 className="text-lg font-semibold mb-2 text-center">{t("room.qrTitle")}</h3>
+              <p className="text-sm text-muted-foreground mb-4 text-center">{t("room.qrDescription")}</p>
+
+              <div className="bg-white p-4 rounded-lg mb-4 flex justify-center border">
+                <QRCodeCanvas value={shareableLink} size={240} />
+              </div>
+
+              <div className="rounded-lg border bg-background p-4 text-center mb-4">
+                <div className="text-xs text-muted-foreground mb-1">{t("room.code")}</div>
+                <div className="font-mono text-xl font-bold tracking-widest">{createdRoom.code}</div>
+                <div className="grid grid-cols-2 gap-2 mt-3">
+                  <Button type="button" variant="outline" onClick={() => handleCopy(createdRoom.code)}>
+                    {t("room.copyCode")}
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => handleCopy(shareableLink)} disabled={!clipboardSupported}>
+                    {t("room.copyLink")}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Button type="button" className="w-full" onClick={handleShareInvite} disabled={!shareSupported && !clipboardSupported}>
+                  {t("room.share")}
+                </Button>
+                <Button type="button" className="w-full" variant="secondary" onClick={() => setShowQr(false)}>
+                  {t("common.cancel")}
+                </Button>
+              </div>
+            </div>
           </div>
         )}
 
         {showScanner && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white p-4 rounded-lg max-w-sm w-full mx-4">
-              <h3 className="text-lg font-semibold mb-4 text-center">{t('room.scanTitle')}</h3>
+              <h3 className="text-lg font-semibold mb-4 text-center">{t("room.scanTitle")}</h3>
               <div id="qr-reader" className="w-full"></div>
-              <button
+              <Button
                 onClick={() => setShowScanner(false)}
-                className="w-full mt-4 p-2 bg-gray-500 text-white rounded"
+                className="w-full mt-4"
+                variant="secondary"
               >
-                {t('common.cancel')}
-              </button>
+                {t("common.cancel")}
+              </Button>
             </div>
           </div>
         )}

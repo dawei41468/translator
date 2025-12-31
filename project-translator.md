@@ -3,7 +3,7 @@
 **Quick Summary**: A Progressive Web App (PWA) that enables seamless two-way real-time translated conversations between two users on different devices (iOS/Android). Users join a private room, select their language, speak naturally (via device mic or Bluetooth headset), and instantly hear/see the translation in their own language through speaker or Bluetooth headset.
 
 **Live URL**: https://translator.studiodtw.net  
-**Current Progress**: 5% (Project markdown finalized, translation provider locked, infrastructure planning complete — December 31, 2025)  
+**Current Progress**: 30% (Auth/infra/deploy/db complete — December 31, 2025)
 **Target MVP**: End of January 2026
 
 **Engineering Patterns (Canonical)**: Follow existing OneProject patterns exactly (see `CODEBASE-PATTERNS.md` in OneProject repo) for coding conventions, API design, auth, deployment, and architectural decisions.
@@ -30,10 +30,10 @@
 
 | Area                  | Status   | Notes |
 |-----------------------|----------|-------|
-| Infrastructure        | 10%      | Turborepo + pnpm + self-hosted PostgreSQL + Express + React + shadcn/ui |
-| Authentication        | 0%       | Will reuse OneProject JWT-in-httpOnly-cookie pattern |
-| Deployment            | 20%      | NGINX block planned (port 3005), EdgeOne subdomain ready to configure |
-| Database Schema       | 50%      | users/rooms/room_participants draft complete |
+| Infrastructure        | 100%     | Complete (Turborepo + pnpm + Drizzle + PM2 + Express serving React) |
+| Authentication        | 100%     | Complete (JWT cookie, /api/auth/*, /me, rate limit) |
+| Deployment            | 100%     | Complete (deploy.sh, ecosystem.config.cjs port 4003, PM2) |
+| Database Schema       | 100%     | Complete (users/sessions/rooms/room_participants w/ relations) |
 | Core Features         | 0%       | Room creation/join, real-time speech → translation → TTS |
 | Internationalization  | 0%       | Will reuse OneProject react-i18next + DB preference (essential for translator) |
 
@@ -84,8 +84,8 @@
 
 | Feature                                    | Priority | Status     | Owner          |
 |--------------------------------------------|----------|------------|----------------|
-| Secure login (email/password)              | High     | Not started| Kilo           |
-| Register (invite-only initially)           | High     | Not started| Kilo           |
+| Secure login (email/password)              | High     | Completed  | Kilo           |
+| Register (invite-only initially)           | High     | Completed  | Kilo           |
 | Create private room + shareable link/QR    | High     | Not started| You + Kilo     |
 | Join room by link/code                     | High     | Not started| You + Kilo     |
 | Language selection per user (DB stored)    | High     | Not started| Kilo           |
@@ -104,10 +104,10 @@
 
 | Item                                       | Status       | Priority | Owner | Notes |
 |--------------------------------------------|--------------|----------|-------|-------|
-| Scaffold Turborepo (copy OneProject)       | Not started  | High     | You   | Clone structure, create apps/web + apps/server |
-| NGINX + EdgeOne subdomain setup            | Not started  | High     | You   | Add translator.studiodtw.net block (port 3005) |
-| Auth system (copy OneProject)              | Not started  | High     | Kilo  | JWT cookie, /api/auth/* endpoints |
-| Database schema + Drizzle setup            | In progress  | High     | Kilo  | users, rooms, room_participants |
+| Scaffold Turborepo (copy OneProject)       | Completed    | High     | You   | Clone structure, create apps/web + apps/server |
+| NGINX + EdgeOne subdomain setup            | Completed    | High     | You   | translator.studiodtw.net block configured (port 4003) |
+| Auth system (copy OneProject)              | Completed    | High     | Kilo  | JWT cookie, /api/auth/* endpoints |
+| Database schema + Drizzle setup            | Completed    | High     | Kilo  | users, rooms, room_participants |
 | Room creation/join flow + shareable link   | Not started  | High     | You   | /join/:roomId route |
 | Socket.io real-time infrastructure         | Not started  | High     | Kilo  | Auth via cookie, room namespaces |
 | Core speech → translate → TTS loop         | Not started  | High     | Both  | End-to-end test on two devices |
@@ -149,7 +149,7 @@
 
 ## Build & Deployment Notes
 
-- **PM2 config**: `ecosystem.config.cjs` running `./apps/server/dist/apps/server/src/index.js` on port 4005
+- **PM2 config**: `ecosystem.config.cjs` running `./apps/server/dist/apps/server/src/index.js` on port 4003
 - **Server build**: `pnpm -C apps/server build` (tsc)
 - **Web build**: `pnpm -C apps/web build` (vite)
 - Server serves built frontend from `apps/web/dist` + `/api/health`
@@ -162,4 +162,4 @@
 - Grok: Loveable prompts, architecture alignment, deployment config, roadmap
 - You: final merge, deploy, test, UI integration, prioritize
 
-Last updated: December 31, 2025
+Last updated: December 31, 2025 (auth/infra/db/deploy status updated)

@@ -57,14 +57,12 @@ This document codifies the existing patterns in the Live Translator codebase so 
 
 ### Logging
 
-- Server logging is via `apps/server/src/logger.ts`:
-  - `logInfo(message, context?)`
-  - `logWarn(message, context?)`
-  - `logError(message, error?, context?)`
-  - `getRequestContext(req)` enriches logs with `user` object and `ip`.
-- **Structured Output**: Logs include grouped context for `user`, `request`, `response`, and `error`.
-- **Middleware**: `requestLogger` (in `apps/server/src/middleware/logger.ts`) automatically logs all API activity with duration and status codes.
-- **Human Readable**: In development, console output uses a visual hierarchy for metadata to improve debugability.
+- **Planned**: Server logging via `apps/server/src/logger.ts` (not yet implemented).
+  - Planned: `logInfo(message, context?)`, `logWarn(message, context?)`, `logError(message, error?, context?)`
+  - Planned: `getRequestContext(req)` enriches logs with `user` object and `ip`.
+  - Planned: Structured output with grouped context for `user`, `request`, `response`, and `error`.
+  - Planned: `requestLogger` middleware (in `apps/server/src/middleware/logger.ts`) for automatic API activity logging with duration and status codes.
+  - Planned: Human readable console output in development with visual hierarchy for metadata.
 
 ### Environment and configuration
 
@@ -82,7 +80,7 @@ This document codifies the existing patterns in the Live Translator codebase so 
 
 - `AuthProvider` is the source of truth.
   - On mount, it calls `apiClient.getMe()`.
-  - If user has `language`, it calls `i18n.changeLanguage(user.language)`.
+  - Planned: If user has `language`, call `i18n.changeLanguage(user.language)` (i18n not yet implemented).
 
 ### API access
 
@@ -94,7 +92,7 @@ This document codifies the existing patterns in the Live Translator codebase so 
 ### Server state and caching
 
 - Use TanStack Query.
-- All server state hooks live in `apps/web/src/lib/hooks.ts`:
+- Planned: All server state hooks in `apps/web/src/lib/hooks.ts` (not yet implemented):
   - Read hooks via `useQuery`
   - Write hooks via `useMutation`
   - On success, invalidate related keys (list + detail).
@@ -107,50 +105,51 @@ This document codifies the existing patterns in the Live Translator codebase so 
 
 ### Loading & Empty States
 
-- **Skeleton Component**: Use `Skeleton` for loading states with customizable dimensions and animations.
-  ```typescript
-  // Basic usage
-  <Skeleton className="h-4 w-1/2" />
+- **Planned**: Skeleton, EmptyState, ErrorState components (not yet implemented).
+  - Planned: Skeleton for loading states with customizable dimensions and animations.
+    ```typescript
+    // Basic usage
+    <Skeleton className="h-4 w-1/2" />
 
-  // Card skeleton
-  <Skeleton className="h-32 w-full rounded-lg" />
-  ```
+    // Card skeleton
+    <Skeleton className="h-32 w-full rounded-lg" />
+    ```
 
-- **EmptyState Component**: Reusable component for empty data states with optional icon, title, description, and action.
-  ```typescript
-  // Basic empty state
-  <EmptyState
-    title={t('rooms.empty.title')}
-    action={<Button>Create Room</Button>}
-  />
+  - Planned: EmptyState for empty data states with optional icon, title, description, and action.
+    ```typescript
+    // Basic empty state
+    <EmptyState
+      title={t('rooms.empty.title')}
+      action={<Button>Create Room</Button>}
+    />
 
-  // With icon and description
-  <EmptyState
-    icon={Plus}
-    title="No conversations found"
-    description="Try adjusting your search or filters."
-    action={<Button variant="outline">Clear Filters</Button>}
-  />
-  ```
+    // With icon and description
+    <EmptyState
+      icon={Plus}
+      title="No conversations found"
+      description="Try adjusting your search or filters."
+      action={<Button variant="outline">Clear Filters</Button>}
+    />
+    ```
 
-- **ErrorState Component**: Consistent error display with retry functionality.
-  ```typescript
-  // With retry action
-  <ErrorState
-    message="Failed to load rooms"
-    onRetry={() => refetch()}
-  />
+  - Planned: ErrorState for consistent error display with retry functionality.
+    ```typescript
+    // With retry action
+    <ErrorState
+      message="Failed to load rooms"
+      onRetry={() => refetch()}
+    />
 
-  // Without retry
-  <ErrorState message="Network error occurred" />
-  ```
+    // Without retry
+    <ErrorState message="Network error occurred" />
+    ```
 
-- **Patterns**:
-  - Use skeleton loaders for list views (cards/tables) during loading
-  - Provide contextual empty states with clear actions (e.g., "Start New Conversation")
-  - Include retry functionality for recoverable errors
-  - Support i18n for all text content
-  - Use responsive skeletons that match the final layout (table vs card views)
+  - Planned Patterns:
+    - Use skeleton loaders for list views (cards/tables) during loading
+    - Provide contextual empty states with clear actions (e.g., "Start New Conversation")
+    - Include retry functionality for recoverable errors
+    - Support i18n for all text content
+    - Use responsive skeletons that match the final layout (table vs card views)
 
 ### Build
 
@@ -158,8 +157,8 @@ This document codifies the existing patterns in the Live Translator codebase so 
 
 ### i18n
 
-- `i18next` initialized in `apps/web/src/lib/i18n.ts`.
-- Languages supported: `en`, `zh`.
+- Planned: `i18next` initialized in `apps/web/src/lib/i18n.ts` (not yet implemented).
+- Planned: Languages supported: `en`, `zh`.
 
 ## Data model patterns
 
@@ -171,7 +170,7 @@ This document codifies the existing patterns in the Live Translator codebase so 
 
 ## API response patterns
 
-- Room list responses may include server-computed aggregate fields such as participant count and status indicators.
+- Planned: Room list responses may include server-computed aggregate fields such as participant count and status indicators (rooms not yet implemented).
 
 ## Testing Patterns
 

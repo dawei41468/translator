@@ -8,6 +8,7 @@ import { authRouter } from "./routes/auth.js";
 import { meRouter } from "./routes/me.js";
 import { roomsRouter } from "./routes/rooms.js";
 import { authenticate } from "./middleware/auth.js";
+import { requestLogger } from "./middleware/logger.js";
 
 declare global {
   namespace Express {
@@ -39,6 +40,7 @@ const WEB_DIST_DIR = path.resolve(getRepoRootFromCwd(), "apps/web/dist");
 
 export const app = express();
 
+app.use(requestLogger);
 app.use(cors({ origin: true, credentials: true }));
 app.use(json({ limit: "10kb" }));
 app.use(express.urlencoded({ extended: true, limit: "10kb" }));

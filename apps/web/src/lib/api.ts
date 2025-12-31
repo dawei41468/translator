@@ -88,6 +88,13 @@ class ApiClient {
     });
   }
 
+  async updateMe(data: { name?: string; language?: string }) {
+    return this.request<{ user: AuthUser }>("/api/me", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
   // Room endpoints
   async createRoom() {
     return this.request<{ roomId: string; roomCode: string }>("/api/rooms", {

@@ -129,6 +129,6 @@ translator/
 
 ---
 
-**Current Progress**: 30% (Auth/infra/deploy/db complete — MVP target: End of January 2026)
+**Current Progress**: 90% (Core features completed - QR joining, multi-user translation, end-to-end speech/TTS — MVP target: End of January 2026)
 
 See [`project-translator.md`](project-translator.md) for detailed roadmap and status.

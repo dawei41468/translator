@@ -22,8 +22,7 @@ app.listen(PORT, "0.0.0.0", async () => {
   }
 
   // Service status
-  const r2Configured = !!(process.env.R2_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY);
-  const emailConfigured = !!process.env.SMTP_HOST; // Check for common SMTP env var
+  const translationConfigured = !!process.env.GOOGLE_TRANSLATE_API_KEY;
 
   // Startup time
   const startupTime = Date.now() - startupStart;
@@ -41,14 +40,12 @@ app.listen(PORT, "0.0.0.0", async () => {
     },
     database: {
       status: dbStatus,
-      type: 'PostgreSQL (Neon)'
+      type: 'PostgreSQL (TDSQL-C)'
     },
     services: {
-      r2Storage: r2Configured ? 'configured' : 'not configured',
-      emailService: emailConfigured ? 'configured' : 'not configured'
+      translationService: translationConfigured ? 'configured' : 'not configured'
     },
     configuration: {
-      uploadLimit: '20MB (PDFs only)',
       corsPolicy: 'Allow all origins',
       jwtExpiration: '30 days',
       missingEnvVars: missingVars

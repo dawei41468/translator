@@ -5,11 +5,11 @@ import path from 'path'
 export default defineConfig({
   plugins: [react()],
   server: {
-    port: 3004,
+    port: 4004,
     host: true,
     proxy: {
       "/api": {
-        target: "http://localhost:3003",
+        target: "http://localhost:4005",
         changeOrigin: true,
       },
     },

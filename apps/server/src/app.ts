@@ -9,6 +9,22 @@ import { apiLimiter } from "./middleware/rateLimiters.js";
 import { authRouter } from "./routes/auth.js";
 import { meRouter } from "./routes/me.js";
 
+declare global {
+  namespace Express {
+    interface Request {
+      user?: {
+        id: string;
+        email: string;
+        name: string | null;
+        language: string | null;
+        createdAt: Date | null;
+        updatedAt: Date | null;
+        deletedAt: Date | null;
+      };
+    }
+  }
+}
+
 function getRepoRootFromCwd(): string {
   const cwd = process.cwd();
   const base = path.basename(cwd);

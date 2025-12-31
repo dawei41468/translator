@@ -7,7 +7,6 @@ import { eq } from "drizzle-orm";
 import { db } from "../../../../packages/db/src/index.js";
 import { users } from "../../../../packages/db/src/schema.js";
 import { logInfo, logWarn, logError, getRequestContext } from "../logger.js";
-import { createAuditLog } from "../utils/audit.js";
 import { authenticate } from "../middleware/auth.js";
 
 const router = express.Router();
@@ -75,43 +74,7 @@ router.post("/login", async (req, res) => {
 
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
       logWarn("Failed login attempt", { ...context, email });
-
-      // Audit log: Failed authentication
-      await createAuditLog({
-        action: 'USER_LOGIN_FAILED',
-        ipAddress: context.ip,
-        userAgent: typeof context.userAgent === 'string' ? context.userAgent : null,
-        endpoint: req.path,
-        metadata: {
-          email: email,
-          reason: 'invalid_credentials',
-        },
-      });
-
       return res.status(401).json({ error: "Invalid credentials" });
-    }
-
-    if (!user.isActive) {
-      logWarn("Login attempt for disabled account", { ...context, email, userId: user.id });
-
-      // Audit log: Disabled account login attempt
-      await createAuditLog({
-        userId: user.id,
-        userBusinessUnit: user.businessUnit,
-        userRole: user.role,
-        action: 'USER_LOGIN_DISABLED',
-        targetType: 'user',
-        targetId: user.id,
-        ipAddress: context.ip,
-        userAgent: typeof context.userAgent === 'string' ? context.userAgent : null,
-        endpoint: req.path,
-        metadata: {
-          email: user.email,
-          reason: 'account_disabled',
-        },
-      });
-
-      return res.status(403).json({ error: "Account disabled" });
     }
 
     const token = jwt.sign(
@@ -119,8 +82,7 @@ router.post("/login", async (req, res) => {
         userId: user.id,
         email: user.email,
         name: user.name,
-        businessUnit: user.businessUnit,
-        role: user.role,
+        language: user.language,
       },
       JWT_SECRET,
       { expiresIn: "30d" }
@@ -135,32 +97,13 @@ router.post("/login", async (req, res) => {
       path: "/",
     });
 
-    logInfo("User logged in successfully", { ...context, userId: user.id, businessUnit: user.businessUnit });
-
-    // Audit log: User authentication
-    await createAuditLog({
-      userId: user.id,
-      userBusinessUnit: user.businessUnit,
-      userRole: user.role,
-      action: 'USER_LOGIN',
-      targetType: 'user',
-      targetId: user.id,
-      ipAddress: context.ip,
-      userAgent: typeof context.userAgent === 'string' ? context.userAgent : null,
-      endpoint: req.path,
-      metadata: {
-        email: user.email,
-        successful: true,
-      },
-    });
+    logInfo("User logged in successfully", { ...context, userId: user.id });
 
     res.json({
       user: {
         id: user.id,
         name: user.name,
         email: user.email,
-        businessUnit: user.businessUnit,
-        role: user.role,
         language: user.language,
       },
     });
@@ -208,8 +151,6 @@ router.post("/change-password", authenticate, async (req, res) => {
         userId: user.id,
         email: user.email,
         name: user.name,
-        businessUnit: user.businessUnit,
-        role: user.role,
         language: user.language,
       },
       JWT_SECRET,

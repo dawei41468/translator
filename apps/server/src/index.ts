@@ -40,7 +40,7 @@ app.listen(PORT, "0.0.0.0", async () => {
     },
     database: {
       status: dbStatus,
-      type: 'PostgreSQL (TDSQL-C)'
+      type: 'PostgreSQL (Local)'
     },
     services: {
       translationService: translationConfigured ? 'configured' : 'not configured'

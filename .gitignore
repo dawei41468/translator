@@ -1,0 +1,70 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+.pnpm-store/
+.pnpm-debug.log*
+
+# Build outputs
+dist/
+build/
+apps/*/dist/
+apps/*/build/
+packages/*/dist/
+packages/*/build/
+
+# Vite
+.vite/
+apps/web/.vite/
+
+# Turborepo
+.turbo/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Logs & runtime
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+logs/
+
+# Editor & OS
+.vscode/
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# TypeScript cache
+*.tsbuildinfo
+*.tsbuildinfo.next
+
+# Parcel/Next/Gatsby/Nuxt (we don't use but harmless)
+.cache/
+.parcel-cache/
+.next/
+.nuxt/
+.out/
+.storybook-out/
+# PM2 — we DO want this in git!
+# Remove or comment out this line:
+# ecosystem.config.js
+
+# Misc
+coverage/
+.nyc_output/
+*.tgz
+.node_repl_history
+
+# Testing
+test-results/
+playwright-report/
+playwright/.cache/
+apps/*/test-results/
+apps/*/playwright-report/
+apps/*/playwright/.cache/

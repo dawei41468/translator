@@ -1,0 +1,14 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "tasks": {
+    "build": {},
+    "dev": {},
+    "test": {},
+    "test:watch": {},
+    "test:e2e": {},
+    "lint": {},
+    "db:generate": {},
+    "db:migrate": {},
+    "db:push": {}
+  }
+}

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { apiClient } from "./api";
 import type { AuthUser } from "./types";
+import { useTranslation } from "react-i18next";
 
 interface AuthContextType {
   user: AuthUser | null;
@@ -14,6 +15,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const { i18n } = useTranslation();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -23,6 +25,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .getMe()
       .then(({ user }) => {
         setUser(user);
+        if (user?.language) {
+          i18n.changeLanguage(user.language);
+        }
       })
       .catch(() => {
         setUser(null);

@@ -32,7 +32,7 @@
 | Deployment            | 100%     | Complete (deploy.sh, ecosystem.config.cjs port 4003, PM2) |
 | Database Schema       | 100%     | Complete (users/sessions/rooms/room_participants w/ relations) |
 | Core Features         | 90%      | Backend: room creation/join, real-time speech → translation → broadcast (multi-user); Frontend: QR joining, Web Speech API, TTS, chat UI |
-| Internationalization  | 0%       | Will reuse OneProject react-i18next + DB preference (essential for translator) |
+| Internationalization  | 100%     | Complete: react-i18next + DB preference (en/zh) |
 
 ## Translation Provider Decision (Locked)
 
@@ -110,9 +110,9 @@
 | Server-side translation (Google Cloud HK)  | High     | Completed    | Kilo           |
 | Broadcast translated text to other participant | High     | Completed    | Kilo           |
 | Client-side TTS (Web Speech API) + audio toggle | High     | Completed   | You            |
-| Bluetooth headset output routing (Audio Output API) | High     | Not started  | You            |
-| Live chat-like UI with bubbles (You / Other) | High     | Not started  | You            |
-| Mobile-responsive conversation screen      | High     | Not started  | You            |
+| Bluetooth headset output routing (Audio Output API) | High     | Completed    | You            |
+| Live chat-like UI with bubbles (You / Other) | High     | Completed    | You            |
+| Mobile-responsive conversation screen      | High     | Completed    | You            |
 | Reconnection handling + status indicators | Medium   | Not started  | Kilo           |
 | Room expiration (24h auto-cleanup)         | Medium   | Not started  | Kilo           |
 

@@ -23,6 +23,8 @@ const Conversation = () => {
   const [audioEnabled, setAudioEnabled] = useState(true);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const synthRef = useRef<SpeechSynthesis | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [outputDeviceId, setOutputDeviceId] = useState<string>('');
 
   // Get room info
   const { data: roomData, isLoading } = useQuery({
@@ -150,6 +152,11 @@ const Conversation = () => {
     }
   }, [socket, roomData]);
 
+  // Auto-scroll to bottom on new messages
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
   const toggleRecording = () => {
     if (!recognitionRef.current) {
       toast.error('Speech recognition not supported');
@@ -171,6 +178,21 @@ const Conversation = () => {
     }
   };
 
+  const selectOutputDevice = async () => {
+    if ('selectAudioOutput' in navigator.mediaDevices) {
+      try {
+        const device = await (navigator.mediaDevices as any).selectAudioOutput();
+        setOutputDeviceId(device.deviceId);
+        toast.success('Output device selected');
+      } catch (error) {
+        console.error('Error selecting output device:', error);
+        toast.error('Failed to select output device');
+      }
+    } else {
+      toast.error('Audio output selection not supported on this device');
+    }
+  };
+
   if (isLoading) {
     return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
   }
@@ -182,7 +204,7 @@ const Conversation = () => {
   return (
     <div className="flex flex-col h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-white border-b p-4 flex items-center justify-between">
+      <div className="bg-white border-b p-4 sm:p-6 flex items-center justify-between">
         <div className="flex items-center space-x-2">
           <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
           <span className="font-medium">Room: {roomData.code}</span>
@@ -195,6 +217,13 @@ const Conversation = () => {
             🔊
           </button>
           <button
+            onClick={selectOutputDevice}
+            className="p-2 rounded bg-gray-200 hover:bg-gray-300"
+            title="Select audio output device"
+          >
+            🎧
+          </button>
+          <button
             onClick={() => navigate('/dashboard')}
             className="px-3 py-1 bg-gray-500 text-white rounded"
           >
@@ -204,14 +233,14 @@ const Conversation = () => {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
         {messages.map((message) => (
           <div
             key={message.id}
             className={`flex ${message.isOwn ? 'justify-end' : 'justify-start'}`}
           >
             <div
-              className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+              className={`max-w-xs sm:max-w-sm lg:max-w-md px-4 py-2 rounded-lg ${
                 message.isOwn
                   ? 'bg-blue-500 text-white'
                   : 'bg-white border'
@@ -224,15 +253,16 @@ const Conversation = () => {
             </div>
           </div>
         ))}
+        <div ref={messagesEndRef} />
       </div>
 
       {/* Controls */}
-      <div className="bg-white border-t p-4">
+      <div className="bg-white border-t p-4 sm:p-6">
         <div className="flex justify-center">
           <button
             onClick={toggleRecording}
             disabled={!isConnected}
-            className={`px-6 py-3 rounded-full font-medium ${
+            className={`px-6 py-3 sm:px-8 sm:py-4 rounded-full font-medium ${
               isRecording
                 ? 'bg-red-500 text-white animate-pulse'
                 : 'bg-green-500 text-white hover:bg-green-600'

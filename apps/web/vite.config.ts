@@ -7,6 +7,7 @@ export default defineConfig(({ mode }) => {
   const isDev = mode === "development";
 
   return {
+    envDir: path.resolve(__dirname, "../.."),
     plugins: [
       react(),
       VitePWA({

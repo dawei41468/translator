@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/ui/error-state";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
-import { Volume2, VolumeX, LogOut, Mic, MicOff } from "lucide-react";
+import { Volume2, VolumeX, LogOut, Mic, MicOff, Speaker } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LANGUAGES } from "@/lib/languages";
 import {
@@ -28,6 +28,23 @@ interface Message {
 }
 
 const TTS_ENABLED_STORAGE_KEY = "translator_tts_enabled";
+const TTS_SPEAKER_OVERRIDE_STORAGE_KEY = "translator_tts_speaker_override";
+
+function getTtsLocale(language: string | null | undefined): string {
+  switch ((language ?? "en").toLowerCase()) {
+    case "zh":
+      return "zh-CN";
+    case "it":
+      return "it-IT";
+    case "de":
+      return "de-DE";
+    case "nl":
+      return "nl-NL";
+    case "en":
+    default:
+      return "en-US";
+  }
+}
 
 function getSocketBaseUrl(): string {
   const base = import.meta.env.VITE_API_BASE_URL;
@@ -68,6 +85,7 @@ const Conversation = () => {
     "connecting" | "connected" | "disconnected" | "reconnecting"
   >("connecting");
   const [isRecording, setIsRecording] = useState(false);
+  const isRecordingRef = useRef<boolean>(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [soloMode, setSoloMode] = useState(false);
@@ -83,17 +101,117 @@ const Conversation = () => {
       return true;
     }
   });
+  const [allowSpeakerAudio, setAllowSpeakerAudio] = useState(() => {
+    try {
+      const stored = localStorage.getItem(TTS_SPEAKER_OVERRIDE_STORAGE_KEY);
+      if (stored === null) return false;
+      return stored === "true";
+    } catch {
+      return false;
+    }
+  });
+  const [hasPrivateAudioOutput, setHasPrivateAudioOutput] = useState(false);
   const synthRef = useRef<SpeechSynthesis | null>(null);
+  const voicesRef = useRef<SpeechSynthesisVoice[]>([]);
+  const pendingTtsRef = useRef<{ text: string; language: string | null | undefined } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const audioEnabledRef = useRef<boolean>(audioEnabled);
+  const hasPrivateAudioOutputRef = useRef<boolean>(hasPrivateAudioOutput);
+  const allowSpeakerAudioRef = useRef<boolean>(allowSpeakerAudio);
 
   useEffect(() => {
     audioEnabledRef.current = audioEnabled;
   }, [audioEnabled]);
 
   useEffect(() => {
+    hasPrivateAudioOutputRef.current = hasPrivateAudioOutput;
+  }, [hasPrivateAudioOutput]);
+
+  useEffect(() => {
+    allowSpeakerAudioRef.current = allowSpeakerAudio;
+  }, [allowSpeakerAudio]);
+
+  useEffect(() => {
+    isRecordingRef.current = isRecording;
+  }, [isRecording]);
+
+  useEffect(() => {
     socketRef.current = socket;
   }, [socket]);
+
+  const speakTextNow = (text: string, language: string | null | undefined) => {
+    if (!audioEnabledRef.current) return;
+    // Real-world default: only speak when using a private audio output (headphones/earbuds).
+    if (!hasPrivateAudioOutputRef.current && !allowSpeakerAudioRef.current) return;
+    const synth = synthRef.current;
+    if (!synth) return;
+
+    const locale = getTtsLocale(language);
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = locale;
+
+    const voices =
+      voicesRef.current.length > 0 ? voicesRef.current : synth.getVoices();
+
+    const localeLower = locale.toLowerCase();
+    const primary = localeLower.split("-")[0];
+
+    const voice =
+      voices.find((v) => v.lang.toLowerCase() === localeLower) ??
+      voices.find((v) => v.lang.toLowerCase().startsWith(`${primary}-`)) ??
+      voices.find((v) => v.lang.toLowerCase() === primary);
+
+    if (voice) utterance.voice = voice;
+
+    synth.cancel();
+    synth.speak(utterance);
+  };
+
+  const speakText = (text: string, language: string | null | undefined) => {
+    // Avoid audio feedback loops: don't speak while mic is recording.
+    if (isRecordingRef.current) {
+      pendingTtsRef.current = { text, language };
+      return;
+    }
+    speakTextNow(text, language);
+  };
+
+  const flushPendingTts = () => {
+    const pending = pendingTtsRef.current;
+    if (!pending) return;
+    pendingTtsRef.current = null;
+    speakTextNow(pending.text, pending.language);
+  };
+
+  const refreshAudioOutputs = async () => {
+    try {
+      if (!navigator.mediaDevices?.enumerateDevices) return;
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const outputs = devices.filter((d) => d.kind === "audiooutput");
+
+      // If the platform doesn't expose output devices, we can't reliably detect.
+      // Keep default false (text-only).
+      if (outputs.length === 0) {
+        setHasPrivateAudioOutput(false);
+        return;
+      }
+
+      const isPrivate = outputs.some((d) => {
+        const label = (d.label ?? "").toLowerCase();
+        return (
+          label.includes("headphone") ||
+          label.includes("headset") ||
+          label.includes("earbud") ||
+          label.includes("airpod") ||
+          label.includes("buds")
+        );
+      });
+
+      setHasPrivateAudioOutput(isPrivate);
+    } catch {
+      setHasPrivateAudioOutput(false);
+    }
+  };
 
   useEffect(() => {
     const next = meData?.user?.language ?? user?.language;
@@ -162,8 +280,7 @@ const Conversation = () => {
 
       // Speak the translated text if audio is enabled
       if (audioEnabledRef.current && synthRef.current) {
-        const utterance = new SpeechSynthesisUtterance(data.translatedText);
-        synthRef.current.speak(utterance);
+        speakText(data.translatedText, data.targetLang);
       }
     });
 
@@ -199,15 +316,15 @@ const Conversation = () => {
         });
 
         if (audioEnabledRef.current && synthRef.current) {
-          const utterance = new SpeechSynthesisUtterance(data.translatedText);
-          synthRef.current.speak(utterance);
+          speakText(data.translatedText, data.targetLang);
         }
       }
     );
 
     socketInstance.on('speech-error', (error: string) => {
       toast.error(error);
-      setIsRecording(false);
+      pendingTtsRef.current = null;
+      stopRecordingInternal();
     });
 
     socketInstance.on('error', (error: string) => {
@@ -229,14 +346,49 @@ const Conversation = () => {
     }
   }, [audioEnabled]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        TTS_SPEAKER_OVERRIDE_STORAGE_KEY,
+        String(allowSpeakerAudio)
+      );
+    } catch {
+      // ignore
+    }
+  }, [allowSpeakerAudio]);
+
   // Initialize speech synthesis and cleanup audio on unmount
   useEffect(() => {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      synthRef.current = window.speechSynthesis;
-    }
+      const synth = window.speechSynthesis;
+      synthRef.current = synth;
 
+      const syncVoices = () => {
+        voicesRef.current = synth.getVoices();
+      };
+
+      syncVoices();
+      synth.addEventListener("voiceschanged", syncVoices);
+
+      return () => {
+        synth.removeEventListener("voiceschanged", syncVoices);
+        stopRecordingInternal();
+      };
+    }
     return () => {
       stopRecordingInternal();
+    };
+  }, []);
+
+  useEffect(() => {
+    refreshAudioOutputs();
+
+    const mediaDevices = navigator.mediaDevices;
+    if (!mediaDevices?.addEventListener) return;
+
+    mediaDevices.addEventListener("devicechange", refreshAudioOutputs);
+    return () => {
+      mediaDevices.removeEventListener("devicechange", refreshAudioOutputs);
     };
   }, []);
 
@@ -251,13 +403,24 @@ const Conversation = () => {
     if (socketRef.current) {
       socketRef.current.emit('stop-speech');
     }
+    isRecordingRef.current = false;
     setIsRecording(false);
+    flushPendingTts();
   };
 
   const startRecordingInternal = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
       streamRef.current = stream;
+
+      // After mic permission is granted, device labels become available in many browsers.
+      await refreshAudioOutputs();
 
       const activeSocket = socketRef.current;
       if (!activeSocket) return;
@@ -288,6 +451,7 @@ const Conversation = () => {
 
       mediaRecorder.start(250); // Send data every 250ms
       mediaRecorderRef.current = mediaRecorder;
+      isRecordingRef.current = true;
       setIsRecording(true);
     } catch (err) {
       console.error('Failed to start recording', err);
@@ -319,6 +483,10 @@ const Conversation = () => {
       }
       return next;
     });
+  };
+
+  const toggleSpeakerOverride = () => {
+    setAllowSpeakerAudio((prev) => !prev);
   };
 
   if (isLoading) {
@@ -382,6 +550,15 @@ const Conversation = () => {
           </Button>
           <Button
             type="button"
+            variant={allowSpeakerAudio ? "secondary" : "outline"}
+            onClick={toggleSpeakerOverride}
+            title={t('conversation.allowSpeakerAudio', 'Allow speaker audio')}
+            size="icon"
+          >
+            <Speaker />
+          </Button>
+          <Button
+            type="button"
             variant="secondary"
             onClick={() => navigate('/dashboard')}
           >
@@ -432,7 +609,6 @@ const Conversation = () => {
               type="button"
               variant={soloMode ? "default" : "outline"}
               size="sm"
-              disabled={connectionStatus !== 'connected'}
               onClick={toggleSoloMode}
             >
               {t('conversation.soloMode')}

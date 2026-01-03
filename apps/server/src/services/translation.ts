@@ -3,6 +3,23 @@ import { logger } from "../logger.js";
 
 let translationClient: TranslationServiceClient | null = null;
 
+const SUPPORTED_TRANSLATION_LOCATIONS = new Set(["global", "us-central1"]);
+
+function getTranslationLocation(): string {
+  const raw =
+    process.env.GOOGLE_CLOUD_TRANSLATE_LOCATION ??
+    process.env.GOOGLE_CLOUD_LOCATION ??
+    "global";
+
+  const location = raw.trim();
+  if (SUPPORTED_TRANSLATION_LOCATIONS.has(location)) return location;
+
+  logger.warn("Unsupported Google Translation location; falling back to global", {
+    location,
+  });
+  return "global";
+}
+
 function getTranslationClient() {
   if (!translationClient) {
     translationClient = new TranslationServiceClient();
@@ -12,16 +29,19 @@ function getTranslationClient() {
 
 export async function translateText(text: string, sourceLang: string, targetLang: string): Promise<string> {
   try {
+    const normalizedText = text.trim();
+    if (!normalizedText) return text;
+
     const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
     if (!projectId) {
       throw new Error("GOOGLE_CLOUD_PROJECT_ID not configured");
     }
 
-    const location = "asia-east2"; // Hong Kong region
+    const location = getTranslationLocation(); // Hong Kong region
 
     const request = {
       parent: `projects/${projectId}/locations/${location}`,
-      contents: [text],
+      contents: [normalizedText],
       mimeType: "text/plain",
       sourceLanguageCode: sourceLang,
       targetLanguageCode: targetLang,

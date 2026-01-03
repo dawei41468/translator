@@ -2,8 +2,11 @@ import winston from 'winston';
 
 const { combine, timestamp, printf, colorize, align } = winston.format;
 
+const isProd = process.env.NODE_ENV === 'production';
+
 const logFormat = printf(({ level, message, timestamp, ...metadata }) => {
-  const isProd = process.env.NODE_ENV === 'production';
+  const prettyProd =
+    process.env.LOG_PRETTY === '1' || process.env.LOG_PRETTY === 'true';
   
   // ANSI colors for dev mode
   const reset = '\x1b[0m';
@@ -13,8 +16,19 @@ const logFormat = printf(({ level, message, timestamp, ...metadata }) => {
   const blue = '\x1b[34m';
 
   if (isProd) {
-    const metaStr = Object.keys(metadata).length > 0 ? ` ${JSON.stringify(metadata)}` : '';
-    return `${timestamp} [${level}] : ${message}${metaStr}`;
+    if (Object.keys(metadata).length === 0) {
+      return `${timestamp} [${level}] : ${message}`;
+    }
+
+    if (!prettyProd) {
+      return `${timestamp} [${level}] : ${message} ${JSON.stringify(metadata)}`;
+    }
+
+    const pretty = JSON.stringify(metadata, null, 2)
+      .split('\n')
+      .map((line) => `  ${line}`)
+      .join('\n');
+    return `${timestamp} [${level}] : ${message}\n${pretty}`;
   }
 
   // Development formatting
@@ -52,11 +66,13 @@ const logFormat = printf(({ level, message, timestamp, ...metadata }) => {
 
 const loggerInstance = winston.createLogger({
   level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
-  format: combine(
-    colorize(), // Colors the level property
-    timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-    logFormat
-  ),
+  format: (() => {
+    const formats = [timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }), logFormat];
+    if (!isProd) {
+      formats.unshift(colorize());
+    }
+    return combine(...formats);
+  })(),
   transports: [new winston.transports.Console()],
 });
 

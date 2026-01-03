@@ -73,8 +73,18 @@ app.use(
 app.use(
   express.static(WEB_DIST_DIR, {
     setHeaders(res, filePath) {
-      if (filePath.endsWith("index.html")) {
+      if (
+        filePath.endsWith("index.html") ||
+        filePath.endsWith("sw.js") ||
+        filePath.endsWith("manifest.webmanifest")
+      ) {
         res.setHeader("Cache-Control", "no-store");
+        return;
+      }
+
+      const baseName = path.basename(filePath);
+      if (baseName.startsWith("workbox-") && baseName.endsWith(".js")) {
+        res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
       }
     },
   })

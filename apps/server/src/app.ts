@@ -40,6 +40,22 @@ const WEB_DIST_DIR = path.resolve(getRepoRootFromCwd(), "apps/web/dist");
 
 export const app = express();
 
+if (process.env.NODE_ENV === "production") {
+  const raw = process.env.TRUST_PROXY;
+  if (raw === undefined || raw === "") {
+    // Typical production deployments sit behind a reverse proxy (nginx / cloud LB).
+    // Needed for correct req.ip and express-rate-limit when X-Forwarded-For is present.
+    app.set("trust proxy", 1);
+  } else if (raw === "true" || raw === "1") {
+    app.set("trust proxy", true);
+  } else if (raw === "false" || raw === "0") {
+    app.set("trust proxy", false);
+  } else {
+    const hops = Number(raw);
+    app.set("trust proxy", Number.isFinite(hops) ? hops : 1);
+  }
+}
+
 app.use(requestLogger);
 app.use(cors({ origin: true, credentials: true }));
 app.use(json({ limit: "10kb" }));

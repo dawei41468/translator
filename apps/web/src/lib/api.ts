@@ -1,7 +1,19 @@
 import { QueryClient } from "@tanstack/react-query";
 import type { AuthUser, ApiError } from "./types";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
+function normalizeApiBaseUrl(raw: string | undefined): string {
+  const base = (raw ?? "").trim();
+  if (!base) return "";
+
+  // If the env var is set to `/api`, the endpoints below already include `/api/...`,
+  // so treat it as same-origin.
+  if (base === "/api" || base === "/api/") return "";
+
+  // If the env var includes a trailing `/api`, strip it so we don't end up with `/api/api/...`.
+  return base.replace(/\/api\/?$/, "");
+}
+
+const API_BASE_URL = normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL);
 
 function getErrorMessage(errorBody: unknown, fallback: string): string {
   if (typeof errorBody === "object" && errorBody !== null && "error" in errorBody) {

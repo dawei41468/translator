@@ -10,6 +10,14 @@ import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Volume2, VolumeX, LogOut, Mic, MicOff } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { LANGUAGES } from "@/lib/languages";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface Message {
   id: string;
@@ -56,10 +64,16 @@ const Conversation = () => {
   const [socket, setSocket] = useState<Socket | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected' | 'reconnecting'>('connecting');
+  const [connectionStatus, setConnectionStatus] = useState<
+    "connecting" | "connected" | "disconnected" | "reconnecting"
+  >("connecting");
   const [isRecording, setIsRecording] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const [soloMode, setSoloMode] = useState(false);
+  const [soloTargetLang, setSoloTargetLang] = useState<string>(() => {
+    return user?.language ?? "en";
+  });
   const [audioEnabled, setAudioEnabled] = useState(() => {
     try {
       const stored = localStorage.getItem(TTS_ENABLED_STORAGE_KEY);
@@ -80,6 +94,11 @@ const Conversation = () => {
   useEffect(() => {
     socketRef.current = socket;
   }, [socket]);
+
+  useEffect(() => {
+    const next = meData?.user?.language ?? user?.language;
+    if (next) setSoloTargetLang(next);
+  }, [meData?.user?.language, user?.language]);
 
   // Get room info
   const { data: roomData, isLoading, error, refetch } = useRoom(code);
@@ -148,15 +167,43 @@ const Conversation = () => {
       }
     });
 
-    socketInstance.on('recognized-speech', (data: { text: string; sourceLang: string }) => {
+    socketInstance.on('recognized-speech', (data: { id?: string; text: string; sourceLang: string }) => {
       const message: Message = {
-        id: Date.now().toString(),
+        id: data.id ?? Date.now().toString(),
         text: data.text,
         isOwn: true,
         timestamp: new Date(),
       };
       setMessages(prev => [...prev, message]);
     });
+
+    socketInstance.on(
+      'solo-translated',
+      (data: { id: string; originalText: string; translatedText: string; sourceLang: string; targetLang: string }) => {
+        setMessages((prev) => {
+          const existing = prev.find((m) => m.id === data.id);
+          if (existing) {
+            return prev.map((m) => (m.id === data.id ? { ...m, translatedText: data.translatedText } : m));
+          }
+
+          return [
+            ...prev,
+            {
+              id: data.id,
+              text: data.originalText,
+              translatedText: data.translatedText,
+              isOwn: true,
+              timestamp: new Date(),
+            },
+          ];
+        });
+
+        if (audioEnabledRef.current && synthRef.current) {
+          const utterance = new SpeechSynthesisUtterance(data.translatedText);
+          synthRef.current.speak(utterance);
+        }
+      }
+    );
 
     socketInstance.on('speech-error', (error: string) => {
       toast.error(error);
@@ -216,7 +263,11 @@ const Conversation = () => {
       if (!activeSocket) return;
 
       const languageCode = getSpeechRecognitionLocale(meData?.user?.language ?? user?.language ?? "en");
-      activeSocket.emit('start-speech', { languageCode });
+      activeSocket.emit('start-speech', {
+        languageCode,
+        soloMode,
+        soloTargetLang: soloMode ? soloTargetLang : undefined,
+      });
 
       // Use MediaRecorder to capture audio and send chunks
       // Check for supported mime types
@@ -251,6 +302,13 @@ const Conversation = () => {
     } else {
       startRecordingInternal();
     }
+  };
+
+  const toggleSoloMode = () => {
+    if (isRecording) {
+      stopRecordingInternal();
+    }
+    setSoloMode((prev) => !prev);
   };
 
   const toggleAudio = () => {
@@ -349,8 +407,15 @@ const Conversation = () => {
               )}
             >
               <p className="leading-relaxed">{message.text}</p>
-              {message.translatedText && !message.isOwn && (
-                <p className="text-sm text-muted-foreground mt-1.5 border-t pt-1 border-border/50">
+              {message.translatedText && (
+                <p
+                  className={cn(
+                    "text-sm mt-1.5 border-t pt-1",
+                    message.isOwn
+                      ? "text-primary-foreground/80 border-primary-foreground/20"
+                      : "text-muted-foreground border-border/50"
+                  )}
+                >
                   {message.translatedText}
                 </p>
               )}
@@ -361,6 +426,38 @@ const Conversation = () => {
       </div>
 
       <div className="bg-background border-t p-4 pb-8 sm:p-6">
+        <div className="mb-4 flex flex-col items-center gap-3">
+          <div className="flex items-center justify-center gap-3">
+            <Button
+              type="button"
+              variant={soloMode ? "default" : "outline"}
+              size="sm"
+              disabled={connectionStatus !== 'connected'}
+              onClick={toggleSoloMode}
+            >
+              {t('conversation.soloMode')}
+            </Button>
+            {soloMode && (
+              <Select value={soloTargetLang} onValueChange={setSoloTargetLang}>
+                <SelectTrigger className="h-9 w-44">
+                  <SelectValue placeholder={t('conversation.translateTo')} />
+                </SelectTrigger>
+                <SelectContent>
+                  {LANGUAGES.map((lang) => (
+                    <SelectItem key={lang.code} value={lang.code}>
+                      {lang.name} ({lang.code.toUpperCase()})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+          {soloMode && (
+            <p className="text-center text-xs text-muted-foreground">
+              {t('conversation.soloModeHint')}
+            </p>
+          )}
+        </div>
         <div className="flex justify-center">
           <Button
             type="button"

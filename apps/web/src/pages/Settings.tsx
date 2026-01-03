@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { useMe, useUpdateLanguage } from "@/lib/hooks";
+import { LANGUAGES } from "@/lib/languages";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "react-i18next";
 import {
@@ -14,14 +15,6 @@ import {
 } from "@/components/ui/select";
 
 const TTS_ENABLED_STORAGE_KEY = "translator_tts_enabled";
-
-const LANGUAGES = [
-  { code: "en", name: "English" },
-  { code: "zh", name: "Chinese (中文)" },
-  { code: "it", name: "Italian" },
-  { code: "de", name: "German" },
-  { code: "nl", name: "Dutch" },
-];
 
 const Settings = () => {
   const { t } = useTranslation();

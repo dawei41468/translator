@@ -15,6 +15,8 @@ interface AuthenticatedSocket extends Socket {
   userId?: string;
   roomId?: string;
   recognizeStream?: any;
+  soloMode?: boolean;
+  soloTargetLang?: string;
 }
 
 export function setupSocketIO(io: Server) {
@@ -54,10 +56,15 @@ export function setupSocketIO(io: Server) {
       }
     };
 
-    socket.on("start-speech", (data: { languageCode: string }) => {
+    socket.on(
+      "start-speech",
+      (data: { languageCode: string; soloMode?: boolean; soloTargetLang?: string }) => {
       if (!socket.roomId || !socket.userId) return;
 
       stopRecognition();
+
+      socket.soloMode = Boolean(data.soloMode);
+      socket.soloTargetLang = data.soloTargetLang;
 
       try {
         socket.recognizeStream = createRecognizeStream(
@@ -75,7 +82,8 @@ export function setupSocketIO(io: Server) {
       } catch (error) {
         socket.emit("speech-error", "Failed to start recognition");
       }
-    });
+    }
+    );
 
     socket.on("speech-data", (data: Buffer) => {
       if (socket.recognizeStream) {
@@ -90,6 +98,8 @@ export function setupSocketIO(io: Server) {
     const handleTranscript = async (transcript: string, sourceLang: string) => {
       if (!socket.roomId || !socket.userId) return;
 
+      const messageId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
       try {
         const participants = await db.query.roomParticipants.findMany({
           where: eq(roomParticipants.roomId, socket.roomId),
@@ -99,7 +109,7 @@ export function setupSocketIO(io: Server) {
         });
 
         const otherParticipants = participants.filter((p) => p.userId !== socket.userId);
-        if (otherParticipants.length === 0) return;
+        if (otherParticipants.length === 0 && !socket.soloMode) return;
 
         const participantsByLanguage = new Map<string, typeof otherParticipants>();
 
@@ -111,33 +121,52 @@ export function setupSocketIO(io: Server) {
           participantsByLanguage.get(lang)!.push(participant);
         }
 
-        const translationPromises = Array.from(participantsByLanguage.entries()).map(
-          async ([targetLang, participants]) => {
-            const translatedText = await translateText(transcript, sourceLang, targetLang);
-            return { targetLang, translatedText, participants };
-          }
-        );
+        if (otherParticipants.length > 0) {
+          const translationPromises = Array.from(participantsByLanguage.entries()).map(
+            async ([targetLang, participants]) => {
+              const translatedText = await translateText(transcript, sourceLang, targetLang);
+              return { targetLang, translatedText, participants };
+            }
+          );
 
-        const translations = await Promise.all(translationPromises);
+          const translations = await Promise.all(translationPromises);
 
-        for (const { targetLang, translatedText, participants } of translations) {
-          for (const participant of participants) {
-            socket.to(socket.roomId!).emit("translated-message", {
-              originalText: transcript,
-              translatedText,
-              sourceLang,
-              targetLang,
-              fromUserId: socket.userId,
-              toUserId: participant.userId,
-            });
+          for (const { targetLang, translatedText, participants } of translations) {
+            for (const participant of participants) {
+              socket.to(socket.roomId!).emit("translated-message", {
+                originalText: transcript,
+                translatedText,
+                sourceLang,
+                targetLang,
+                fromUserId: socket.userId,
+                toUserId: participant.userId,
+              });
+            }
           }
         }
 
         // Also emit back to the sender so they see their own recognized text
         socket.emit("recognized-speech", {
+          id: messageId,
           text: transcript,
           sourceLang,
         });
+
+        if (socket.soloMode && socket.soloTargetLang) {
+          const translatedText = await translateText(
+            transcript,
+            sourceLang,
+            socket.soloTargetLang
+          );
+
+          socket.emit("solo-translated", {
+            id: messageId,
+            originalText: transcript,
+            translatedText,
+            sourceLang,
+            targetLang: socket.soloTargetLang,
+          });
+        }
       } catch (error) {
         logger.error("Error processing transcript", error, {
           userId: socket.userId,

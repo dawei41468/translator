@@ -13,7 +13,7 @@ const BottomNav = () => {
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-background border-t border-border z-50">
+    <nav className="fixed bottom-0 left-0 right-0 border-t border-border z-50 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/70">
       <div className="flex justify-around items-center h-16 px-4">
         {navItems.map(({ to, label, icon: Icon }) => {
           const isActive = location.pathname === to;
@@ -29,6 +29,12 @@ const BottomNav = () => {
               )}
             >
               <Icon className="h-5 w-5 mb-1" />
+              <span
+                className={cn(
+                  "h-0.5 w-6 rounded-full mb-1 transition-colors",
+                  isActive ? "bg-primary" : "bg-transparent"
+                )}
+              />
               {label}
             </Link>
           );

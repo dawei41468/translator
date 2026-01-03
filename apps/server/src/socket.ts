@@ -4,6 +4,7 @@ import { db } from "../../../packages/db/src/index.js";
 import { users, rooms, roomParticipants } from "../../../packages/db/src/schema.js";
 import { eq } from "drizzle-orm";
 import { translateText } from "./services/translation.js";
+import { createRecognizeStream } from "./services/stt.js";
 import { logger } from "./logger.js";
 import { parseCookies } from "./middleware/auth.js";
 
@@ -13,6 +14,7 @@ const AUTH_COOKIE_NAME = "auth_token";
 interface AuthenticatedSocket extends Socket {
   userId?: string;
   roomId?: string;
+  recognizeStream?: any;
 }
 
 export function setupSocketIO(io: Server) {
@@ -44,6 +46,106 @@ export function setupSocketIO(io: Server) {
 
   io.on("connection", (socket: AuthenticatedSocket) => {
     logger.info(`User connected to socket`, { userId: socket.userId });
+
+    const stopRecognition = () => {
+      if (socket.recognizeStream) {
+        socket.recognizeStream.end();
+        socket.recognizeStream = undefined;
+      }
+    };
+
+    socket.on("start-speech", (data: { languageCode: string }) => {
+      if (!socket.roomId || !socket.userId) return;
+
+      stopRecognition();
+
+      try {
+        socket.recognizeStream = createRecognizeStream(
+          { languageCode: data.languageCode },
+          async (transcript, isFinal) => {
+            if (isFinal) {
+              handleTranscript(transcript, data.languageCode.split("-")[0]);
+            }
+          },
+          (_error) => {
+            socket.emit("speech-error", "Recognition failed");
+            stopRecognition();
+          }
+        );
+      } catch (error) {
+        socket.emit("speech-error", "Failed to start recognition");
+      }
+    });
+
+    socket.on("speech-data", (data: Buffer) => {
+      if (socket.recognizeStream) {
+        socket.recognizeStream.write(data);
+      }
+    });
+
+    socket.on("stop-speech", () => {
+      stopRecognition();
+    });
+
+    const handleTranscript = async (transcript: string, sourceLang: string) => {
+      if (!socket.roomId || !socket.userId) return;
+
+      try {
+        const participants = await db.query.roomParticipants.findMany({
+          where: eq(roomParticipants.roomId, socket.roomId),
+          with: {
+            user: true,
+          },
+        });
+
+        const otherParticipants = participants.filter((p) => p.userId !== socket.userId);
+        if (otherParticipants.length === 0) return;
+
+        const participantsByLanguage = new Map<string, typeof otherParticipants>();
+
+        for (const participant of otherParticipants) {
+          const lang = participant.user.language || "en";
+          if (!participantsByLanguage.has(lang)) {
+            participantsByLanguage.set(lang, []);
+          }
+          participantsByLanguage.get(lang)!.push(participant);
+        }
+
+        const translationPromises = Array.from(participantsByLanguage.entries()).map(
+          async ([targetLang, participants]) => {
+            const translatedText = await translateText(transcript, sourceLang, targetLang);
+            return { targetLang, translatedText, participants };
+          }
+        );
+
+        const translations = await Promise.all(translationPromises);
+
+        for (const { targetLang, translatedText, participants } of translations) {
+          for (const participant of participants) {
+            socket.to(socket.roomId!).emit("translated-message", {
+              originalText: transcript,
+              translatedText,
+              sourceLang,
+              targetLang,
+              fromUserId: socket.userId,
+              toUserId: participant.userId,
+            });
+          }
+        }
+
+        // Also emit back to the sender so they see their own recognized text
+        socket.emit("recognized-speech", {
+          text: transcript,
+          sourceLang,
+        });
+      } catch (error) {
+        logger.error("Error processing transcript", error, {
+          userId: socket.userId,
+          roomId: socket.roomId,
+          transcript,
+        });
+      }
+    };
 
     socket.on("join-room", async (roomCode: string) => {
       try {
@@ -93,66 +195,12 @@ export function setupSocketIO(io: Server) {
     });
 
     socket.on("speech-transcript", async (data: { transcript: string; sourceLang: string }) => {
-      if (!socket.roomId || !socket.userId) return;
-
-      try {
-        // Get all other participants
-        const participants = await db.query.roomParticipants.findMany({
-          where: eq(roomParticipants.roomId, socket.roomId),
-          with: {
-            user: true,
-          },
-        });
-
-        const otherParticipants = participants.filter(p => p.userId !== socket.userId);
-        if (otherParticipants.length === 0) return;
-
-        // Group participants by language to avoid redundant translations
-        const participantsByLanguage = new Map<string, typeof otherParticipants>();
-
-        for (const participant of otherParticipants) {
-          const lang = participant.user.language || "en";
-          if (!participantsByLanguage.has(lang)) {
-            participantsByLanguage.set(lang, []);
-          }
-          participantsByLanguage.get(lang)!.push(participant);
-        }
-
-        // Translate once per unique language
-        const translationPromises = Array.from(participantsByLanguage.entries()).map(
-          async ([targetLang, participants]) => {
-            const translatedText = await translateText(data.transcript, data.sourceLang, targetLang);
-            return { targetLang, translatedText, participants };
-          }
-        );
-
-        const translations = await Promise.all(translationPromises);
-
-        // Emit to all participants in each language group
-        for (const { targetLang, translatedText, participants } of translations) {
-          for (const participant of participants) {
-            socket.to(socket.roomId).emit("translated-message", {
-              originalText: data.transcript,
-              translatedText,
-              sourceLang: data.sourceLang,
-              targetLang,
-              fromUserId: socket.userId,
-              toUserId: participant.userId,
-            });
-          }
-        }
-      } catch (error) {
-        logger.error("Error processing speech transcript", error, { 
-          userId: socket.userId, 
-          roomId: socket.roomId,
-          transcript: data.transcript 
-        });
-        socket.emit("error", "Translation failed");
-      }
+      handleTranscript(data.transcript, data.sourceLang);
     });
 
     socket.on("disconnect", () => {
       logger.info(`User disconnected from socket`, { userId: socket.userId });
+      stopRecognition();
       if (socket.roomId) {
         socket.to(socket.roomId).emit("user-left", { userId: socket.userId });
       }

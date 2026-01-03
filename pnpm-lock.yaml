@@ -54,6 +54,9 @@ importers:
       '@aws-sdk/s3-request-presigner':
         specifier: ^3.948.0
         version: 3.958.0
+      '@google-cloud/speech':
+        specifier: ^7.2.1
+        version: 7.2.1
       '@google-cloud/translate':
         specifier: ^9.3.0
         version: 9.3.0
@@ -1803,6 +1806,10 @@ packages:
     resolution: {integrity: sha512-N8qS6dlORGHwk7WjGXKOSsLjIjNINCPicsOX6gyyLiYk7mq3MtII96NZ9N2ahwA2vnkLmZODOIH9rlNniYWvCQ==}
     engines: {node: '>=18'}
 
+  '@google-cloud/speech@7.2.1':
+    resolution: {integrity: sha512-3eaX4/aT5cJ0JMAiMwg1RLJJD2fxbF3St9x+9QSQskHJGFuMM2RCUmadLjCK3gPsdVk2eVdStiyxxuw+zeIEbw==}
+    engines: {node: '>=18'}
+
   '@google-cloud/translate@9.3.0':
     resolution: {integrity: sha512-OgZ2bCu3P0ZzMhEdYubwyCo/eFFlJMYalozmgOxlVcD51vCYelYUJeVnGlS+3cFQTJQX4RE84bYTKu7W0wqByw==}
     engines: {node: '>=18'}
@@ -2966,6 +2973,9 @@ packages:
   '@types/deep-eql@4.0.2':
     resolution: {integrity: sha512-c9h9dVVMigMPc4bwTvC5dxqtqJZwQPePsWjPlpSOnojbor6pGqdk541lfA7AqFQr5pB1BRdq0juY9db81BwyFw==}
 
+  '@types/duplexify@3.6.5':
+    resolution: {integrity: sha512-fB56ACzlW91UdZ5F3VXplVMDngO8QaX5Y2mjvADtN01TT2TMy4WjF0Lg+tFDvt4uMBeTe4SgaD+qCrA7dL5/tA==}
+
   '@types/estree@0.0.39':
     resolution: {integrity: sha512-EYNwp3bU+98cpU4lAWYYL7Zz+2gryWH1qbdDTidVd6hkiR6weksdbMadyXKXNPEkQFhXM+hVO9ZygomHXp+AIw==}
 
@@ -3016,6 +3026,9 @@ packages:
 
   '@types/prop-types@15.7.15':
     resolution: {integrity: sha512-F6bEyamV9jKGAFBEmlQnesRPGOQqS2+Uwi0Em15xenOxHaf2hv6L8YCVn3rPdPJOiJfPiCnLIRyvwVaqMY3MIw==}
+
+  '@types/pumpify@1.4.5':
+    resolution: {integrity: sha512-BGVAQyK5yJdfIII230fVYGY47V63hUNAhryuuS3b4lEN2LNwxUXFKsEf8QLDCjmZuimlj23BHppJgcrGvNtqKg==}
 
   '@types/qs@6.14.0':
     resolution: {integrity: sha512-eOunJqu0K1923aExK6y8p6fsihYEn/BYuQ4g0CxAAgFc4b/ZLN4CrsRZ55srTdqoiLzU2B2evC+apEIxprEzkQ==}
@@ -5169,6 +5182,12 @@ packages:
     resolution: {integrity: sha512-llQsMLSUDUPT44jdrU/O37qlnifitDP+ZwrmmZcoSKyLKvtZxpyV0n2/bD/N4tBAAZ/gJEdZU7KMraoK1+XYAg==}
     engines: {node: '>= 0.10'}
 
+  pump@3.0.3:
+    resolution: {integrity: sha512-todwxLMY7/heScKmntwQG8CXVkWUOdYxIvY2s0VWAAMh/nd8SoYiRaKjlr7+iCs984f2P8zvrfWcDDYVb73NfA==}
+
+  pumpify@2.0.1:
+    resolution: {integrity: sha512-m7KOje7jZxrmutanlkS1daj1dS6z6BgslzOXmcSEpIlCxM3VJH7lG5QLeck/6hgF6F4crFf01UtQmNsJfweTAw==}
+
   punycode@2.3.1:
     resolution: {integrity: sha512-vYt7UD1U9Wg6138shLtLOvdAu+8DsC/ilFtEVHcH+wydcSpNE20AfSOduf6MkRFahL5FY7X1oU7nKVZFtfq8Fg==}
     engines: {node: '>=6'}
@@ -5963,6 +5982,10 @@ packages:
   utils-merge@1.0.1:
     resolution: {integrity: sha512-pMZTvIkT1d+TFGvDOqodOclx0QWkkgi6Tdoa8gC8ffGAAqz9pzPTZWAybbsHHoED/ztMtkv/VoYTYyShUn81hA==}
     engines: {node: '>= 0.4.0'}
+
+  uuid@11.1.0:
+    resolution: {integrity: sha512-0/A9rDy9P7cJ+8w1c9WD9V//9Wj15Ce2MPz8Ri6032usz+NfePxx5AcN3bN+r6ZL6jEo066/yNYB3tn4pQEx+A==}
+    hasBin: true
 
   uuid@13.0.0:
     resolution: {integrity: sha512-XQegIaBTVUjSHliKqcnFqYypAd4S+WCYt5NIeRs6w/UAry7z8Y9j5ZwRRL4kzq9U3sD6v+85er9FvkEaBpji2w==}
@@ -8014,6 +8037,17 @@ snapshots:
 
   '@google-cloud/promisify@5.0.0': {}
 
+  '@google-cloud/speech@7.2.1':
+    dependencies:
+      '@google-cloud/common': 6.0.0
+      '@types/pumpify': 1.4.5
+      google-gax: 5.0.6
+      pumpify: 2.0.1
+      stream-events: 1.0.5
+      uuid: 11.1.0
+    transitivePeerDependencies:
+      - supports-color
+
   '@google-cloud/translate@9.3.0':
     dependencies:
       '@google-cloud/common': 6.0.0
@@ -9376,6 +9410,10 @@ snapshots:
 
   '@types/deep-eql@4.0.2': {}
 
+  '@types/duplexify@3.6.5':
+    dependencies:
+      '@types/node': 25.0.3
+
   '@types/estree@0.0.39': {}
 
   '@types/estree@1.0.8': {}
@@ -9442,6 +9480,11 @@ snapshots:
       - aws-crt
 
   '@types/prop-types@15.7.15': {}
+
+  '@types/pumpify@1.4.5':
+    dependencies:
+      '@types/duplexify': 3.6.5
+      '@types/node': 25.0.3
 
   '@types/qs@6.14.0': {}
 
@@ -11907,6 +11950,17 @@ snapshots:
       forwarded: 0.2.0
       ipaddr.js: 1.9.1
 
+  pump@3.0.3:
+    dependencies:
+      end-of-stream: 1.4.5
+      once: 1.4.0
+
+  pumpify@2.0.1:
+    dependencies:
+      duplexify: 4.1.3
+      inherits: 2.0.4
+      pump: 3.0.3
+
   punycode@2.3.1: {}
 
   pure-rand@7.0.1: {}
@@ -12802,6 +12856,8 @@ snapshots:
   util-deprecate@1.0.2: {}
 
   utils-merge@1.0.1: {}
+
+  uuid@11.1.0: {}
 
   uuid@13.0.0: {}
 

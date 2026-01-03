@@ -1,7 +1,14 @@
 import { TranslationServiceClient } from "@google-cloud/translate";
 import { logger } from "../logger.js";
 
-const translationClient = new TranslationServiceClient();
+let translationClient: TranslationServiceClient | null = null;
+
+function getTranslationClient() {
+  if (!translationClient) {
+    translationClient = new TranslationServiceClient();
+  }
+  return translationClient;
+}
 
 export async function translateText(text: string, sourceLang: string, targetLang: string): Promise<string> {
   try {
@@ -20,7 +27,7 @@ export async function translateText(text: string, sourceLang: string, targetLang
       targetLanguageCode: targetLang,
     };
 
-    const [response] = await translationClient.translateText(request);
+    const [response] = await getTranslationClient().translateText(request);
 
     if (!response.translations || response.translations.length === 0) {
       throw new Error("No translation returned");

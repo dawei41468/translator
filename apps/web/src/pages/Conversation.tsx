@@ -1,13 +1,15 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { io, Socket } from "socket.io-client";
-import { useRoom } from "@/lib/hooks";
+import { useRoom, useMe } from "@/lib/hooks";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/ui/error-state";
 import { useAuth } from "@/lib/auth";
-import { useMe } from "@/lib/hooks";
+import { Button } from "@/components/ui/button";
+import { Volume2, VolumeX, LogOut, Mic, MicOff } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface Message {
   id: string;
@@ -52,9 +54,12 @@ const Conversation = () => {
   const { user } = useAuth();
   const { data: meData } = useMe();
   const [socket, setSocket] = useState<Socket | null>(null);
+  const socketRef = useRef<Socket | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected' | 'reconnecting'>('connecting');
   const [isRecording, setIsRecording] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const [audioEnabled, setAudioEnabled] = useState(() => {
     try {
       const stored = localStorage.getItem(TTS_ENABLED_STORAGE_KEY);
@@ -64,7 +69,6 @@ const Conversation = () => {
       return true;
     }
   });
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
   const synthRef = useRef<SpeechSynthesis | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const audioEnabledRef = useRef<boolean>(audioEnabled);
@@ -72,6 +76,10 @@ const Conversation = () => {
   useEffect(() => {
     audioEnabledRef.current = audioEnabled;
   }, [audioEnabled]);
+
+  useEffect(() => {
+    socketRef.current = socket;
+  }, [socket]);
 
   // Get room info
   const { data: roomData, isLoading, error, refetch } = useRoom(code);
@@ -140,6 +148,21 @@ const Conversation = () => {
       }
     });
 
+    socketInstance.on('recognized-speech', (data: { text: string; sourceLang: string }) => {
+      const message: Message = {
+        id: Date.now().toString(),
+        text: data.text,
+        isOwn: true,
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, message]);
+    });
+
+    socketInstance.on('speech-error', (error: string) => {
+      toast.error(error);
+      setIsRecording(false);
+    });
+
     socketInstance.on('error', (error: string) => {
       toast.error(error);
     });
@@ -159,81 +182,74 @@ const Conversation = () => {
     }
   }, [audioEnabled]);
 
-  // Initialize speech recognition
+  // Initialize speech synthesis and cleanup audio on unmount
   useEffect(() => {
-    if (typeof window !== 'undefined' && 'webkitSpeechRecognition' in window) {
-      const SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition;
-      const recognition = new SpeechRecognition();
-
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = getSpeechRecognitionLocale(meData?.user?.language ?? user?.language ?? "en");
-
-      recognition.onresult = (event) => {
-        let finalTranscript = '';
-        let interimTranscript = '';
-
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const transcript = event.results[i][0].transcript;
-          if (event.results[i].isFinal) {
-            finalTranscript += transcript;
-          } else {
-            interimTranscript += transcript;
-          }
-        }
-
-        if (finalTranscript && socket) {
-          // Send to server for translation
-          socket.emit('speech-transcript', {
-            transcript: finalTranscript,
-            sourceLang: recognition.lang.split('-')[0],
-          });
-
-          // Add own message
-          const message: Message = {
-            id: Date.now().toString(),
-            text: finalTranscript,
-            isOwn: true,
-            timestamp: new Date(),
-          };
-          setMessages(prev => [...prev, message]);
-        }
-      };
-
-      recognition.onerror = (event) => {
-        console.error('Speech recognition error:', event.error);
-        setIsRecording(false);
-      };
-
-      recognition.onend = () => {
-        setIsRecording(false);
-      };
-
-      recognitionRef.current = recognition;
-    }
-
-    // Initialize speech synthesis
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       synthRef.current = window.speechSynthesis;
     }
-  }, [socket, roomData, user?.language, meData?.user?.language]);
 
-  // Auto-scroll to bottom on new messages
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    return () => {
+      stopRecordingInternal();
+    };
+  }, []);
+
+  const stopRecordingInternal = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    if (socketRef.current) {
+      socketRef.current.emit('stop-speech');
+    }
+    setIsRecording(false);
+  };
+
+  const startRecordingInternal = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+
+      const activeSocket = socketRef.current;
+      if (!activeSocket) return;
+
+      const languageCode = getSpeechRecognitionLocale(meData?.user?.language ?? user?.language ?? "en");
+      activeSocket.emit('start-speech', { languageCode });
+
+      // Use MediaRecorder to capture audio and send chunks
+      // Check for supported mime types
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
+        ? 'audio/webm;codecs=opus' 
+        : 'audio/webm';
+      
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType,
+        audioBitsPerSecond: 128000
+      });
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0 && activeSocket.connected) {
+          activeSocket.emit('speech-data', event.data);
+        }
+      };
+
+      mediaRecorder.start(250); // Send data every 250ms
+      mediaRecorderRef.current = mediaRecorder;
+      setIsRecording(true);
+    } catch (err) {
+      console.error('Failed to start recording', err);
+      toast.error(t('error.generic'));
+      stopRecordingInternal();
+    }
+  };
 
   const toggleRecording = () => {
-    if (!recognitionRef.current) {
-      toast.error(t('error.speechNotSupported'));
-      return;
-    }
-
     if (isRecording) {
-      recognitionRef.current.stop();
+      stopRecordingInternal();
     } else {
-      recognitionRef.current.start();
-      setIsRecording(true);
+      startRecordingInternal();
     }
   };
 
@@ -249,8 +265,8 @@ const Conversation = () => {
 
   if (isLoading) {
     return (
-      <div className="flex flex-col h-screen bg-gray-50">
-        <div className="bg-white border-b p-4 sm:p-6 flex items-center justify-between">
+      <div className="flex flex-col h-screen bg-background">
+        <div className="bg-background border-b p-4 sm:p-6 flex items-center justify-between">
           <Skeleton className="h-6 w-32" />
           <div className="flex space-x-2">
             <Skeleton className="h-10 w-10" />
@@ -279,33 +295,41 @@ const Conversation = () => {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50">
+    <div className="flex flex-col h-screen bg-background">
       {/* Header */}
-      <div className="bg-white border-b p-4 sm:p-6 flex items-center justify-between">
-        <div className="flex items-center space-x-2">
-          <div className={`w-3 h-3 rounded-full ${
-            connectionStatus === 'connected' ? 'bg-green-500' :
-            connectionStatus === 'connecting' ? 'bg-yellow-500' :
-            connectionStatus === 'reconnecting' ? 'bg-orange-500' :
-            'bg-red-500'
-          }`}></div>
-          <span className="font-medium">{t('room.code')}: {roomData.code}</span>
-          {connectionStatus === 'reconnecting' && <span className="text-sm text-orange-600">{t('conversation.reconnecting')}...</span>}
+      <div className="bg-background border-b p-4 sm:p-6 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="inline-flex items-center gap-2 rounded-full bg-muted px-3 py-1">
+            <div className={`h-2.5 w-2.5 rounded-full ${
+              connectionStatus === 'connected' ? 'bg-green-500' :
+              connectionStatus === 'connecting' ? 'bg-yellow-500' :
+              connectionStatus === 'reconnecting' ? 'bg-orange-500' :
+              'bg-red-500'
+            }`}></div>
+            <span className="text-sm font-medium">{t('room.code')}: {roomData.code}</span>
+          </div>
+          {connectionStatus === 'reconnecting' && (
+            <span className="text-sm text-muted-foreground">{t('conversation.reconnecting')}...</span>
+          )}
         </div>
         <div className="flex items-center space-x-2">
-          <button
+          <Button
+            type="button"
+            variant={audioEnabled ? "default" : "outline"}
             onClick={toggleAudio}
-            className={`p-2 rounded ${audioEnabled ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
             title={audioEnabled ? t('conversation.audioOn') : t('conversation.audioOff')}
+            size="icon"
           >
-            🔊
-          </button>
-          <button
+            {audioEnabled ? <Volume2 /> : <VolumeX />}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
             onClick={() => navigate('/dashboard')}
-            className="px-3 py-1 bg-gray-500 text-white rounded"
           >
+            <LogOut />
             {t('common.leave')}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -317,15 +341,18 @@ const Conversation = () => {
             className={`flex ${message.isOwn ? 'justify-end' : 'justify-start'}`}
           >
             <div
-              className={`max-w-xs sm:max-w-sm lg:max-w-md px-4 py-2 rounded-lg ${
+              className={cn(
+                "max-w-[85%] sm:max-w-sm lg:max-w-md px-4 py-2 shadow-sm",
                 message.isOwn
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-white border'
-              }`}
+                  ? "bg-primary text-primary-foreground rounded-2xl rounded-tr-none"
+                  : "bg-card text-card-foreground border rounded-2xl rounded-tl-none"
+              )}
             >
-              <p>{message.text}</p>
+              <p className="leading-relaxed">{message.text}</p>
               {message.translatedText && !message.isOwn && (
-                <p className="text-sm opacity-75 mt-1">{message.translatedText}</p>
+                <p className="text-sm text-muted-foreground mt-1.5 border-t pt-1 border-border/50">
+                  {message.translatedText}
+                </p>
               )}
             </div>
           </div>
@@ -333,21 +360,25 @@ const Conversation = () => {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Controls */}
-      <div className="bg-white border-t p-4 sm:p-6">
+      <div className="bg-background border-t p-4 pb-8 sm:p-6">
         <div className="flex justify-center">
-          <button
+          <Button
+            type="button"
             onClick={toggleRecording}
             disabled={connectionStatus !== 'connected'}
-            className={`px-6 py-3 sm:px-8 sm:py-4 rounded-full font-medium ${
-              isRecording
-                ? 'bg-red-500 text-white animate-pulse'
-                : 'bg-green-500 text-white hover:bg-green-600'
-            } disabled:opacity-50`}
+            variant={isRecording ? "destructive" : "default"}
+            size="lg"
+            className={cn(
+              "h-16 w-16 rounded-full shadow-lg transition-all",
+              isRecording ? "animate-pulse scale-110" : "hover:scale-105"
+            )}
           >
-            {isRecording ? t('conversation.stopSpeaking') : t('conversation.startSpeaking')}
-          </button>
+            {isRecording ? <MicOff className="h-8 w-8" /> : <Mic className="h-8 w-8" />}
+          </Button>
         </div>
+        <p className="text-center text-xs text-muted-foreground mt-3">
+          {isRecording ? t('conversation.stopSpeaking') : t('conversation.startSpeaking')}
+        </p>
       </div>
     </div>
   );

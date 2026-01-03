@@ -9,12 +9,24 @@ import Dashboard from "@/pages/Dashboard";
 import Settings from "@/pages/Settings";
 import Conversation from "@/pages/Conversation";
 import Layout from "@/components/Layout";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
 
   if (isLoading) {
-    return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="container mx-auto px-4 py-10">
+          <div className="max-w-md mx-auto border rounded-xl bg-card text-card-foreground shadow-sm p-5 space-y-4">
+            <Skeleton className="h-7 w-32" />
+            <Skeleton className="h-11 w-full" />
+            <Skeleton className="h-11 w-full" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (!isAuthenticated) {

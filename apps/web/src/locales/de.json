@@ -79,6 +79,7 @@
   "toast.updateProfileFailed": "Profil konnte nicht aktualisiert werden",
   "error.generic": "Ein Fehler ist aufgetreten",
   "error.network": "Netzwerkfehler",
+  "error.speechNetwork": "Spracherkennungsdienst nicht verfügbar. Prüfen Sie Verbindung/VPN und versuchen Sie es erneut.",
   "error.speechNotSupported": "Spracherkennung nicht unterstützt",
   "error.enterCode": "Bitte geben Sie einen Raumcode ein",
   "error.invalidQR": "Ungültiger QR-Code",

@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { useTranslation } from 'react-i18next';
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 export default function Login() {
   const { t } = useTranslation();
@@ -27,54 +29,67 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        <h1 className="text-2xl font-bold text-center mb-4">{t('app.name')}</h1>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {error && (
-            <div className="text-red-500 text-sm">
-              {error}
-            </div>
-          )}
-          <div>
-            <label htmlFor="email">{t('auth.email')}</label>
-            <input
-              id="email"
-              type="email"
-              placeholder={t('auth.email')}
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoComplete="email"
-              required
-              className="w-full p-2 border rounded"
-            />
+    <div className="min-h-screen bg-background">
+      <div className="container mx-auto px-4 py-10">
+        <div className="max-w-md mx-auto">
+          <div className="text-center mb-8">
+            <h1 className="mb-3 text-4xl font-bold tracking-tight">{t("app.name")}</h1>
+            <p className="text-base text-muted-foreground">{t("app.description")}</p>
           </div>
 
-          <div>
-            <label htmlFor="password">{t('auth.password')}</label>
-            <input
-              id="password"
-              type="password"
-              placeholder={t('auth.password')}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-              required
-              className="w-full p-2 border rounded"
-            />
+          <div className="border rounded-xl bg-card text-card-foreground shadow-sm p-5">
+            <h2 className="text-lg font-semibold mb-4">{t("auth.login")}</h2>
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {error && (
+                <div className="text-sm text-destructive">
+                  {error}
+                </div>
+              )}
+
+              <div className="space-y-1">
+                <label htmlFor="email" className="text-sm font-medium">
+                  {t("auth.email")}
+                </label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder={t("auth.email")}
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  autoComplete="email"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label htmlFor="password" className="text-sm font-medium">
+                  {t("auth.password")}
+                </label>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder={t("auth.password")}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="current-password"
+                  required
+                />
+              </div>
+
+              <Button type="submit" disabled={isSubmitting} className="w-full" size="lg">
+                {isSubmitting ? t("auth.signingIn") : t("auth.signIn")}
+              </Button>
+            </form>
           </div>
 
-          <button type="submit" disabled={isSubmitting} className="w-full p-2 bg-blue-500 text-white rounded disabled:opacity-50">
-            {isSubmitting ? t('auth.signingIn') : t('auth.signIn')}
-          </button>
-        </form>
-        <div className="text-center mt-4">
-          <button
-            onClick={() => navigate('/register')}
-            className="text-blue-500 hover:underline"
-          >
-            {t('auth.noAccount')}
-          </button>
+          <div className="text-center mt-6">
+            <Button type="button" variant="link" onClick={() => navigate("/register")}
+              className="px-0"
+            >
+              {t("auth.noAccount")}
+            </Button>
+          </div>
         </div>
       </div>
     </div>

@@ -79,6 +79,7 @@
   "toast.updateProfileFailed": "Impossibile aggiornare il profilo",
   "error.generic": "Si è verificato un errore",
   "error.network": "Errore di rete",
+  "error.speechNetwork": "Servizio di riconoscimento vocale non disponibile. Controlla connessione/VPN e riprova.",
   "error.speechNotSupported": "Riconoscimento vocale non supportato",
   "error.enterCode": "Inserisci un codice stanza",
   "error.invalidQR": "Codice QR non valido",

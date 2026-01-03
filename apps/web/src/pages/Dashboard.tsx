@@ -8,6 +8,7 @@ import { QRCodeCanvas } from "qrcode.react";
 import { useAuth } from "@/lib/auth";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 const Dashboard = () => {
   const { t } = useTranslation();
@@ -169,12 +170,12 @@ const Dashboard = () => {
               </div>
 
               <div className="space-y-2">
-                <input
+                <Input
                   type="text"
                   value={manualCode}
                   onChange={(e) => setManualCode(e.target.value.toUpperCase())}
                   placeholder={t("room.enterCodePlaceholder")}
-                  className="w-full h-11 px-3 border border-input bg-background rounded-md text-center font-mono tracking-wider"
+                  className="text-center font-mono tracking-wider"
                   maxLength={7}
                   disabled={!isAuthenticated}
                 />
@@ -237,12 +238,12 @@ const Dashboard = () => {
 
         {createdRoom && showQr && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-white p-5 rounded-xl max-w-sm w-full mx-4">
+            <div className="border rounded-xl bg-card text-card-foreground shadow-sm p-5 max-w-sm w-full mx-4">
               <h3 className="text-lg font-semibold mb-2 text-center">{t("room.qrTitle")}</h3>
               <p className="text-sm text-muted-foreground mb-4 text-center">{t("room.qrDescription")}</p>
 
-              <div className="bg-white p-4 rounded-lg mb-4 flex justify-center border">
-                <QRCodeCanvas value={createdRoom.code} size={240} />
+              <div className="bg-background p-4 rounded-lg mb-4 flex justify-center border">
+                <QRCodeCanvas value={createdRoom.code} size={240} bgColor="#ffffff" fgColor="#000000" />
               </div>
 
               <div className="rounded-lg border bg-background p-4 text-center mb-4">
@@ -265,8 +266,8 @@ const Dashboard = () => {
         )}
 
         {showScanner && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white p-4 rounded-lg max-w-sm w-full mx-4">
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="border rounded-xl bg-card text-card-foreground shadow-sm p-4 max-w-sm w-full mx-4">
               <h3 className="text-lg font-semibold mb-4 text-center">{t("room.scanTitle")}</h3>
               <div id="qr-reader" className="w-full"></div>
               <Button

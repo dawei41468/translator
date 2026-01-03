@@ -79,6 +79,7 @@
   "toast.updateProfileFailed": "Failed to update profile",
   "error.generic": "An error occurred",
   "error.network": "Network error",
+  "error.speechNetwork": "Speech recognition service unavailable. Check your connection/VPN and try again.",
   "error.speechNotSupported": "Speech recognition not supported",
   "error.enterCode": "Please enter a room code",
   "error.invalidQR": "Invalid QR code",

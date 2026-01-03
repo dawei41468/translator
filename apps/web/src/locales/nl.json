@@ -79,6 +79,7 @@
   "toast.updateProfileFailed": "Profiel bijwerken mislukt",
   "error.generic": "Er is een fout opgetreden",
   "error.network": "Netwerkfout",
+  "error.speechNetwork": "Spraakherkenningsservice niet beschikbaar. Controleer je verbinding/VPN en probeer het opnieuw.",
   "error.speechNotSupported": "Spraakherkenning niet ondersteund",
   "error.enterCode": "Voer een kamercode in",
   "error.invalidQR": "Ongeldige QR-code",

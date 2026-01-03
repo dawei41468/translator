@@ -1,5 +1,8 @@
 import { sql } from "drizzle-orm";
 import { db } from "../../../packages/db/src/index.js";
+import { normalizeGoogleCredentials } from "./config.js";
+normalizeGoogleCredentials();
+
 import { rooms } from "../../../packages/db/src/schema.js";
 import { logger } from "./logger.js";
 import { app } from "./app.js";

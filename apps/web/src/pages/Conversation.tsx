@@ -49,7 +49,12 @@ function getTtsLocale(language: string | null | undefined): string {
 function getSocketBaseUrl(): string {
   const base = import.meta.env.VITE_API_BASE_URL;
   if (typeof window === "undefined") return "";
-  if (!base) return "http://localhost:4003";
+  if (!base) {
+    const host = window.location.hostname;
+    const isLocalHost = host === "localhost" || host === "127.0.0.1";
+    // In local dev, the API/socket server runs on :4003. In prod, default to same-origin.
+    return isLocalHost ? "http://localhost:4003" : window.location.origin;
+  }
   if (base.startsWith("http")) return base.replace(/\/api\/?$/, "");
   // Relative base URL (e.g. /api) means same origin
   if (base.startsWith("/")) return window.location.origin;

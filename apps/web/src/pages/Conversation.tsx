@@ -658,8 +658,8 @@ const Conversation = () => {
 
   if (isLoading) {
     return (
-      <div className="flex flex-col h-screen bg-background overflow-hidden">
-        <div className="bg-background border-b p-4 sm:p-6 flex items-center justify-between">
+      <div className="flex flex-col h-screen bg-background">
+        <div className="fixed top-0 left-0 right-0 z-10 bg-background border-b p-4 sm:p-6 flex items-center justify-between">
           <Skeleton className="h-6 w-32" />
           <div className="flex space-x-2">
             <Skeleton className="h-10 w-10" />
@@ -667,7 +667,7 @@ const Conversation = () => {
             <Skeleton className="h-10 w-20" />
           </div>
         </div>
-        <div className="flex-1 p-4 sm:p-6 space-y-4">
+        <div className="flex-1 p-4 sm:p-6 space-y-4 pt-32">
           <Skeleton className="h-12 w-3/4" />
           <Skeleton className="h-12 w-1/2 ml-auto" />
           <Skeleton className="h-12 w-2/3" />
@@ -689,9 +689,9 @@ const Conversation = () => {
 
   try {
     return (
-      <div className="flex flex-col h-screen bg-background overflow-hidden">
+      <div className="flex flex-col h-screen bg-background">
         {/* Header */}
-        <header className="bg-background border-b p-4 sm:p-6" role="banner">
+        <header className="fixed top-0 left-0 right-0 z-10 bg-background border-b p-4 sm:p-6" role="banner">
           {/* First Row: Room status and controls */}
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-3">
@@ -817,7 +817,7 @@ const Conversation = () => {
         </header>
 
         {/* Messages */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4" role="log" aria-live="polite" aria-label={t('conversation.messages')} aria-atomic="false">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 pt-32 pb-40" role="log" aria-live="polite" aria-label={t('conversation.messages')} aria-atomic="false">
           {messages.map((message, index) => {
             const prevMessage = index > 0 ? messages[index - 1] : null;
             const showSpeakerName = !prevMessage || prevMessage.speakerName !== message.speakerName;
@@ -876,7 +876,7 @@ const Conversation = () => {
           <div ref={messagesEndRef} aria-hidden="true" />
         </main>
 
-        <footer className="bg-background border-t p-4 pb-8 sm:p-6 relative overscroll-contain touch-none" role="contentinfo">
+        <footer className="fixed bottom-0 left-0 right-0 z-10 bg-background border-t p-4 pb-8 sm:p-6 overscroll-contain touch-none" role="contentinfo">
           {/* Solo mode button positioned in bottom left corner */}
           <Button
             type="button"

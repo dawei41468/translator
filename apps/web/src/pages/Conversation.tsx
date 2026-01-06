@@ -52,21 +52,37 @@ function getSocketBaseUrl(): string {
   const host = window.location.hostname;
   const isLocalHost = host === "localhost" || host === "127.0.0.1";
 
+  console.log('getSocketBaseUrl debug:', {
+    base,
+    host,
+    isLocalHost,
+    origin: window.location.origin
+  });
+
   if (!base) {
     // In local dev, the API/socket server runs on :4003. In prod, default to same-origin.
-    return isLocalHost ? "http://localhost:4003" : window.location.origin;
+    const result = isLocalHost ? "http://localhost:4003" : window.location.origin;
+    console.log('No base URL, returning:', result);
+    return result;
   }
   if (base.startsWith("http")) {
     const normalized = base.replace(/\/api\/?$/, "");
     // Never allow production clients to attempt sockets on their own localhost.
     if (!isLocalHost && /^(https?:\/\/)(localhost|127\.0\.0\.1)(:|\/|$)/.test(normalized)) {
+      console.log('Production client trying to connect to localhost, using origin:', window.location.origin);
       return window.location.origin;
     }
+    console.log('Using normalized base URL:', normalized);
     return normalized;
   }
   // Relative base URL (e.g. /api) means same origin
-  if (base.startsWith("/")) return window.location.origin;
-  return "http://localhost:4003";
+  if (base.startsWith("/")) {
+    console.log('Relative base URL, using origin:', window.location.origin);
+    return window.location.origin;
+  }
+  const result = "http://localhost:4003";
+  console.log('Fallback to localhost:', result);
+  return result;
 }
 
 function getSpeechRecognitionLocale(language: string | null | undefined): string {
@@ -244,11 +260,29 @@ const Conversation = () => {
     if (!code) return;
 
     console.log('Initializing socket connection for room:', code);
-    const socketInstance = io(getSocketBaseUrl(), {
+    const socketUrl = getSocketBaseUrl();
+    console.log('Connecting to socket URL:', socketUrl);
+
+    console.log('Creating Socket.IO instance with URL:', socketUrl);
+    const socketInstance = io(socketUrl, {
       withCredentials: true,
+      timeout: 10000, // 10 second connection timeout
+      transports: ['websocket', 'polling'], // Try WebSocket first, fallback to polling
+      forceNew: true, // Force new connection
     });
+    console.log('Socket.IO instance created:', socketInstance);
+
+    // Set a timeout for connection
+    const connectionTimeout = setTimeout(() => {
+      if (socketInstance.connected === false) {
+        console.error('Socket connection timeout');
+        setConnectionStatus('disconnected');
+        toast.error('Connection timeout. The conversation server may be unavailable.');
+      }
+    }, 15000); // 15 seconds
 
     socketInstance.on('connect', () => {
+      clearTimeout(connectionTimeout);
       console.log('Socket connected, joining room:', code);
       setConnectionStatus('connected');
       // Join the room
@@ -268,8 +302,10 @@ const Conversation = () => {
       toast.success(t('conversation.reconnected'));
     });
 
-    socketInstance.on('connect_error', () => {
+    socketInstance.on('connect_error', (error: any) => {
+      console.error('Socket connection error:', error);
       setConnectionStatus('disconnected');
+      toast.error('Unable to connect to conversation server. Please check your internet connection.');
     });
 
     socketInstance.on('joined-room', (_data: any) => {

@@ -20,6 +20,10 @@ const io = new Server(server, {
     origin: true,
     credentials: true,
   },
+  transports: ['websocket', 'polling'],
+  allowEIO3: true, // Allow Engine.IO v3 clients for compatibility
+  pingTimeout: 60000,
+  pingInterval: 25000,
 });
 
 setupSocketIO(io);

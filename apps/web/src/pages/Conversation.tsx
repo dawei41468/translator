@@ -92,6 +92,9 @@ const Conversation = () => {
   const { user } = useAuth();
   const { data: meData } = useMe();
   const [socket, setSocket] = useState<Socket | null>(null);
+
+  // Debug logging
+  console.log('Conversation component rendered', { code, user, meData });
   const socketRef = useRef<Socket | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<
@@ -234,15 +237,19 @@ const Conversation = () => {
   // Get room info
   const { data: roomData, isLoading, error, refetch } = useRoom(code);
 
+  console.log('Room data state:', { roomData, isLoading, error, code });
+
   // Initialize Socket.io
   useEffect(() => {
     if (!code) return;
 
+    console.log('Initializing socket connection for room:', code);
     const socketInstance = io(getSocketBaseUrl(), {
       withCredentials: true,
     });
 
     socketInstance.on('connect', () => {
+      console.log('Socket connected, joining room:', code);
       setConnectionStatus('connected');
       // Join the room
       socketInstance.emit('join-room', code);
@@ -266,6 +273,7 @@ const Conversation = () => {
     });
 
     socketInstance.on('joined-room', (_data: any) => {
+      console.log('Successfully joined room via socket');
       toast.success(t('conversation.connectedToast'));
     });
 
@@ -562,175 +570,190 @@ const Conversation = () => {
     );
   }
 
-  return (
-    <div className="flex flex-col h-screen bg-background">
-      {/* Header */}
-      <header className="bg-background border-b p-4 sm:p-6 flex items-center justify-between" role="banner">
-        <div className="flex items-center gap-3">
-          <div className="inline-flex items-center gap-2 rounded-full bg-muted px-3 py-1" role="status" aria-label={t('conversation.connectionStatus')}>
-            <div className={`h-2.5 w-2.5 rounded-full ${
-              connectionStatus === 'connected' ? 'bg-green-500' :
-              connectionStatus === 'connecting' ? 'bg-yellow-500' :
-              connectionStatus === 'reconnecting' ? 'bg-orange-500' :
-              'bg-red-500'
-            }`} aria-hidden="true"></div>
-            <span className="text-sm font-medium">{t('room.code')}: {roomData.code}</span>
-          </div>
-          {connectionStatus === 'reconnecting' && (
-            <span className="text-sm text-muted-foreground" aria-live="polite">{t('conversation.reconnecting')}...</span>
-          )}
-        </div>
-        <div className="flex items-center space-x-2" role="toolbar" aria-label={t('conversation.controls')}>
-          <Button
-            type="button"
-            variant={audioEnabled ? "default" : "outline"}
-            onClick={toggleAudio}
-            aria-label={audioEnabled ? t('conversation.audioOn') : t('conversation.audioOff')}
-            aria-pressed={audioEnabled}
-            size="icon"
-            aria-describedby="audio-description"
-          >
-            {audioEnabled ? <Volume2 /> : <VolumeX />}
-          </Button>
-          <span id="audio-description" className="sr-only">
-            {audioEnabled ? t('conversation.audioEnabledDesc') : t('conversation.audioDisabledDesc')}
-          </span>
-          <Button
-            type="button"
-            variant={allowSpeakerAudio ? "secondary" : "outline"}
-            onClick={toggleSpeakerOverride}
-            aria-label={t('conversation.allowSpeakerAudio', 'Allow speaker audio')}
-            aria-pressed={allowSpeakerAudio}
-            size="icon"
-            aria-describedby="speaker-description"
-          >
-            <Speaker />
-          </Button>
-          <span id="speaker-description" className="sr-only">
-            {allowSpeakerAudio ? t('conversation.speakerAllowedDesc') : t('conversation.speakerNotAllowedDesc')}
-          </span>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => navigate('/dashboard')}
-            aria-label={t('common.leave')}
-            aria-describedby="leave-description"
-          >
-            <LogOut />
-            {t('common.leave')}
-          </Button>
-          <span id="leave-description" className="sr-only">{t('conversation.leaveRoomDesc')}</span>
-        </div>
-      </header>
-
-      {/* Messages */}
-      <main className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4" role="log" aria-live="polite" aria-label={t('conversation.messages')} aria-atomic="false">
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={`flex ${message.isOwn ? 'justify-end' : 'justify-start'}`}
-            role="article"
-            aria-label={`${message.isOwn ? t('conversation.yourMessage') : t('conversation.otherMessage')} ${new Date(message.timestamp).toLocaleTimeString()}`}
-          >
-            <div
-              className={cn(
-                "max-w-[85%] sm:max-w-sm lg:max-w-md px-4 py-2 shadow-sm",
-                message.isOwn
-                  ? "bg-primary text-primary-foreground rounded-2xl rounded-tr-none"
-                  : "bg-card text-card-foreground border rounded-2xl rounded-tl-none"
-              )}
-            >
-              <p className="leading-relaxed">{message.text}</p>
-              {message.translatedText && (
-                <p
-                  className={cn(
-                    "text-sm mt-1.5 border-t pt-1",
-                    message.isOwn
-                      ? "text-primary-foreground/80 border-primary-foreground/20"
-                      : "text-muted-foreground border-border/50"
-                  )}
-                  aria-label={`${t('conversation.translation')}: ${message.translatedText}`}
-                >
-                  {message.translatedText}
-                </p>
-              )}
-              <time className="sr-only" dateTime={message.timestamp.toISOString()}>
-                {new Date(message.timestamp).toLocaleTimeString()}
-              </time>
+  try {
+    return (
+      <div className="flex flex-col h-screen bg-background">
+        {/* Header */}
+        <header className="bg-background border-b p-4 sm:p-6 flex items-center justify-between" role="banner">
+          <div className="flex items-center gap-3">
+            <div className="inline-flex items-center gap-2 rounded-full bg-muted px-3 py-1" role="status" aria-label={t('conversation.connectionStatus')}>
+              <div className={`h-2.5 w-2.5 rounded-full ${
+                connectionStatus === 'connected' ? 'bg-green-500' :
+                connectionStatus === 'connecting' ? 'bg-yellow-500' :
+                connectionStatus === 'reconnecting' ? 'bg-orange-500' :
+                'bg-red-500'
+              }`} aria-hidden="true"></div>
+              <span className="text-sm font-medium">{t('room.code')}: {roomData.code}</span>
             </div>
+            {connectionStatus === 'reconnecting' && (
+              <span className="text-sm text-muted-foreground" aria-live="polite">{t('conversation.reconnecting')}...</span>
+            )}
           </div>
-        ))}
-        <div ref={messagesEndRef} aria-hidden="true" />
-      </main>
-
-      <footer className="bg-background border-t p-4 pb-8 sm:p-6" role="contentinfo">
-        <div className="mb-4 flex flex-col items-center gap-3">
-          <div className="flex items-center justify-center gap-3" role="group" aria-label={t('conversation.modeControls')}>
+          <div className="flex items-center space-x-2" role="toolbar" aria-label={t('conversation.controls')}>
             <Button
               type="button"
-              variant={soloMode ? "default" : "outline"}
-              size="sm"
-              onClick={toggleSoloMode}
-              aria-pressed={soloMode}
-              aria-label={t('conversation.soloMode')}
-              aria-describedby="solo-mode-description"
+              variant={audioEnabled ? "default" : "outline"}
+              onClick={toggleAudio}
+              aria-label={audioEnabled ? t('conversation.audioOn') : t('conversation.audioOff')}
+              aria-pressed={audioEnabled}
+              size="icon"
+              aria-describedby="audio-description"
             >
-              {t('conversation.soloMode')}
+              {audioEnabled ? <Volume2 /> : <VolumeX />}
             </Button>
-            {soloMode && (
-              <div>
-                <label htmlFor="solo-language-select" className="sr-only">{t('conversation.translateTo')}</label>
-                <Select value={soloTargetLang} onValueChange={setSoloTargetLang}>
-                  <SelectTrigger id="solo-language-select" className="h-9 w-44" aria-label={t('conversation.translateTo')}>
-                    <SelectValue placeholder={t('conversation.translateTo')} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {LANGUAGES.map((lang) => (
-                      <SelectItem key={lang.code} value={lang.code}>
-                        {lang.name} ({lang.code.toUpperCase()})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            <span id="audio-description" className="sr-only">
+              {audioEnabled ? t('conversation.audioEnabledDesc') : t('conversation.audioDisabledDesc')}
+            </span>
+            <Button
+              type="button"
+              variant={allowSpeakerAudio ? "secondary" : "outline"}
+              onClick={toggleSpeakerOverride}
+              aria-label={t('conversation.allowSpeakerAudio', 'Allow speaker audio')}
+              aria-pressed={allowSpeakerAudio}
+              size="icon"
+              aria-describedby="speaker-description"
+            >
+              <Speaker />
+            </Button>
+            <span id="speaker-description" className="sr-only">
+              {allowSpeakerAudio ? t('conversation.speakerAllowedDesc') : t('conversation.speakerNotAllowedDesc')}
+            </span>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => navigate('/dashboard')}
+              aria-label={t('common.leave')}
+              aria-describedby="leave-description"
+            >
+              <LogOut />
+              {t('common.leave')}
+            </Button>
+            <span id="leave-description" className="sr-only">{t('conversation.leaveRoomDesc')}</span>
+          </div>
+        </header>
+
+        {/* Messages */}
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4" role="log" aria-live="polite" aria-label={t('conversation.messages')} aria-atomic="false">
+          {messages.map((message) => (
+            <div
+              key={message.id}
+              className={`flex ${message.isOwn ? 'justify-end' : 'justify-start'}`}
+              role="article"
+              aria-label={`${message.isOwn ? t('conversation.yourMessage') : t('conversation.otherMessage')} ${new Date(message.timestamp).toLocaleTimeString()}`}
+            >
+              <div
+                className={cn(
+                  "max-w-[85%] sm:max-w-sm lg:max-w-md px-4 py-2 shadow-sm",
+                  message.isOwn
+                    ? "bg-primary text-primary-foreground rounded-2xl rounded-tr-none"
+                    : "bg-card text-card-foreground border rounded-2xl rounded-tl-none"
+                )}
+              >
+                <p className="leading-relaxed">{message.text}</p>
+                {message.translatedText && (
+                  <p
+                    className={cn(
+                      "text-sm mt-1.5 border-t pt-1",
+                      message.isOwn
+                        ? "text-primary-foreground/80 border-primary-foreground/20"
+                        : "text-muted-foreground border-border/50"
+                    )}
+                    aria-label={`${t('conversation.translation')}: ${message.translatedText}`}
+                  >
+                    {message.translatedText}
+                  </p>
+                )}
+                <time className="sr-only" dateTime={message.timestamp.toISOString()}>
+                  {new Date(message.timestamp).toLocaleTimeString()}
+                </time>
               </div>
+            </div>
+          ))}
+          <div ref={messagesEndRef} aria-hidden="true" />
+        </main>
+
+        <footer className="bg-background border-t p-4 pb-8 sm:p-6" role="contentinfo">
+          <div className="mb-4 flex flex-col items-center gap-3">
+            <div className="flex items-center justify-center gap-3" role="group" aria-label={t('conversation.modeControls')}>
+              <Button
+                type="button"
+                variant={soloMode ? "default" : "outline"}
+                size="sm"
+                onClick={toggleSoloMode}
+                aria-pressed={soloMode}
+                aria-label={t('conversation.soloMode')}
+                aria-describedby="solo-mode-description"
+              >
+                {t('conversation.soloMode')}
+              </Button>
+              {soloMode && (
+                <div>
+                  <label htmlFor="solo-language-select" className="sr-only">{t('conversation.translateTo')}</label>
+                  <Select value={soloTargetLang} onValueChange={setSoloTargetLang}>
+                    <SelectTrigger id="solo-language-select" className="h-9 w-44" aria-label={t('conversation.translateTo')}>
+                      <SelectValue placeholder={t('conversation.translateTo')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {LANGUAGES.map((lang) => (
+                        <SelectItem key={lang.code} value={lang.code}>
+                          {lang.name} ({lang.code.toUpperCase()})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+            {soloMode && (
+              <p className="text-center text-xs text-muted-foreground" id="solo-mode-description" role="note">
+                {t('conversation.soloModeHint')}
+              </p>
             )}
           </div>
-          {soloMode && (
-            <p className="text-center text-xs text-muted-foreground" id="solo-mode-description" role="note">
-              {t('conversation.soloModeHint')}
-            </p>
-          )}
-        </div>
-        <div className="flex justify-center">
-          <Button
-            type="button"
-            onClick={toggleRecording}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                toggleRecording();
-              }
-            }}
-            disabled={connectionStatus !== 'connected'}
-            variant={isRecording ? "destructive" : "default"}
-            size="lg"
-            className={cn(
-              "h-16 w-16 rounded-full shadow-lg transition-all focus:ring-4 focus:ring-primary/20",
-              isRecording ? "animate-pulse scale-110" : "hover:scale-105"
-            )}
-            aria-pressed={isRecording}
-            aria-label={isRecording ? t('conversation.stopSpeaking') : t('conversation.startSpeaking')}
-            aria-describedby="recording-status"
-          >
-            {isRecording ? <MicOff className="h-8 w-8" /> : <Mic className="h-8 w-8" />}
+          <div className="flex justify-center">
+            <Button
+              type="button"
+              onClick={toggleRecording}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  toggleRecording();
+                }
+              }}
+              disabled={connectionStatus !== 'connected'}
+              variant={isRecording ? "destructive" : "default"}
+              size="lg"
+              className={cn(
+                "h-16 w-16 rounded-full shadow-lg transition-all focus:ring-4 focus:ring-primary/20",
+                isRecording ? "animate-pulse scale-110" : "hover:scale-105"
+              )}
+              aria-pressed={isRecording}
+              aria-label={isRecording ? t('conversation.stopSpeaking') : t('conversation.startSpeaking')}
+              aria-describedby="recording-status"
+            >
+              {isRecording ? <MicOff className="h-8 w-8" /> : <Mic className="h-8 w-8" />}
+            </Button>
+          </div>
+          <p className="text-center text-xs text-muted-foreground mt-3" aria-live="polite" role="status" id="recording-status">
+            {isRecording ? t('conversation.recordingActive') : t('conversation.tapToSpeak')}
+          </p>
+        </footer>
+      </div>
+    );
+  } catch (error) {
+    console.error('Error rendering Conversation component:', error);
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <div className="text-center p-8">
+          <h2 className="text-xl font-semibold mb-4">Something went wrong</h2>
+          <p className="text-muted-foreground mb-4">Unable to load the conversation. Please try refreshing the page.</p>
+          <Button onClick={() => window.location.reload()}>
+            Refresh Page
           </Button>
         </div>
-        <p className="text-center text-xs text-muted-foreground mt-3" aria-live="polite" role="status" id="recording-status">
-          {isRecording ? t('conversation.recordingActive') : t('conversation.tapToSpeak')}
-        </p>
-      </footer>
-    </div>
-  );
+      </div>
+    );
+  }
 };
 
 export default Conversation;

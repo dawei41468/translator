@@ -151,7 +151,11 @@ export function setupSocketIO(io: Server) {
   });
 
   io.on("connection", (socket: AuthenticatedSocket) => {
-    logger.info(`User connected to socket`, { userId: socket.userId });
+    logger.info(`User connected to socket`, {
+      userId: socket.userId,
+      userAgent: socket.handshake.headers['user-agent'],
+      ip: socket.handshake.address
+    });
 
     // Handle connection errors
     socket.on("connect_error", (error) => {
@@ -355,6 +359,12 @@ export function setupSocketIO(io: Server) {
     };
 
     socket.on("join-room", async (roomCode: string) => {
+      logger.info(`User attempting to join room`, {
+        userId: socket.userId,
+        roomCode,
+        userAgent: socket.handshake.headers['user-agent']
+      });
+
       if (!validateSocketData({ roomCode }, roomCodeSchema)) {
         handleSocketError(socket, "join-room", new Error("Invalid room code format"));
         return;
@@ -414,6 +424,11 @@ export function setupSocketIO(io: Server) {
         // Notify others in the room
         socket.to(room.id).emit("user-joined", { userId: socket.userId });
 
+        logger.info(`User successfully joined room`, {
+          userId: socket.userId,
+          roomId: room.id,
+          roomCode: room.code
+        });
         socket.emit("joined-room", { roomId: room.id });
       } catch (error) {
         handleSocketError(socket, "join-room", error, "Unable to join room - please try again", { roomCode });

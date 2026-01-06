@@ -93,6 +93,12 @@ const Conversation = () => {
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
 
   // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      navigate('/login', { replace: true });
+    }
+  }, [authLoading, isAuthenticated, navigate]);
+
   if (authLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
@@ -102,8 +108,7 @@ const Conversation = () => {
   }
 
   if (!isAuthenticated) {
-    navigate('/login', { replace: true });
-    return null;
+    return null; // Will redirect via useEffect
   }
   const { data: meData } = useMe();
   const [socket, setSocket] = useState<Socket | null>(null);

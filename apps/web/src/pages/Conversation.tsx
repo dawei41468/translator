@@ -254,6 +254,7 @@ const Conversation = () => {
   const { data: roomData, isLoading, error, refetch } = useRoom(code);
 
   console.log('Room data state:', { roomData, isLoading, error, code });
+  console.log('User data state:', { user, meData });
 
   // Initialize Socket.io
   useEffect(() => {
@@ -607,8 +608,23 @@ const Conversation = () => {
   }
 
   try {
+    // Temporary debug info
+    const debugInfo = {
+      code,
+      roomData: !!roomData,
+      isLoading,
+      error: error ? String(error) : null,
+      connectionStatus,
+      user: !!user,
+      meData: !!meData
+    };
+
     return (
       <div className="flex flex-col h-screen bg-background">
+        {/* Debug overlay - remove in production */}
+        <div className="fixed top-0 left-0 bg-black text-white text-xs p-2 z-50 max-w-md">
+          DEBUG: {JSON.stringify(debugInfo, null, 2)}
+        </div>
         {/* Header */}
         <header className="bg-background border-b p-4 sm:p-6 flex items-center justify-between" role="banner">
           <div className="flex items-center gap-3">

@@ -1,6 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "./api";
-import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 
@@ -30,7 +29,6 @@ export const useCreateRoom = () => {
 };
 
 export const useJoinRoom = () => {
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { t } = useTranslation();
 
@@ -38,15 +36,17 @@ export const useJoinRoom = () => {
     mutationFn: (code: string) => apiClient.joinRoom(code),
     onSuccess: (data) => {
       console.log('🎯 useJoinRoom onSuccess - navigating to room:', data.roomCode);
-      console.log('🔀 Calling navigate() with path:', `/room/${data.roomCode}`);
       queryClient.invalidateQueries({ queryKey: ["rooms"] });
-      navigate(`/room/${data.roomCode}`);
-      console.log('✅ navigate() called, current location should change');
+      
+      // Use window.location for full page navigation - most reliable
+      const targetUrl = `/room/${data.roomCode}`;
+      console.log('🌐 Using window.location.href =', targetUrl);
+      window.location.href = targetUrl;
     },
     onError: (error: any) => {
       console.error('❌ useJoinRoom onError:', error);
       toast.error(error?.message || t("toast.joinRoomFailed"));
-    },
+    }
   });
 };
 

@@ -12,9 +12,12 @@ import Layout from "@/components/Layout";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
+
+  console.log('🔐 ProtectedRoute check:', { isAuthenticated, isLoading, user: !!user, path: window.location.pathname });
 
   if (isLoading) {
+    console.log('🔄 ProtectedRoute: still loading auth state');
     return (
       <div className="min-h-screen bg-background">
         <div className="container mx-auto px-4 py-10">
@@ -30,9 +33,11 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (!isAuthenticated) {
+    console.log('🚫 ProtectedRoute: not authenticated, redirecting to login');
     return <Navigate to="/login" replace />;
   }
 
+  console.log('✅ ProtectedRoute: authenticated, rendering protected content');
   return <Layout>{children}</Layout>;
 }
 

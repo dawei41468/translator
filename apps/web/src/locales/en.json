@@ -86,6 +86,8 @@
   "conversation.languageDescription": "Select your language for speech recognition and translations",
   "conversation.originalText": "Original",
   "conversation.allowSpeakerAudio": "Allow speaker audio",
+  "conversation.ttsNotSupported": "Text-to-speech is not supported on this device",
+  "conversation.ttsError": "Speech synthesis failed. Check device permissions.",
   "common.or": "OR",
   "common.cancel": "Cancel",
   "common.closeModal": "Close modal",

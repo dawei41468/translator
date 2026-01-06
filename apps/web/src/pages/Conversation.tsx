@@ -137,16 +137,41 @@ const Conversation = () => {
   }, [socket]);
 
   const speakTextNow = (text: string, language: string | null | undefined) => {
-    if (!audioEnabledRef.current) return;
+    if (!audioEnabledRef.current) {
+      console.log('TTS: Audio disabled, skipping speech');
+      return;
+    }
     const synth = synthRef.current;
-    if (!synth) return;
+    if (!synth) {
+      console.error('TTS: SpeechSynthesis not available');
+      toast.error(t('conversation.ttsNotSupported'));
+      return;
+    }
 
     const locale = getTtsLocale(language);
+    console.log('TTS: Attempting to speak text:', text.substring(0, 50) + '...', 'in locale:', locale);
+
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = locale;
 
+    // Add error handling
+    utterance.onerror = (event) => {
+      console.error('TTS: Speech synthesis error:', event.error, event);
+      toast.error(t('conversation.ttsError', 'Speech synthesis failed. Check device permissions.'));
+    };
+
+    utterance.onstart = () => {
+      console.log('TTS: Speech started successfully');
+    };
+
+    utterance.onend = () => {
+      console.log('TTS: Speech completed');
+    };
+
     const voices =
       voicesRef.current.length > 0 ? voicesRef.current : synth.getVoices();
+
+    console.log('TTS: Available voices:', voices.length, voices.map(v => `${v.name} (${v.lang})`));
 
     const localeLower = locale.toLowerCase();
     const primary = localeLower.split("-")[0];
@@ -156,10 +181,21 @@ const Conversation = () => {
       voices.find((v) => v.lang.toLowerCase().startsWith(`${primary}-`)) ??
       voices.find((v) => v.lang.toLowerCase() === primary);
 
-    if (voice) utterance.voice = voice;
+    if (voice) {
+      utterance.voice = voice;
+      console.log('TTS: Using voice:', voice.name, '(', voice.lang, ')');
+    } else {
+      console.warn('TTS: No suitable voice found for locale:', locale);
+    }
 
-    synth.cancel();
-    synth.speak(utterance);
+    try {
+      synth.cancel(); // Cancel any ongoing speech
+      synth.speak(utterance);
+      console.log('TTS: Speech synthesis initiated');
+    } catch (error) {
+      console.error('TTS: Failed to initiate speech synthesis:', error);
+      toast.error(t('conversation.ttsError', 'Speech synthesis failed. Check device permissions.'));
+    }
   };
 
   const speakText = (text: string, language: string | null | undefined) => {

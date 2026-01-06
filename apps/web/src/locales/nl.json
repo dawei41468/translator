@@ -51,6 +51,8 @@
   "conversation.soloModeHint": "Toont de herkende tekst en de vertaling op dit apparaat.",
   "conversation.languageDescription": "Selecteer uw taal voor spraakherkenning en vertalingen",
   "conversation.originalText": "Origineel",
+  "conversation.ttsNotSupported": "Tekst-naar-spraak wordt niet ondersteund op dit apparaat",
+  "conversation.ttsError": "Spraaksynthese mislukt. Controleer apparaatmachtigingen.",
   "conversation.connected": "Verbonden",
   "conversation.reconnecting": "Opnieuw verbinden",
   "conversation.reconnected": "Opnieuw verbonden met gesprek",

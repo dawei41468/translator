@@ -48,7 +48,7 @@
   "conversation.audioOff": "Audio uit",
   "conversation.soloMode": "Solomodus",
   "conversation.translateTo": "Vertalen naar",
-  "conversation.soloModeHint": "Toont de herkende tekst en de vertaling op dit apparaat.",
+  "conversation.soloModeHint": "Kies de uitvoertaal.",
   "conversation.languageDescription": "Selecteer uw taal voor spraakherkenning en vertalingen",
   "conversation.originalText": "Origineel",
   "conversation.ttsNotSupported": "Tekst-naar-spraak wordt niet ondersteund op dit apparaat",

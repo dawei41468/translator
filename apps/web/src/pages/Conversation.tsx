@@ -876,20 +876,23 @@ const Conversation = () => {
           <div ref={messagesEndRef} aria-hidden="true" />
         </main>
 
-        <footer className="bg-background border-t p-4 pb-8 sm:p-6" role="contentinfo">
+        <footer className="bg-background border-t p-4 pb-8 sm:p-6 relative overscroll-contain touch-none" role="contentinfo">
+          {/* Solo mode button positioned in bottom left corner */}
+          <Button
+            type="button"
+            variant={soloMode ? "default" : "outline"}
+            size="sm"
+            onClick={toggleSoloMode}
+            aria-pressed={soloMode}
+            aria-label={t('conversation.soloMode')}
+            aria-describedby="solo-mode-description"
+            className="absolute bottom-4 left-4"
+          >
+            Solo
+          </Button>
+
           <div className="mb-4 flex flex-col items-center gap-3">
             <div className="flex items-center justify-center gap-3" role="group" aria-label={t('conversation.modeControls')}>
-              <Button
-                type="button"
-                variant={soloMode ? "default" : "outline"}
-                size="sm"
-                onClick={toggleSoloMode}
-                aria-pressed={soloMode}
-                aria-label={t('conversation.soloMode')}
-                aria-describedby="solo-mode-description"
-              >
-                {t('conversation.soloMode')}
-              </Button>
               {soloMode && (
                 <div>
                   <label htmlFor="solo-language-select" className="sr-only">{t('conversation.translateTo')}</label>

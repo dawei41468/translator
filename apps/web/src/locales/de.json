@@ -48,7 +48,7 @@
   "conversation.audioOff": "Audio aus",
   "conversation.soloMode": "Solo-Modus",
   "conversation.translateTo": "Übersetzen nach",
-  "conversation.soloModeHint": "Zeigt den erkannten Text und die Übersetzung auf diesem Gerät.",
+  "conversation.soloModeHint": "Wählen Sie die Ausgabesprache.",
   "conversation.languageDescription": "Wählen Sie Ihre Sprache für Spracherkennung und Übersetzungen",
   "conversation.originalText": "Original",
   "conversation.ttsNotSupported": "Text-zu-Sprache wird auf diesem Gerät nicht unterstützt",

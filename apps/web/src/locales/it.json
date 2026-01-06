@@ -48,7 +48,7 @@
   "conversation.audioOff": "Audio disattivato",
   "conversation.soloMode": "Modalità solo",
   "conversation.translateTo": "Traduci in",
-  "conversation.soloModeHint": "Mostra il testo riconosciuto e la traduzione su questo dispositivo.",
+  "conversation.soloModeHint": "Scegli la lingua di output.",
   "conversation.languageDescription": "Seleziona la tua lingua per il riconoscimento vocale e le traduzioni",
   "conversation.originalText": "Originale",
   "conversation.ttsNotSupported": "La sintesi vocale non è supportata su questo dispositivo",

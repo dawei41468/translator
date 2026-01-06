@@ -61,7 +61,7 @@
   "conversation.audioOff": "Audio Off",
   "conversation.soloMode": "Solo mode",
   "conversation.translateTo": "Translate to",
-  "conversation.soloModeHint": "Shows what was recognized and the translation on this device.",
+  "conversation.soloModeHint": "Choose the output language.",
   "conversation.connected": "Connected",
   "conversation.reconnecting": "Reconnecting",
   "conversation.reconnected": "Reconnected to conversation",

@@ -48,7 +48,7 @@
   "conversation.audioOff": "音频关闭",
   "conversation.soloMode": "单人模式",
   "conversation.translateTo": "翻译为",
-  "conversation.soloModeHint": "在本设备显示识别文本及翻译结果。",
+  "conversation.soloModeHint": "选择输出语言。",
   "conversation.languageDescription": "选择您的语言用于语音识别和翻译",
   "conversation.originalText": "原文",
   "conversation.ttsNotSupported": "此设备不支持文本转语音功能",

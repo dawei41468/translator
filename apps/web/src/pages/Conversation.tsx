@@ -90,26 +90,7 @@ const Conversation = () => {
   const { t } = useTranslation();
   const { code } = useParams<{ code: string }>();
   const navigate = useNavigate();
-  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
-
-  // Redirect to login if not authenticated
-  useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
-      navigate('/login', { replace: true });
-    }
-  }, [authLoading, isAuthenticated, navigate]);
-
-  if (authLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return null; // Will redirect via useEffect
-  }
+  const { user } = useAuth();
   const { data: meData } = useMe();
   const [socket, setSocket] = useState<Socket | null>(null);
 

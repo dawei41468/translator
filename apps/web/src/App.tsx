@@ -11,7 +11,7 @@ import Conversation from "@/pages/Conversation";
 import Layout from "@/components/Layout";
 import { Skeleton } from "@/components/ui/skeleton";
 
-export function ProtectedRoute({ children }: { children: React.ReactNode }) {
+export function ProtectedRoute({ children, showBottomNav = true }: { children: React.ReactNode; showBottomNav?: boolean }) {
   const { isAuthenticated, isLoading } = useAuth();
 
   if (isLoading) {
@@ -33,7 +33,7 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/login" replace />;
   }
 
-  return <Layout>{children}</Layout>;
+  return <Layout showBottomNav={showBottomNav}>{children}</Layout>;
 }
 
 export const AppRoutes = () => {
@@ -53,7 +53,9 @@ export const AppRoutes = () => {
         </ProtectedRoute>
       } />
       <Route path="/room/:code" element={
-        <Conversation />
+        <ProtectedRoute showBottomNav={false}>
+          <Conversation />
+        </ProtectedRoute>
       } />
     </Routes>
   );

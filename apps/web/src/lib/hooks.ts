@@ -33,14 +33,16 @@ export const useJoinRoom = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { t } = useTranslation();
-  
+
   return useMutation({
     mutationFn: (code: string) => apiClient.joinRoom(code),
     onSuccess: (data) => {
+      console.log('🎯 useJoinRoom onSuccess - navigating to room:', data.roomCode);
       queryClient.invalidateQueries({ queryKey: ["rooms"] });
       navigate(`/room/${data.roomCode}`);
     },
     onError: (error: any) => {
+      console.error('❌ useJoinRoom onError:', error);
       toast.error(error?.message || t("toast.joinRoomFailed"));
     },
   });

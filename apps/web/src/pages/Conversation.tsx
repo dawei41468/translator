@@ -110,7 +110,7 @@ const Conversation = () => {
   const [socket, setSocket] = useState<Socket | null>(null);
 
   // Debug logging
-  console.log('Conversation component rendered', { code, user, meData });
+  console.log('🚀 Conversation component MOUNTED', { code, user: !!user, meData: !!meData, timestamp: new Date().toISOString() });
   const socketRef = useRef<Socket | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<

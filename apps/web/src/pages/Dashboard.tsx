@@ -3,7 +3,7 @@ import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCreateRoom, useJoinRoom } from "@/lib/hooks";
 import { toast } from "sonner";
-import { Html5QrcodeScanner } from "html5-qrcode";
+import { Html5Qrcode } from "html5-qrcode";
 import { QRCodeCanvas } from "qrcode.react";
 import { useAuth } from "@/lib/auth";
 import { useTranslation } from "react-i18next";
@@ -18,7 +18,7 @@ const Dashboard = () => {
   const [showScanner, setShowScanner] = useState(false);
   const [showQr, setShowQr] = useState(false);
   const [manualCode, setManualCode] = useState("");
-  const scannerRef = useRef<Html5QrcodeScanner | null>(null);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
   const [permissionStatus, setPermissionStatus] = useState<'checking' | 'granted' | 'denied' | 'prompt'>('checking');
   const [isScanning, setIsScanning] = useState(false);
 
@@ -51,17 +51,18 @@ const Dashboard = () => {
   const initializeScanner = () => {
     if (scannerRef.current) return;
 
-    scannerRef.current = new Html5QrcodeScanner(
-      "qr-reader",
+    console.log('Creating Html5Qrcode instance...');
+    scannerRef.current = new Html5Qrcode("qr-reader");
+
+    console.log('Starting QR scan...');
+    scannerRef.current.start(
+      { facingMode: "environment" }, // Prefer back camera
       {
         fps: 10,
-        qrbox: { width: 250, height: 250 },
+        qrbox: { width: 250, height: 250 }
       },
-      false
-    );
-
-    scannerRef.current.render(
-      (decodedText) => {
+      (decodedText: string) => {
+        console.log('QR code detected:', decodedText);
         const input = decodedText.trim();
         if (!input) {
           toast.error(t("error.invalidQR"));
@@ -87,45 +88,25 @@ const Dashboard = () => {
         setShowScanner(false);
         setIsScanning(false);
       },
-      (error) => {
-        console.log("QR scan error:", error);
-      }
-    );
-
-    // Hide the html5-qrcode permission message using MutationObserver
-    const hidePermissionElements = () => {
-      // Hide permission buttons
-      const permissionButtons = document.querySelectorAll('button[id*="html5-qrcode-button-camera-permission"]');
-      permissionButtons.forEach(el => {
-        (el as HTMLElement).style.display = 'none';
-      });
-
-      // Hide permission messages
-      const allElements = document.querySelectorAll('*');
-      allElements.forEach(el => {
-        if (el.textContent?.includes('Request Camera Permissions') ||
-            el.textContent?.includes('camera permission') ||
-            el.textContent?.includes('Camera permission')) {
-          (el as HTMLElement).style.display = 'none';
+      (error: any) => {
+        // Ignore scan errors, only log serious issues
+        if (!error?.includes && typeof error !== 'string') {
+          console.log("QR scan error:", error);
         }
-      });
-    };
-
-    // Watch for DOM changes to hide permission elements as they appear
-    const observer = new MutationObserver(hidePermissionElements);
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true
+      }
+    ).then(() => {
+      console.log('QR scanner started successfully');
+    }).catch((error: any) => {
+      console.error('Failed to start QR scanner:', error);
+      setPermissionStatus('denied');
+      setIsScanning(false);
     });
-
-    // Also hide immediately and after a delay
-    hidePermissionElements();
-    setTimeout(hidePermissionElements, 200);
-    setTimeout(hidePermissionElements, 500);
 
     // Return cleanup function
     return () => {
-      observer.disconnect();
+      if (scannerRef.current) {
+        scannerRef.current.stop().catch(console.error);
+      }
     };
   };
 
@@ -140,21 +121,36 @@ const Dashboard = () => {
   };
 
   const handleRequestPermission = async () => {
+    console.log('Requesting camera permission...');
     setPermissionStatus('checking');
 
     try {
-      // Request permission using browser's native dialog
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' } // Use back camera on mobile
+      // First, try to get camera access to verify permissions work
+      console.log('Calling getUserMedia...');
+      const testStream = await navigator.mediaDevices.getUserMedia({
+        video: true
       });
-      stream.getTracks().forEach(track => track.stop()); // Stop immediately
+      console.log('getUserMedia succeeded, stopping test stream...');
+      testStream.getTracks().forEach(track => track.stop()); // Stop test stream
 
-      // If we get here, permission was granted
+      console.log('Setting permission status to granted...');
+      // If we get here, basic camera access works
+      // Now try to initialize the QR scanner
       setPermissionStatus('granted');
       setIsScanning(true);
-      initializeScanner();
+
+      // Small delay to ensure state updates
+      setTimeout(() => {
+        console.log('Initializing scanner...');
+        initializeScanner();
+      }, 100);
+
     } catch (error) {
-      // Permission denied or error occurred
+      console.error('Camera permission error:', error);
+      if (error instanceof Error) {
+        console.error('Error name:', error.name);
+        console.error('Error message:', error.message);
+      }
       setPermissionStatus('denied');
     }
   };
@@ -203,7 +199,7 @@ const Dashboard = () => {
         cleanup();
       }
       if (scannerRef.current) {
-        scannerRef.current.clear();
+        scannerRef.current.stop().catch(console.error);
         scannerRef.current = null;
       }
     };

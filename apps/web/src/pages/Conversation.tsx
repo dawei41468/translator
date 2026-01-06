@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/ui/error-state";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
-import { Volume2, VolumeX, LogOut, Mic, MicOff, Speaker } from "lucide-react";
+import { Volume2, VolumeX, LogOut, Mic, MicOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LANGUAGES } from "@/lib/languages";
 import {
@@ -28,7 +28,6 @@ interface Message {
 }
 
 const TTS_ENABLED_STORAGE_KEY = "translator_tts_enabled";
-const TTS_SPEAKER_OVERRIDE_STORAGE_KEY = "translator_tts_speaker_override";
 
 function getTtsLocale(language: string | null | undefined): string {
   switch ((language ?? "en").toLowerCase()) {
@@ -91,7 +90,21 @@ const Conversation = () => {
   const { t } = useTranslation();
   const { code } = useParams<{ code: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
+
+  // Redirect to login if not authenticated
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    navigate('/login', { replace: true });
+    return null;
+  }
   const { data: meData } = useMe();
   const [socket, setSocket] = useState<Socket | null>(null);
 
@@ -111,41 +124,21 @@ const Conversation = () => {
   const [audioEnabled, setAudioEnabled] = useState(() => {
     try {
       const stored = localStorage.getItem(TTS_ENABLED_STORAGE_KEY);
-      if (stored === null) return true;
-      return stored === "true";
-    } catch {
-      return true;
-    }
-  });
-  const [allowSpeakerAudio, setAllowSpeakerAudio] = useState(() => {
-    try {
-      const stored = localStorage.getItem(TTS_SPEAKER_OVERRIDE_STORAGE_KEY);
-      if (stored === null) return false;
+      if (stored === null) return false; // Default to OFF for text-only mode
       return stored === "true";
     } catch {
       return false;
     }
   });
-  const [hasPrivateAudioOutput, setHasPrivateAudioOutput] = useState(false);
   const synthRef = useRef<SpeechSynthesis | null>(null);
   const voicesRef = useRef<SpeechSynthesisVoice[]>([]);
   const pendingTtsRef = useRef<{ text: string; language: string | null | undefined } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const audioEnabledRef = useRef<boolean>(audioEnabled);
-  const hasPrivateAudioOutputRef = useRef<boolean>(hasPrivateAudioOutput);
-  const allowSpeakerAudioRef = useRef<boolean>(allowSpeakerAudio);
 
   useEffect(() => {
     audioEnabledRef.current = audioEnabled;
   }, [audioEnabled]);
-
-  useEffect(() => {
-    hasPrivateAudioOutputRef.current = hasPrivateAudioOutput;
-  }, [hasPrivateAudioOutput]);
-
-  useEffect(() => {
-    allowSpeakerAudioRef.current = allowSpeakerAudio;
-  }, [allowSpeakerAudio]);
 
   useEffect(() => {
     isRecordingRef.current = isRecording;
@@ -157,8 +150,6 @@ const Conversation = () => {
 
   const speakTextNow = (text: string, language: string | null | undefined) => {
     if (!audioEnabledRef.current) return;
-    // Real-world default: only speak when using a private audio output (headphones/earbuds).
-    if (!hasPrivateAudioOutputRef.current && !allowSpeakerAudioRef.current) return;
     const synth = synthRef.current;
     if (!synth) return;
 
@@ -199,35 +190,6 @@ const Conversation = () => {
     speakTextNow(pending.text, pending.language);
   };
 
-  const refreshAudioOutputs = async () => {
-    try {
-      if (!navigator.mediaDevices?.enumerateDevices) return;
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const outputs = devices.filter((d) => d.kind === "audiooutput");
-
-      // If the platform doesn't expose output devices, we can't reliably detect.
-      // Keep default false (text-only).
-      if (outputs.length === 0) {
-        setHasPrivateAudioOutput(false);
-        return;
-      }
-
-      const isPrivate = outputs.some((d) => {
-        const label = (d.label ?? "").toLowerCase();
-        return (
-          label.includes("headphone") ||
-          label.includes("headset") ||
-          label.includes("earbud") ||
-          label.includes("airpod") ||
-          label.includes("buds")
-        );
-      });
-
-      setHasPrivateAudioOutput(isPrivate);
-    } catch {
-      setHasPrivateAudioOutput(false);
-    }
-  };
 
   useEffect(() => {
     const next = meData?.user?.language ?? user?.language;
@@ -380,16 +342,6 @@ const Conversation = () => {
     }
   }, [audioEnabled]);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(
-        TTS_SPEAKER_OVERRIDE_STORAGE_KEY,
-        String(allowSpeakerAudio)
-      );
-    } catch {
-      // ignore
-    }
-  }, [allowSpeakerAudio]);
 
   // Initialize speech synthesis and cleanup audio on unmount
   useEffect(() => {
@@ -414,17 +366,6 @@ const Conversation = () => {
     };
   }, []);
 
-  useEffect(() => {
-    refreshAudioOutputs();
-
-    const mediaDevices = navigator.mediaDevices;
-    if (!mediaDevices?.addEventListener) return;
-
-    mediaDevices.addEventListener("devicechange", refreshAudioOutputs);
-    return () => {
-      mediaDevices.removeEventListener("devicechange", refreshAudioOutputs);
-    };
-  }, []);
 
   const stopRecordingInternal = () => {
     try {
@@ -481,9 +422,6 @@ const Conversation = () => {
         },
       });
       streamRef.current = stream;
-
-      // After mic permission is granted, device labels become available in many browsers.
-      await refreshAudioOutputs();
 
       const activeSocket = socketRef.current;
       if (!activeSocket) return;
@@ -548,13 +486,10 @@ const Conversation = () => {
     });
   };
 
-  const toggleSpeakerOverride = () => {
-    setAllowSpeakerAudio((prev) => !prev);
-  };
 
   if (isLoading) {
     return (
-      <div className="flex flex-col h-screen bg-background">
+      <div className="flex flex-col h-screen bg-background overflow-hidden">
         <div className="bg-background border-b p-4 sm:p-6 flex items-center justify-between">
           <Skeleton className="h-6 w-32" />
           <div className="flex space-x-2">
@@ -585,7 +520,7 @@ const Conversation = () => {
 
   try {
     return (
-      <div className="flex flex-col h-screen bg-background">
+      <div className="flex flex-col h-screen bg-background overflow-hidden">
         {/* Header */}
         <header className="bg-background border-b p-4 sm:p-6 flex items-center justify-between" role="banner">
           <div className="flex items-center gap-3">
@@ -616,20 +551,6 @@ const Conversation = () => {
             </Button>
             <span id="audio-description" className="sr-only">
               {audioEnabled ? t('conversation.audioEnabledDesc') : t('conversation.audioDisabledDesc')}
-            </span>
-            <Button
-              type="button"
-              variant={allowSpeakerAudio ? "secondary" : "outline"}
-              onClick={toggleSpeakerOverride}
-              aria-label={t('conversation.allowSpeakerAudio', 'Allow speaker audio')}
-              aria-pressed={allowSpeakerAudio}
-              size="icon"
-              aria-describedby="speaker-description"
-            >
-              <Speaker />
-            </Button>
-            <span id="speaker-description" className="sr-only">
-              {allowSpeakerAudio ? t('conversation.speakerAllowedDesc') : t('conversation.speakerNotAllowedDesc')}
             </span>
             <Button
               type="button"

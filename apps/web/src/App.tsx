@@ -53,9 +53,7 @@ export const AppRoutes = () => {
         </ProtectedRoute>
       } />
       <Route path="/room/:code" element={
-        <ProtectedRoute>
-          <Conversation />
-        </ProtectedRoute>
+        <Conversation />
       } />
     </Routes>
   );

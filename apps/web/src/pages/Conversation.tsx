@@ -96,11 +96,30 @@ const Conversation = () => {
   const updateLanguageMutation = useUpdateLanguage();
 
   // Check if TTS debug panel should be enabled
+  // Note: VITE_ variables must be available at build time
   const isTtsDebugEnabled = import.meta.env.VITE_ENABLE_TTS_DEBUG === 'true';
   const [socket, setSocket] = useState<Socket | null>(null);
 
   const socketRef = useRef<Socket | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>(() => {
+    // Load messages from sessionStorage on initial render
+    if (code) {
+      try {
+        const saved = sessionStorage.getItem(`translator_messages_${code}`);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          // Convert timestamp strings back to Date objects
+          return parsed.map((msg: any) => ({
+            ...msg,
+            timestamp: new Date(msg.timestamp)
+          }));
+        }
+      } catch {
+        // ignore storage errors
+      }
+    }
+    return [];
+  });
   const [connectionStatus, setConnectionStatus] = useState<
     "connecting" | "connected" | "disconnected" | "reconnecting"
   >("connecting");
@@ -292,6 +311,17 @@ const Conversation = () => {
   useEffect(() => {
     console.log('Conversation: soloTargetLang changed:', soloTargetLang);
   }, [soloTargetLang]);
+
+  // Save messages to sessionStorage whenever they change
+  useEffect(() => {
+    if (code && messages.length > 0) {
+      try {
+        sessionStorage.setItem(`translator_messages_${code}`, JSON.stringify(messages));
+      } catch {
+        // ignore storage errors (e.g., quota exceeded)
+      }
+    }
+  }, [messages, code]);
 
   // Get room info
   const { data: roomData, isLoading, error, refetch } = useRoom(code);
@@ -689,7 +719,7 @@ const Conversation = () => {
 
   try {
     return (
-      <div className="flex flex-col h-screen bg-background">
+      <div className="flex flex-col h-screen bg-background" style={{ overscrollBehavior: 'none' }}>
         {/* Header */}
         <header className="fixed top-0 left-0 right-0 z-10 bg-background border-b p-4 sm:p-6" role="banner">
           {/* First Row: Room status and controls */}

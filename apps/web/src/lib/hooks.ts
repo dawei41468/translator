@@ -38,8 +38,10 @@ export const useJoinRoom = () => {
     mutationFn: (code: string) => apiClient.joinRoom(code),
     onSuccess: (data) => {
       console.log('🎯 useJoinRoom onSuccess - navigating to room:', data.roomCode);
+      console.log('🔀 Calling navigate() with path:', `/room/${data.roomCode}`);
       queryClient.invalidateQueries({ queryKey: ["rooms"] });
       navigate(`/room/${data.roomCode}`);
+      console.log('✅ navigate() called, current location should change');
     },
     onError: (error: any) => {
       console.error('❌ useJoinRoom onError:', error);

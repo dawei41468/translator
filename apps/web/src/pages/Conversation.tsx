@@ -94,6 +94,9 @@ const Conversation = () => {
   const { user } = useAuth();
   const { data: meData } = useMe();
   const updateLanguageMutation = useUpdateLanguage();
+
+  // Check if TTS debug panel should be enabled
+  const isTtsDebugEnabled = import.meta.env.VITE_ENABLE_TTS_DEBUG === 'true';
   const [socket, setSocket] = useState<Socket | null>(null);
 
   const socketRef = useRef<Socket | null>(null);
@@ -109,6 +112,7 @@ const Conversation = () => {
   const [soloTargetLang, setSoloTargetLang] = useState<string>(() => {
     return user?.language ?? "en";
   });
+  const [hasUserSelectedSoloLang, setHasUserSelectedSoloLang] = useState(false);
   const [audioEnabled, setAudioEnabled] = useState(() => {
     try {
       const stored = localStorage.getItem(TTS_ENABLED_STORAGE_KEY);
@@ -129,6 +133,7 @@ const Conversation = () => {
     isSpeaking: false,
     voicesLoaded: false,
   });
+  const [debugPanelExpanded, setDebugPanelExpanded] = useState(false);
   const synthRef = useRef<SpeechSynthesis | null>(null);
   const voicesRef = useRef<SpeechSynthesisVoice[]>([]);
   const pendingTtsRef = useRef<{ text: string; language: string | null | undefined } | null>(null);
@@ -269,12 +274,24 @@ const Conversation = () => {
   };
 
 
+  // Only sync soloTargetLang with user language on initial load, not when user has manually selected
   useEffect(() => {
     const next = meData?.user?.language ?? user?.language;
-    if (next && next !== soloTargetLang) {
+    if (next && !hasUserSelectedSoloLang) {
       setSoloTargetLang(next);
     }
-  }, [meData?.user?.language, user?.language, soloTargetLang]);
+  }, [meData?.user?.language, user?.language, hasUserSelectedSoloLang]);
+
+  // Debug logging for language changes
+  useEffect(() => {
+    console.log('Conversation: meData changed:', meData);
+    console.log('Conversation: current language from meData:', meData?.user?.language);
+  }, [meData]);
+
+  // Debug logging for solo mode language changes
+  useEffect(() => {
+    console.log('Conversation: soloTargetLang changed:', soloTargetLang);
+  }, [soloTargetLang]);
 
   // Get room info
   const { data: roomData, isLoading, error, refetch } = useRoom(code);
@@ -394,6 +411,8 @@ const Conversation = () => {
           ];
         });
 
+        // In solo mode, speak the translated text in the target language (what user is learning)
+        // This allows them to hear how their speech sounds when translated to the target language
         if (audioEnabledRef.current && synthRef.current) {
           speakText(data.translatedText, data.targetLang);
         }
@@ -721,7 +740,10 @@ const Conversation = () => {
           <div className="flex items-center justify-between">
             <Select
               value={meData?.user?.language || ""}
-              onValueChange={(value) => updateLanguageMutation.mutate(value)}
+              onValueChange={(value) => {
+                console.log('Language selector onValueChange:', value, 'current meData:', meData?.user?.language);
+                updateLanguageMutation.mutate(value);
+              }}
               disabled={updateLanguageMutation.isPending}
             >
               <SelectTrigger className="h-9 w-44" aria-label={t('settings.language.title')}>
@@ -740,29 +762,58 @@ const Conversation = () => {
             </p>
           </div>
 
-          {/* TTS Diagnostic Panel (for debugging) */}
-          <div className="mt-2 p-2 bg-muted/50 rounded text-xs space-y-1">
-            <div className="font-medium flex items-center justify-between">
-              <span>TTS Debug:</span>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={refreshVoices}
-                className="h-6 px-2 text-xs"
-              >
-                Refresh
-              </Button>
+          {/* TTS Diagnostic Panel (collapsible) - only shown if enabled via env var */}
+          {isTtsDebugEnabled && (
+            <div className="mt-2">
+              {!debugPanelExpanded ? (
+                // Collapsed state - small button
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setDebugPanelExpanded(true)}
+                  className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
+                >
+                  Debug
+                </Button>
+              ) : (
+                // Expanded state - full panel
+                <div className="p-2 bg-muted/50 rounded text-xs space-y-1">
+                  <div className="font-medium flex items-center justify-between">
+                    <span>TTS Debug:</span>
+                    <div className="flex gap-1">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={refreshVoices}
+                        className="h-6 px-2 text-xs"
+                      >
+                        Refresh
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setDebugPanelExpanded(false)}
+                        className="h-6 px-2 text-xs"
+                      >
+                        ✕
+                      </Button>
+                    </div>
+                  </div>
+                  <div>Voices: {ttsStatus.voicesCount} | Speaking: {ttsStatus.isSpeaking ? 'Yes' : 'No'} | Loaded: {ttsStatus.voicesLoaded ? 'Yes' : 'No'}</div>
+                  {ttsStatus.lastAttempt && <div>Last attempt: {ttsStatus.lastAttempt}</div>}
+                  {ttsStatus.lastError && <div className="text-red-600">Error: {ttsStatus.lastError}</div>}
+                  {ttsStatus.voicesCount === 0 && (
+                    <div className="text-orange-600 mt-1">
+                      If voices remain 0, try: Settings → Apps → Chrome → Storage → Clear storage, then restart Chrome
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-            <div>Voices: {ttsStatus.voicesCount} | Speaking: {ttsStatus.isSpeaking ? 'Yes' : 'No'} | Loaded: {ttsStatus.voicesLoaded ? 'Yes' : 'No'}</div>
-            {ttsStatus.lastAttempt && <div>Last attempt: {ttsStatus.lastAttempt}</div>}
-            {ttsStatus.lastError && <div className="text-red-600">Error: {ttsStatus.lastError}</div>}
-            {ttsStatus.voicesCount === 0 && (
-              <div className="text-orange-600 mt-1">
-                If voices remain 0, try: Settings → Apps → Chrome → Storage → Clear storage, then restart Chrome
-              </div>
-            )}
-          </div>
+          )}
         </header>
 
         {/* Messages */}
@@ -842,7 +893,15 @@ const Conversation = () => {
               {soloMode && (
                 <div>
                   <label htmlFor="solo-language-select" className="sr-only">{t('conversation.translateTo')}</label>
-                  <Select value={soloTargetLang} onValueChange={setSoloTargetLang}>
+                  <Select
+                    key={`solo-lang-${soloTargetLang}`}
+                    value={soloTargetLang}
+                    onValueChange={(value) => {
+                      console.log('Solo mode language selector onValueChange:', value, 'current soloTargetLang:', soloTargetLang);
+                      setSoloTargetLang(value);
+                      setHasUserSelectedSoloLang(true);
+                    }}
+                  >
                     <SelectTrigger id="solo-language-select" className="h-9 w-44" aria-label={t('conversation.translateTo')}>
                       <SelectValue placeholder={t('conversation.translateTo')} />
                     </SelectTrigger>

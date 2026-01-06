@@ -60,15 +60,20 @@ export const useMe = () => {
 export const useUpdateLanguage = () => {
   const queryClient = useQueryClient();
   const { i18n, t } = useTranslation();
-  
+
   return useMutation({
-    mutationFn: (language: string) => apiClient.updateLanguage(language),
+    mutationFn: (language: string) => {
+      console.log('useUpdateLanguage mutationFn called with:', language);
+      return apiClient.updateLanguage(language);
+    },
     onSuccess: (_, language) => {
+      console.log('useUpdateLanguage onSuccess called, invalidating queries and changing i18n to:', language);
       queryClient.invalidateQueries({ queryKey: ["me"] });
       i18n.changeLanguage(language);
       toast.success(t("toast.languageUpdated"));
     },
     onError: (error: any) => {
+      console.error('useUpdateLanguage onError:', error);
       toast.error(error?.message || t("toast.updateLanguageFailed"));
     },
   });

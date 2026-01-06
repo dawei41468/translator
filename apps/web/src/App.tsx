@@ -1,5 +1,6 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { useEffect } from "react";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { queryClient } from "@/lib/api";
 import { Toaster } from "sonner";
@@ -41,32 +42,48 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <Layout>{children}</Layout>;
 }
 
-export const AppRoutes = () => (
-  <Routes>
-    <Route path="/login" element={<Login />} />
-    <Route path="/register" element={<Register />} />
-    <Route path="/" element={<Navigate to="/dashboard" replace />} />
-    <Route path="/dashboard" element={
-      <ProtectedRoute>
-        <Dashboard />
-      </ProtectedRoute>
-    } />
-    <Route path="/settings" element={
-      <ProtectedRoute>
-        <Settings />
-      </ProtectedRoute>
-    } />
-    <Route path="/room/:code" element={
-      <ProtectedRoute>
-        <Conversation />
-      </ProtectedRoute>
-    } />
-  </Routes>
-);
+export const AppRoutes = () => {
+  const location = useLocation();
+  
+  console.log('🗺️ AppRoutes - current location:', {
+    pathname: location.pathname,
+    search: location.search,
+    hash: location.hash,
+    key: location.key
+  });
+
+  // Log location changes
+  useEffect(() => {
+    console.log('📍 Location changed to:', location.pathname);
+  }, [location]);
+
+  return (
+    <Routes>
+      <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
+      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/dashboard" element={
+        <ProtectedRoute>
+          <Dashboard />
+        </ProtectedRoute>
+      } />
+      <Route path="/settings" element={
+        <ProtectedRoute>
+          <Settings />
+        </ProtectedRoute>
+      } />
+      <Route path="/room/:code" element={
+        <ProtectedRoute>
+          <Conversation />
+        </ProtectedRoute>
+      } />
+    </Routes>
+  );
+};
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+    <BrowserRouter>
       <AuthProvider>
         <AppRoutes />
         <Toaster />

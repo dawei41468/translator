@@ -49,6 +49,7 @@
   "conversation.soloMode": "Solomodus",
   "conversation.translateTo": "Vertalen naar",
   "conversation.soloModeHint": "Toont de herkende tekst en de vertaling op dit apparaat.",
+  "conversation.languageDescription": "Selecteer uw taal voor spraakherkenning en vertalingen",
   "conversation.connected": "Verbonden",
   "conversation.reconnecting": "Opnieuw verbinden",
   "conversation.reconnected": "Opnieuw verbonden met gesprek",

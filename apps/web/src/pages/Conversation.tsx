@@ -1,14 +1,14 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { io, Socket } from "socket.io-client";
-import { useRoom, useMe } from "@/lib/hooks";
+import { useRoom, useMe, useUpdateLanguage } from "@/lib/hooks";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/ui/error-state";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
-import { Volume2, VolumeX, LogOut, Mic, MicOff } from "lucide-react";
+import { Volume2, VolumeX, Mic, MicOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LANGUAGES } from "@/lib/languages";
 import {
@@ -92,6 +92,7 @@ const Conversation = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { data: meData } = useMe();
+  const updateLanguageMutation = useUpdateLanguage();
   const [socket, setSocket] = useState<Socket | null>(null);
 
   const socketRef = useRef<Socket | null>(null);
@@ -510,47 +511,72 @@ const Conversation = () => {
     return (
       <div className="flex flex-col h-screen bg-background overflow-hidden">
         {/* Header */}
-        <header className="bg-background border-b p-4 sm:p-6 flex items-center justify-between" role="banner">
-          <div className="flex items-center gap-3">
-            <div className="inline-flex items-center gap-2 rounded-full bg-muted px-3 py-1" role="status" aria-label={t('conversation.connectionStatus')}>
-              <div className={`h-2.5 w-2.5 rounded-full ${
-                connectionStatus === 'connected' ? 'bg-green-500' :
-                connectionStatus === 'connecting' ? 'bg-yellow-500' :
-                connectionStatus === 'reconnecting' ? 'bg-orange-500' :
-                'bg-red-500'
-              }`} aria-hidden="true"></div>
-              <span className="text-sm font-medium">{t('room.code')}: {roomData.code}</span>
+        <header className="bg-background border-b p-4 sm:p-6" role="banner">
+          {/* First Row: Room status and controls */}
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-3">
+              <div className="inline-flex items-center gap-2 rounded-full bg-muted px-3 py-1" role="status" aria-label={t('conversation.connectionStatus')}>
+                <div className={`h-2.5 w-2.5 rounded-full ${
+                  connectionStatus === 'connected' ? 'bg-green-500' :
+                  connectionStatus === 'connecting' ? 'bg-yellow-500' :
+                  connectionStatus === 'reconnecting' ? 'bg-orange-500' :
+                  'bg-red-500'
+                }`} aria-hidden="true"></div>
+                <span className="text-sm font-medium">{t('room.code')}: {roomData.code}</span>
+              </div>
+              {connectionStatus === 'reconnecting' && (
+                <span className="text-sm text-muted-foreground" aria-live="polite">{t('conversation.reconnecting')}...</span>
+              )}
             </div>
-            {connectionStatus === 'reconnecting' && (
-              <span className="text-sm text-muted-foreground" aria-live="polite">{t('conversation.reconnecting')}...</span>
-            )}
+            <div className="flex items-center space-x-2" role="toolbar" aria-label={t('conversation.controls')}>
+              <Button
+                type="button"
+                variant={audioEnabled ? "default" : "outline"}
+                onClick={toggleAudio}
+                aria-label={audioEnabled ? t('conversation.audioOn') : t('conversation.audioOff')}
+                aria-pressed={audioEnabled}
+                size="icon"
+                aria-describedby="audio-description"
+              >
+                {audioEnabled ? <Volume2 /> : <VolumeX />}
+              </Button>
+              <span id="audio-description" className="sr-only">
+                {audioEnabled ? t('conversation.audioEnabledDesc') : t('conversation.audioDisabledDesc')}
+              </span>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => navigate('/dashboard')}
+                aria-label={t('common.leave')}
+                aria-describedby="leave-description"
+              >
+                {t('common.leave')}
+              </Button>
+              <span id="leave-description" className="sr-only">{t('conversation.leaveRoomDesc')}</span>
+            </div>
           </div>
-          <div className="flex items-center space-x-2" role="toolbar" aria-label={t('conversation.controls')}>
-            <Button
-              type="button"
-              variant={audioEnabled ? "default" : "outline"}
-              onClick={toggleAudio}
-              aria-label={audioEnabled ? t('conversation.audioOn') : t('conversation.audioOff')}
-              aria-pressed={audioEnabled}
-              size="icon"
-              aria-describedby="audio-description"
+
+          {/* Second Row: Language selector and description */}
+          <div className="flex items-center justify-between">
+            <Select
+              value={meData?.user?.language || ""}
+              onValueChange={(value) => updateLanguageMutation.mutate(value)}
+              disabled={updateLanguageMutation.isPending}
             >
-              {audioEnabled ? <Volume2 /> : <VolumeX />}
-            </Button>
-            <span id="audio-description" className="sr-only">
-              {audioEnabled ? t('conversation.audioEnabledDesc') : t('conversation.audioDisabledDesc')}
-            </span>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => navigate('/dashboard')}
-              aria-label={t('common.leave')}
-              aria-describedby="leave-description"
-            >
-              <LogOut />
-              {t('common.leave')}
-            </Button>
-            <span id="leave-description" className="sr-only">{t('conversation.leaveRoomDesc')}</span>
+              <SelectTrigger className="h-9 w-44" aria-label={t('settings.language.title')}>
+                <SelectValue placeholder={t('conversation.translateTo')} />
+              </SelectTrigger>
+              <SelectContent>
+                {LANGUAGES.map((lang) => (
+                  <SelectItem key={lang.code} value={lang.code}>
+                    {lang.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground max-w-xs ml-4">
+              {t('conversation.languageDescription', 'Select your language for speech recognition and translations')}
+            </p>
           </div>
         </header>
 
@@ -618,7 +644,7 @@ const Conversation = () => {
                     <SelectContent>
                       {LANGUAGES.map((lang) => (
                         <SelectItem key={lang.code} value={lang.code}>
-                          {lang.name} ({lang.code.toUpperCase()})
+                          {lang.name}
                         </SelectItem>
                       ))}
                     </SelectContent>

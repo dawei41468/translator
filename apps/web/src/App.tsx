@@ -6,7 +6,6 @@ import { Toaster } from "sonner";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import Dashboard from "@/pages/Dashboard";
-import Settings from "@/pages/Settings";
 import Conversation from "@/pages/Conversation";
 import Layout from "@/components/Layout";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -45,11 +44,6 @@ export const AppRoutes = () => {
       <Route path="/dashboard" element={
         <ProtectedRoute>
           <Dashboard />
-        </ProtectedRoute>
-      } />
-      <Route path="/settings" element={
-        <ProtectedRoute>
-          <Settings />
         </ProtectedRoute>
       } />
       <Route path="/room/:code" element={

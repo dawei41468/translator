@@ -27,10 +27,8 @@ const Dashboard = () => {
   const joinRoomMutation = useJoinRoom();
 
   const handleStartConversation = () => {
-    console.log('Starting room creation...');
     createRoomMutation.mutate(undefined, {
       onSuccess: (data) => {
-        console.log('Room created successfully:', data);
         setCreatedRoom({ code: data.roomCode, id: data.roomId });
         toast.success(t('room.created', 'Room created successfully!'));
       },
@@ -58,10 +56,8 @@ const Dashboard = () => {
   const initializeScanner = () => {
     if (scannerRef.current) return;
 
-    console.log('Creating Html5Qrcode instance...');
     scannerRef.current = new Html5Qrcode("qr-reader");
 
-    console.log('Starting QR scan...');
     scannerRef.current.start(
       { facingMode: "environment" }, // Prefer back camera
       {
@@ -71,14 +67,11 @@ const Dashboard = () => {
       (decodedText: string) => {
           // Prevent multiple join attempts
           if (isJoining) {
-            console.log('Already joining a room, ignoring duplicate QR detection');
             return;
           }
 
-          console.log('QR code detected:', decodedText);
           const input = decodedText.trim();
           if (!input) {
-            console.error('QR code was empty or whitespace only');
             toast.error(t("error.invalidQR"));
             return;
           }
@@ -89,21 +82,17 @@ const Dashboard = () => {
             const lastSegment = url.pathname.split("/").filter(Boolean).pop();
             if (lastSegment) {
               code = lastSegment;
-              console.log('Extracted code from URL:', code);
             }
           } catch {
             // not a URL, use as-is
-            console.log('QR code is not a URL, using as code:', code);
           }
 
           code = code.trim().toUpperCase();
           if (!code || code.length !== 6 || !/^[A-Z0-9]+$/.test(code)) {
-            console.error('Invalid room code format:', code);
             toast.error(t("error.invalidQR"));
             return;
           }
 
-          console.log('Final room code to join:', code);
           setIsJoining(true);
           toast.success(t('room.joiningQR', 'Joining room...'));
 
@@ -113,13 +102,11 @@ const Dashboard = () => {
           }
 
           joinRoomMutation.mutate(code, {
-            onSuccess: (data) => {
-              console.log('Successfully joined room:', data);
+            onSuccess: () => {
               toast.success(t('room.joined', 'Joined room successfully!'));
               setShowScanner(false);
               setIsScanning(false);
               setIsJoining(false);
-              // Navigation should happen automatically via the hook
             },
             onError: (error) => {
               console.error('Failed to join room:', error);
@@ -137,7 +124,7 @@ const Dashboard = () => {
         }
       }
     ).then(() => {
-      console.log('QR scanner started successfully');
+      // QR scanner started successfully
     }).catch((error: any) => {
       console.error('Failed to start QR scanner:', error);
       setPermissionStatus('denied');
@@ -163,19 +150,15 @@ const Dashboard = () => {
   };
 
   const handleRequestPermission = async () => {
-    console.log('Requesting camera permission...');
     setPermissionStatus('checking');
 
     try {
       // First, try to get camera access to verify permissions work
-      console.log('Calling getUserMedia...');
       const testStream = await navigator.mediaDevices.getUserMedia({
         video: true
       });
-      console.log('getUserMedia succeeded, stopping test stream...');
       testStream.getTracks().forEach(track => track.stop()); // Stop test stream
 
-      console.log('Setting permission status to granted...');
       // If we get here, basic camera access works
       // Now try to initialize the QR scanner
       setPermissionStatus('granted');
@@ -183,16 +166,11 @@ const Dashboard = () => {
 
       // Small delay to ensure state updates
       setTimeout(() => {
-        console.log('Initializing scanner...');
         initializeScanner();
       }, 100);
 
     } catch (error) {
       console.error('Camera permission error:', error);
-      if (error instanceof Error) {
-        console.error('Error name:', error.name);
-        console.error('Error message:', error.message);
-      }
       setPermissionStatus('denied');
     }
   };
@@ -207,7 +185,6 @@ const Dashboard = () => {
       return;
     }
     if (isJoining) {
-      console.log('Already joining a room, ignoring manual join');
       return;
     }
     setIsJoining(true);

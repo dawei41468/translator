@@ -35,12 +35,10 @@ export const useJoinRoom = () => {
   return useMutation({
     mutationFn: (code: string) => apiClient.joinRoom(code),
     onSuccess: (data) => {
-      console.log('🎯 useJoinRoom onSuccess - navigating to room:', data.roomCode);
       queryClient.invalidateQueries({ queryKey: ["rooms"] });
-      
+
       // Use window.location for full page navigation - most reliable
       const targetUrl = `/room/${data.roomCode}`;
-      console.log('🌐 Using window.location.href =', targetUrl);
       window.location.href = targetUrl;
     },
     onError: (error: any) => {

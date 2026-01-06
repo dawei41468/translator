@@ -52,37 +52,23 @@ function getSocketBaseUrl(): string {
   const host = window.location.hostname;
   const isLocalHost = host === "localhost" || host === "127.0.0.1";
 
-  console.log('getSocketBaseUrl debug:', {
-    base,
-    host,
-    isLocalHost,
-    origin: window.location.origin
-  });
-
   if (!base) {
     // In local dev, the API/socket server runs on :4003. In prod, default to same-origin.
-    const result = isLocalHost ? "http://localhost:4003" : window.location.origin;
-    console.log('No base URL, returning:', result);
-    return result;
+    return isLocalHost ? "http://localhost:4003" : window.location.origin;
   }
   if (base.startsWith("http")) {
     const normalized = base.replace(/\/api\/?$/, "");
     // Never allow production clients to attempt sockets on their own localhost.
     if (!isLocalHost && /^(https?:\/\/)(localhost|127\.0\.0\.1)(:|\/|$)/.test(normalized)) {
-      console.log('Production client trying to connect to localhost, using origin:', window.location.origin);
       return window.location.origin;
     }
-    console.log('Using normalized base URL:', normalized);
     return normalized;
   }
   // Relative base URL (e.g. /api) means same origin
   if (base.startsWith("/")) {
-    console.log('Relative base URL, using origin:', window.location.origin);
     return window.location.origin;
   }
-  const result = "http://localhost:4003";
-  console.log('Fallback to localhost:', result);
-  return result;
+  return "http://localhost:4003";
 }
 
 function getSpeechRecognitionLocale(language: string | null | undefined): string {
@@ -109,8 +95,6 @@ const Conversation = () => {
   const { data: meData } = useMe();
   const [socket, setSocket] = useState<Socket | null>(null);
 
-  // Debug logging
-  console.log('🚀 Conversation component MOUNTED', { code, user: !!user, meData: !!meData, timestamp: new Date().toISOString() });
   const socketRef = useRef<Socket | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<
@@ -253,25 +237,17 @@ const Conversation = () => {
   // Get room info
   const { data: roomData, isLoading, error, refetch } = useRoom(code);
 
-  console.log('Room data state:', { roomData, isLoading, error, code });
-  console.log('User data state:', { user, meData });
-
   // Initialize Socket.io
   useEffect(() => {
     if (!code) return;
 
-    console.log('Initializing socket connection for room:', code);
     const socketUrl = getSocketBaseUrl();
-    console.log('Connecting to socket URL:', socketUrl);
-
-    console.log('Creating Socket.IO instance with URL:', socketUrl);
     const socketInstance = io(socketUrl, {
       withCredentials: true,
       timeout: 10000, // 10 second connection timeout
       transports: ['websocket', 'polling'], // Try WebSocket first, fallback to polling
       forceNew: true, // Force new connection
     });
-    console.log('Socket.IO instance created:', socketInstance);
 
     // Set a timeout for connection
     const connectionTimeout = setTimeout(() => {
@@ -608,23 +584,8 @@ const Conversation = () => {
   }
 
   try {
-    // Temporary debug info
-    const debugInfo = {
-      code,
-      roomData: !!roomData,
-      isLoading,
-      error: error ? String(error) : null,
-      connectionStatus,
-      user: !!user,
-      meData: !!meData
-    };
-
     return (
       <div className="flex flex-col h-screen bg-background">
-        {/* Debug overlay - remove in production */}
-        <div className="fixed top-0 left-0 bg-black text-white text-xs p-2 z-50 max-w-md">
-          DEBUG: {JSON.stringify(debugInfo, null, 2)}
-        </div>
         {/* Header */}
         <header className="bg-background border-b p-4 sm:p-6 flex items-center justify-between" role="banner">
           <div className="flex items-center gap-3">

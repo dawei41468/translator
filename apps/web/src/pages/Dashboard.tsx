@@ -39,25 +39,6 @@ const Dashboard = () => {
     }
   };
 
-  const checkCameraPermission = async (): Promise<'granted' | 'denied' | 'prompt'> => {
-    try {
-      if (!navigator.permissions) return 'prompt';
-      const permission = await navigator.permissions.query({ name: 'camera' as PermissionName });
-      return permission.state as 'granted' | 'denied' | 'prompt';
-    } catch {
-      return 'prompt';
-    }
-  };
-
-  const requestCameraPermission = async (): Promise<boolean> => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      stream.getTracks().forEach(track => track.stop());
-      return true;
-    } catch {
-      return false;
-    }
-  };
 
   const openAppSettings = () => {
     if (navigator.userAgent.match(/iPhone|iPad|iPod/i)) {
@@ -110,6 +91,42 @@ const Dashboard = () => {
         console.log("QR scan error:", error);
       }
     );
+
+    // Hide the html5-qrcode permission message using MutationObserver
+    const hidePermissionElements = () => {
+      // Hide permission buttons
+      const permissionButtons = document.querySelectorAll('button[id*="html5-qrcode-button-camera-permission"]');
+      permissionButtons.forEach(el => {
+        (el as HTMLElement).style.display = 'none';
+      });
+
+      // Hide permission messages
+      const allElements = document.querySelectorAll('*');
+      allElements.forEach(el => {
+        if (el.textContent?.includes('Request Camera Permissions') ||
+            el.textContent?.includes('camera permission') ||
+            el.textContent?.includes('Camera permission')) {
+          (el as HTMLElement).style.display = 'none';
+        }
+      });
+    };
+
+    // Watch for DOM changes to hide permission elements as they appear
+    const observer = new MutationObserver(hidePermissionElements);
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+
+    // Also hide immediately and after a delay
+    hidePermissionElements();
+    setTimeout(hidePermissionElements, 200);
+    setTimeout(hidePermissionElements, 500);
+
+    // Return cleanup function
+    return () => {
+      observer.disconnect();
+    };
   };
 
   const handleScanQR = async () => {
@@ -119,26 +136,25 @@ const Dashboard = () => {
     }
 
     setShowScanner(true);
-    setPermissionStatus('checking');
-
-    const status = await checkCameraPermission();
-    setPermissionStatus(status);
-
-    if (status === 'granted') {
-      setIsScanning(true);
-      initializeScanner();
-    }
+    setPermissionStatus('prompt');
   };
 
   const handleRequestPermission = async () => {
     setPermissionStatus('checking');
-    const granted = await requestCameraPermission();
 
-    if (granted) {
+    try {
+      // Request permission using browser's native dialog
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' } // Use back camera on mobile
+      });
+      stream.getTracks().forEach(track => track.stop()); // Stop immediately
+
+      // If we get here, permission was granted
       setPermissionStatus('granted');
       setIsScanning(true);
       initializeScanner();
-    } else {
+    } catch (error) {
+      // Permission denied or error occurred
       setPermissionStatus('denied');
     }
   };
@@ -176,11 +192,16 @@ const Dashboard = () => {
 
   // Initialize QR scanner when permissions are granted
   useEffect(() => {
+    let cleanup: (() => void) | undefined;
+
     if (permissionStatus === 'granted' && isScanning && !scannerRef.current) {
-      initializeScanner();
+      cleanup = initializeScanner();
     }
 
     return () => {
+      if (cleanup) {
+        cleanup();
+      }
       if (scannerRef.current) {
         scannerRef.current.clear();
         scannerRef.current = null;

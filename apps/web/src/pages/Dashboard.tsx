@@ -21,14 +21,21 @@ const Dashboard = () => {
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const [permissionStatus, setPermissionStatus] = useState<'checking' | 'granted' | 'denied' | 'prompt'>('checking');
   const [isScanning, setIsScanning] = useState(false);
+  const [isJoining, setIsJoining] = useState(false);
 
   const createRoomMutation = useCreateRoom();
   const joinRoomMutation = useJoinRoom();
 
   const handleStartConversation = () => {
+    console.log('Starting room creation...');
     createRoomMutation.mutate(undefined, {
       onSuccess: (data) => {
+        console.log('Room created successfully:', data);
         setCreatedRoom({ code: data.roomCode, id: data.roomId });
+        toast.success(t('room.created', 'Room created successfully!'));
+      },
+      onError: (error) => {
+        console.error('Room creation failed:', error);
       }
     });
   };
@@ -62,47 +69,67 @@ const Dashboard = () => {
         qrbox: { width: 250, height: 250 }
       },
       (decodedText: string) => {
-        console.log('QR code detected:', decodedText);
-        const input = decodedText.trim();
-        if (!input) {
-          toast.error(t("error.invalidQR"));
-          return;
-        }
-
-        let code = input;
-        try {
-          const url = new URL(input);
-          const lastSegment = url.pathname.split("/").filter(Boolean).pop();
-          if (lastSegment) code = lastSegment;
-        } catch {
-          // not a URL
-        }
-
-        code = code.trim().toUpperCase();
-        if (!code) {
-          toast.error(t("error.invalidQR"));
-          return;
-        }
-
-        console.log('Joining room with code:', code);
-        toast.success(t('room.joiningQR', 'Joining room...'));
-
-        joinRoomMutation.mutate(code, {
-          onSuccess: (data) => {
-            console.log('Successfully joined room:', data);
-            toast.success(t('room.joined', 'Joined room successfully!'));
-            setShowScanner(false);
-            setIsScanning(false);
-            // Navigation should happen automatically via the hook
-          },
-          onError: (error) => {
-            console.error('Failed to join room:', error);
-            toast.error(t('room.joinFailed', 'Failed to join room'));
-            setShowScanner(false);
-            setIsScanning(false);
+          // Prevent multiple join attempts
+          if (isJoining) {
+            console.log('Already joining a room, ignoring duplicate QR detection');
+            return;
           }
-        });
-      },
+
+          console.log('QR code detected:', decodedText);
+          const input = decodedText.trim();
+          if (!input) {
+            console.error('QR code was empty or whitespace only');
+            toast.error(t("error.invalidQR"));
+            return;
+          }
+
+          let code = input;
+          try {
+            const url = new URL(input);
+            const lastSegment = url.pathname.split("/").filter(Boolean).pop();
+            if (lastSegment) {
+              code = lastSegment;
+              console.log('Extracted code from URL:', code);
+            }
+          } catch {
+            // not a URL, use as-is
+            console.log('QR code is not a URL, using as code:', code);
+          }
+
+          code = code.trim().toUpperCase();
+          if (!code || code.length !== 6 || !/^[A-Z0-9]+$/.test(code)) {
+            console.error('Invalid room code format:', code);
+            toast.error(t("error.invalidQR"));
+            return;
+          }
+
+          console.log('Final room code to join:', code);
+          setIsJoining(true);
+          toast.success(t('room.joiningQR', 'Joining room...'));
+
+          // Stop the scanner immediately to prevent multiple detections
+          if (scannerRef.current) {
+            scannerRef.current.stop().catch(console.error);
+          }
+
+          joinRoomMutation.mutate(code, {
+            onSuccess: (data) => {
+              console.log('Successfully joined room:', data);
+              toast.success(t('room.joined', 'Joined room successfully!'));
+              setShowScanner(false);
+              setIsScanning(false);
+              setIsJoining(false);
+              // Navigation should happen automatically via the hook
+            },
+            onError: (error) => {
+              console.error('Failed to join room:', error);
+              toast.error(t('room.joinFailed', 'Failed to join room'));
+              setShowScanner(false);
+              setIsScanning(false);
+              setIsJoining(false);
+            }
+          });
+        },
       (error: any) => {
         // Ignore scan errors, only log serious issues
         if (!error?.includes && typeof error !== 'string') {
@@ -179,7 +206,16 @@ const Dashboard = () => {
       toast.error(t('error.enterCode'));
       return;
     }
-    joinRoomMutation.mutate(manualCode.toUpperCase());
+    if (isJoining) {
+      console.log('Already joining a room, ignoring manual join');
+      return;
+    }
+    setIsJoining(true);
+    joinRoomMutation.mutate(manualCode.toUpperCase(), {
+      onSettled: () => {
+        setIsJoining(false);
+      }
+    });
   };
 
   const clipboardSupported =
@@ -248,12 +284,12 @@ const Dashboard = () => {
 
               <Button
                 onClick={handleScanQR}
-                disabled={!isAuthenticated}
+                disabled={!isAuthenticated || isJoining}
                 className="w-full"
                 variant="secondary"
                 size="lg"
               >
-                {t("room.scan")}
+                {isJoining ? t("room.joining") : t("room.scan")}
               </Button>
 
               <div className="text-center mb-4">
@@ -272,11 +308,11 @@ const Dashboard = () => {
                 />
                 <Button
                   onClick={handleManualJoin}
-                  disabled={!isAuthenticated || !manualCode.trim() || joinRoomMutation.isPending}
+                  disabled={!isAuthenticated || !manualCode.trim() || joinRoomMutation.isPending || isJoining}
                   className="w-full"
                   size="lg"
                 >
-                  {joinRoomMutation.isPending ? t("room.joining") : t("room.joinByCode")}
+                  {joinRoomMutation.isPending || isJoining ? t("room.joining") : t("room.joinByCode")}
                 </Button>
               </div>
 
@@ -381,6 +417,7 @@ const Dashboard = () => {
                         onClick={() => {
                           setShowScanner(false);
                           setPermissionStatus('checking');
+                          setIsJoining(false);
                         }}
                         variant="outline"
                         className="w-full"
@@ -422,6 +459,7 @@ const Dashboard = () => {
                         setShowScanner(false);
                         setIsScanning(false);
                         setPermissionStatus('checking');
+                        setIsJoining(false);
                       }}
                       className="w-full mt-4"
                       variant="secondary"

@@ -68,7 +68,15 @@ async function withRetry<T>(
 // Input validation for socket events
 function validateSocketData(data: any, schema: { [key: string]: (value: any) => boolean }) {
   for (const [key, validator] of Object.entries(schema)) {
-    if (!(key in data) || !validator(data[key])) {
+    // Allow optional fields (those that accept undefined) to be missing
+    if (!(key in data)) {
+      // If the field is missing, check if the validator accepts undefined
+      if (!validator(undefined)) {
+        return false;
+      }
+      continue;
+    }
+    if (!validator(data[key])) {
       return false;
     }
   }

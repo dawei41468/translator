@@ -84,9 +84,24 @@ const Dashboard = () => {
           return;
         }
 
-        joinRoomMutation.mutate(code);
-        setShowScanner(false);
-        setIsScanning(false);
+        console.log('Joining room with code:', code);
+        toast.success(t('room.joiningQR', 'Joining room...'));
+
+        joinRoomMutation.mutate(code, {
+          onSuccess: (data) => {
+            console.log('Successfully joined room:', data);
+            toast.success(t('room.joined', 'Joined room successfully!'));
+            setShowScanner(false);
+            setIsScanning(false);
+            // Navigation should happen automatically via the hook
+          },
+          onError: (error) => {
+            console.error('Failed to join room:', error);
+            toast.error(t('room.joinFailed', 'Failed to join room'));
+            setShowScanner(false);
+            setIsScanning(false);
+          }
+        });
       },
       (error: any) => {
         // Ignore scan errors, only log serious issues

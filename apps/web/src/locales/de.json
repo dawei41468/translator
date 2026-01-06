@@ -50,6 +50,7 @@
   "conversation.translateTo": "Übersetzen nach",
   "conversation.soloModeHint": "Zeigt den erkannten Text und die Übersetzung auf diesem Gerät.",
   "conversation.languageDescription": "Wählen Sie Ihre Sprache für Spracherkennung und Übersetzungen",
+  "conversation.originalText": "Original",
   "conversation.connected": "Verbunden",
   "conversation.reconnecting": "Verbindung wird wiederhergestellt",
   "conversation.reconnected": "Wieder mit der Konversation verbunden",

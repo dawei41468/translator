@@ -597,19 +597,27 @@ const Conversation = () => {
                     : "bg-card text-card-foreground border rounded-2xl rounded-tl-none"
                 )}
               >
-                <p className="leading-relaxed">{message.text}</p>
-                {message.translatedText && (
-                  <p
-                    className={cn(
-                      "text-sm mt-1.5 border-t pt-1",
-                      message.isOwn
-                        ? "text-primary-foreground/80 border-primary-foreground/20"
-                        : "text-muted-foreground border-border/50"
-                    )}
-                    aria-label={`${t('conversation.translation')}: ${message.translatedText}`}
-                  >
-                    {message.translatedText}
-                  </p>
+                {message.translatedText ? (
+                  <>
+                    {/* Translated text - MOST PROMINENT */}
+                    <p className="text-base font-medium leading-relaxed">
+                      {message.translatedText}
+                    </p>
+                    {/* Original text - de-emphasized */}
+                    <p
+                      className={cn(
+                        "text-xs mt-2 border-t pt-2 italic",
+                        message.isOwn
+                          ? "text-primary-foreground/70 border-primary-foreground/20"
+                          : "text-muted-foreground border-border/50"
+                      )}
+                    >
+                      <span className="sr-only">{t('conversation.originalText', 'Original')}: </span>
+                      {message.text}
+                    </p>
+                  </>
+                ) : (
+                  <p className="leading-relaxed">{message.text}</p>
                 )}
                 <time className="sr-only" dateTime={message.timestamp.toISOString()}>
                   {new Date(message.timestamp).toLocaleTimeString()}

@@ -84,6 +84,7 @@
   "conversation.tapToSpeak": "Tap to start speaking",
   "conversation.recordingActive": "Recording active - speak now",
   "conversation.languageDescription": "Select your language for speech recognition and translations",
+  "conversation.originalText": "Original",
   "conversation.allowSpeakerAudio": "Allow speaker audio",
   "common.or": "OR",
   "common.cancel": "Cancel",

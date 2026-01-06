@@ -50,6 +50,7 @@
   "conversation.translateTo": "Traduci in",
   "conversation.soloModeHint": "Mostra il testo riconosciuto e la traduzione su questo dispositivo.",
   "conversation.languageDescription": "Seleziona la tua lingua per il riconoscimento vocale e le traduzioni",
+  "conversation.originalText": "Originale",
   "conversation.connected": "Connesso",
   "conversation.reconnecting": "Riconnessione in corso",
   "conversation.reconnected": "Riconnesso alla conversazione",

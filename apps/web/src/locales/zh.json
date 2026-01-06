@@ -50,6 +50,7 @@
   "conversation.translateTo": "翻译为",
   "conversation.soloModeHint": "在本设备显示识别文本及翻译结果。",
   "conversation.languageDescription": "选择您的语言用于语音识别和翻译",
+  "conversation.originalText": "原文",
   "conversation.connected": "已连接",
   "conversation.reconnecting": "正在重新连接",
   "conversation.reconnected": "已重新连接到对话",

@@ -19,6 +19,8 @@ const Dashboard = () => {
   const [showQr, setShowQr] = useState(false);
   const [manualCode, setManualCode] = useState("");
   const scannerRef = useRef<Html5QrcodeScanner | null>(null);
+  const [permissionStatus, setPermissionStatus] = useState<'checking' | 'granted' | 'denied' | 'prompt'>('checking');
+  const [isScanning, setIsScanning] = useState(false);
 
   const createRoomMutation = useCreateRoom();
   const joinRoomMutation = useJoinRoom();
@@ -37,12 +39,108 @@ const Dashboard = () => {
     }
   };
 
-  const handleScanQR = () => {
+  const checkCameraPermission = async (): Promise<'granted' | 'denied' | 'prompt'> => {
+    try {
+      if (!navigator.permissions) return 'prompt';
+      const permission = await navigator.permissions.query({ name: 'camera' as PermissionName });
+      return permission.state as 'granted' | 'denied' | 'prompt';
+    } catch {
+      return 'prompt';
+    }
+  };
+
+  const requestCameraPermission = async (): Promise<boolean> => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      stream.getTracks().forEach(track => track.stop());
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const openAppSettings = () => {
+    if (navigator.userAgent.match(/iPhone|iPad|iPod/i)) {
+      window.location.href = 'app-settings:';
+    } else {
+      toast.info(t('room.cameraSettingsInstruction'));
+    }
+  };
+
+  const initializeScanner = () => {
+    if (scannerRef.current) return;
+
+    scannerRef.current = new Html5QrcodeScanner(
+      "qr-reader",
+      {
+        fps: 10,
+        qrbox: { width: 250, height: 250 },
+      },
+      false
+    );
+
+    scannerRef.current.render(
+      (decodedText) => {
+        const input = decodedText.trim();
+        if (!input) {
+          toast.error(t("error.invalidQR"));
+          return;
+        }
+
+        let code = input;
+        try {
+          const url = new URL(input);
+          const lastSegment = url.pathname.split("/").filter(Boolean).pop();
+          if (lastSegment) code = lastSegment;
+        } catch {
+          // not a URL
+        }
+
+        code = code.trim().toUpperCase();
+        if (!code) {
+          toast.error(t("error.invalidQR"));
+          return;
+        }
+
+        joinRoomMutation.mutate(code);
+        setShowScanner(false);
+        setIsScanning(false);
+      },
+      (error) => {
+        console.log("QR scan error:", error);
+      }
+    );
+  };
+
+  const handleScanQR = async () => {
     if (!isAuthenticated) {
       navigate("/login");
       return;
     }
+
     setShowScanner(true);
+    setPermissionStatus('checking');
+
+    const status = await checkCameraPermission();
+    setPermissionStatus(status);
+
+    if (status === 'granted') {
+      setIsScanning(true);
+      initializeScanner();
+    }
+  };
+
+  const handleRequestPermission = async () => {
+    setPermissionStatus('checking');
+    const granted = await requestCameraPermission();
+
+    if (granted) {
+      setPermissionStatus('granted');
+      setIsScanning(true);
+      initializeScanner();
+    } else {
+      setPermissionStatus('denied');
+    }
   };
 
   const handleManualJoin = () => {
@@ -76,49 +174,10 @@ const Dashboard = () => {
     }
   };
 
-  // Initialize QR scanner
+  // Initialize QR scanner when permissions are granted
   useEffect(() => {
-    if (showScanner && !scannerRef.current) {
-      scannerRef.current = new Html5QrcodeScanner(
-        "qr-reader",
-        {
-          fps: 10,
-          qrbox: { width: 250, height: 250 },
-        },
-        false
-      );
-
-      scannerRef.current.render(
-        (decodedText) => {
-          const input = decodedText.trim();
-          if (!input) {
-            toast.error(t("error.invalidQR"));
-            return;
-          }
-
-          // New: QR payload is the room code itself.
-          // Legacy support: tolerate older URL QR payloads by extracting the last path segment.
-          let code = input;
-          try {
-            const url = new URL(input);
-            const lastSegment = url.pathname.split("/").filter(Boolean).pop();
-            if (lastSegment) code = lastSegment;
-          } catch {
-            // not a URL
-          }
-
-          code = code.trim().toUpperCase();
-          if (!code) {
-            toast.error(t("error.invalidQR"));
-            return;
-          }
-
-          joinRoomMutation.mutate(code);
-        },
-        (error) => {
-          console.log("QR scan error:", error);
-        }
-      );
+    if (permissionStatus === 'granted' && isScanning && !scannerRef.current) {
+      initializeScanner();
     }
 
     return () => {
@@ -127,7 +186,7 @@ const Dashboard = () => {
         scannerRef.current = null;
       }
     };
-  }, [showScanner, joinRoomMutation, t]);
+  }, [permissionStatus, isScanning, joinRoomMutation, t]);
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -237,49 +296,112 @@ const Dashboard = () => {
         )}
 
         {createdRoom && showQr && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="border rounded-xl bg-card text-card-foreground shadow-sm p-5 max-w-sm w-full mx-4">
-              <h3 className="text-lg font-semibold mb-2 text-center">{t("room.qrTitle")}</h3>
-              <p className="text-sm text-muted-foreground mb-4 text-center">{t("room.qrDescription")}</p>
+           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" role="dialog" aria-modal="true" aria-labelledby="qr-modal-title">
+             <div className="border rounded-xl bg-card text-card-foreground shadow-sm p-5 max-w-sm w-full mx-4" role="document">
+               <h3 id="qr-modal-title" className="text-lg font-semibold mb-2 text-center">{t("room.qrTitle")}</h3>
+               <p className="text-sm text-muted-foreground mb-4 text-center">{t("room.qrDescription")}</p>
 
-              <div className="bg-background p-4 rounded-lg mb-4 flex justify-center border">
-                <QRCodeCanvas value={createdRoom.code} size={240} bgColor="#ffffff" fgColor="#000000" />
-              </div>
+               <div className="bg-background p-4 rounded-lg mb-4 flex justify-center border" aria-label={t("room.qrCodeAlt")}>
+                 <QRCodeCanvas value={createdRoom.code} size={240} bgColor="#ffffff" fgColor="#000000" aria-hidden="true" />
+               </div>
 
-              <div className="rounded-lg border bg-background p-4 text-center mb-4">
-                <div className="text-xs text-muted-foreground mb-1">{t("room.code")}</div>
-                <div className="font-mono text-xl font-bold tracking-widest">{createdRoom.code}</div>
-                <div className="mt-3">
-                  <Button type="button" variant="outline" onClick={() => handleCopy(createdRoom.code)} className="w-full">
-                    {t("room.copyCode")}
-                  </Button>
-                </div>
-              </div>
+               <div className="rounded-lg border bg-background p-4 text-center mb-4">
+                 <div className="text-xs text-muted-foreground mb-1">{t("room.code")}</div>
+                 <div className="font-mono text-xl font-bold tracking-widest" aria-label={`${t("room.code")}: ${createdRoom.code}`}>{createdRoom.code}</div>
+                 <div className="mt-3">
+                   <Button type="button" variant="outline" onClick={() => handleCopy(createdRoom.code)} className="w-full" aria-describedby="copy-instruction">
+                     {t("room.copyCode")}
+                   </Button>
+                   <span id="copy-instruction" className="sr-only">{t("room.copyCodeDesc")}</span>
+                 </div>
+               </div>
 
-              <div className="space-y-2">
-                <Button type="button" className="w-full" variant="secondary" onClick={() => setShowQr(false)}>
-                  {t("common.cancel")}
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
+               <div className="space-y-2">
+                 <Button type="button" className="w-full" variant="secondary" onClick={() => setShowQr(false)} aria-label={t("common.closeModal")}>
+                   {t("common.cancel")}
+                 </Button>
+               </div>
+             </div>
+           </div>
+         )}
 
         {showScanner && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="border rounded-xl bg-card text-card-foreground shadow-sm p-4 max-w-sm w-full mx-4">
-              <h3 className="text-lg font-semibold mb-4 text-center">{t("room.scanTitle")}</h3>
-              <div id="qr-reader" className="w-full"></div>
-              <Button
-                onClick={() => setShowScanner(false)}
-                className="w-full mt-4"
-                variant="secondary"
-              >
-                {t("common.cancel")}
-              </Button>
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" role="dialog" aria-modal="true" aria-labelledby="scanner-modal-title">
+              <div className="border rounded-xl bg-card text-card-foreground shadow-sm p-4 max-w-sm w-full mx-4" role="document">
+                <h3 id="scanner-modal-title" className="text-lg font-semibold mb-4 text-center">{t("room.scanTitle")}</h3>
+
+                {permissionStatus === 'checking' && (
+                  <div className="text-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                    <p className="text-sm text-muted-foreground">{t('room.checkingPermissions')}</p>
+                  </div>
+                )}
+
+                {permissionStatus === 'prompt' && (
+                  <div className="text-center space-y-4 py-4">
+                    <div className="text-4xl mb-4">📷</div>
+                    <p className="text-sm">{t('room.cameraPermissionRequired')}</p>
+                    <div className="space-y-2">
+                      <Button onClick={handleRequestPermission} className="w-full">
+                        {t('room.allowCamera')}
+                      </Button>
+                      <Button
+                        onClick={() => {
+                          setShowScanner(false);
+                          setPermissionStatus('checking');
+                        }}
+                        variant="outline"
+                        className="w-full"
+                      >
+                        {t('common.cancel')}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {permissionStatus === 'denied' && (
+                  <div className="text-center space-y-4 py-4">
+                    <div className="text-4xl mb-4">🚫</div>
+                    <p className="text-sm font-medium">{t('room.cameraAccessDenied')}</p>
+                    <p className="text-xs text-muted-foreground">{t('room.cameraSettingsHelp')}</p>
+                    <div className="space-y-2">
+                      <Button onClick={openAppSettings} className="w-full">
+                        {t('room.goToSettings')}
+                      </Button>
+                      <Button
+                        onClick={() => {
+                          setShowScanner(false);
+                          setPermissionStatus('checking');
+                        }}
+                        variant="outline"
+                        className="w-full"
+                      >
+                        {t('common.cancel')}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {permissionStatus === 'granted' && isScanning && (
+                  <>
+                    <div id="qr-reader" className="w-full" aria-label={t("room.qrScannerAlt")}></div>
+                    <Button
+                      onClick={() => {
+                        setShowScanner(false);
+                        setIsScanning(false);
+                        setPermissionStatus('checking');
+                      }}
+                      className="w-full mt-4"
+                      variant="secondary"
+                      aria-label={t("common.closeModal")}
+                    >
+                      {t("common.cancel")}
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          )}
       </div>
     </div>
   );

@@ -8,8 +8,106 @@ import { createRecognizeStream } from "./services/stt.js";
 import { logger } from "./logger.js";
 import { parseCookies } from "./middleware/auth.js";
 
+// Centralized error handling
+function handleSocketError(socket: AuthenticatedSocket, event: string, error: any, userMessage?: string, logContext?: any) {
+  const errorId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+  logger.error(`Socket error in ${event}`, {
+    errorId,
+    userId: socket.userId,
+    roomId: socket.roomId,
+    event,
+    error: error instanceof Error ? error.message : String(error),
+    stack: error instanceof Error ? error.stack : undefined,
+    ...logContext
+  });
+
+  const message = userMessage || "An unexpected error occurred";
+  socket.emit("error", { message, errorId });
+}
+
+// Graceful degradation for speech recognition
+function handleSpeechError(socket: AuthenticatedSocket, error: any, context: string) {
+  logger.warn(`Speech recognition error: ${context}`, {
+    userId: socket.userId,
+    roomId: socket.roomId,
+    error: error instanceof Error ? error.message : String(error)
+  });
+
+  // Stop recognition to prevent further errors
+  if (socket.recognizeStream) {
+    socket.recognizeStream.end();
+    socket.recognizeStream = undefined;
+  }
+
+  socket.emit("speech-error", "Speech recognition temporarily unavailable. Please try again.");
+}
+
+// Retry mechanism for transient errors
+async function withRetry<T>(
+  operation: () => Promise<T>,
+  maxRetries: number = 3,
+  delay: number = 1000
+): Promise<T> {
+  let lastError: any;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      if (attempt < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, delay * attempt));
+      }
+    }
+  }
+
+  throw lastError;
+}
+
+// Input validation for socket events
+function validateSocketData(data: any, schema: { [key: string]: (value: any) => boolean }) {
+  for (const [key, validator] of Object.entries(schema)) {
+    if (!(key in data) || !validator(data[key])) {
+      return false;
+    }
+  }
+  return true;
+}
+
+const speechStartSchema = {
+  languageCode: (v: any) => typeof v === 'string' && v.length >= 2 && v.length <= 10,
+  soloMode: (v: any) => typeof v === 'boolean' || v === undefined,
+  soloTargetLang: (v: any) => typeof v === 'string' || v === undefined,
+};
+
+const roomCodeSchema = {
+  roomCode: (v: any) => typeof v === 'string' && v.length === 6 && /^[A-Z0-9]+$/.test(v),
+};
+
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
 const AUTH_COOKIE_NAME = "auth_token";
+
+// Rate limiting for socket events
+const rateLimits = new Map<string, { count: number; resetTime: number }>();
+
+function checkRateLimit(userId: string, event: string, maxRequests: number, windowMs: number): boolean {
+  const key = `${userId}:${event}`;
+  const now = Date.now();
+  const limit = rateLimits.get(key);
+
+  if (!limit || now > limit.resetTime) {
+    rateLimits.set(key, { count: 1, resetTime: now + windowMs });
+    return true;
+  }
+
+  if (limit.count >= maxRequests) {
+    return false;
+  }
+
+  limit.count++;
+  return true;
+}
 
 interface AuthenticatedSocket extends Socket {
   userId?: string;
@@ -32,9 +130,11 @@ export function setupSocketIO(io: Server) {
         return next(new Error("Invalid token"));
       }
 
-      const user = await db.query.users.findFirst({
-        where: eq(users.id, userId),
-      });
+      const user = await withRetry(() =>
+        db.query.users.findFirst({
+          where: eq(users.id, userId),
+        }), 2, 500
+      );
       if (!user) {
         return next(new Error("User not found"));
       }
@@ -42,6 +142,10 @@ export function setupSocketIO(io: Server) {
       socket.userId = userId;
       next();
     } catch (err) {
+      logger.warn("Socket authentication failed", {
+        error: err instanceof Error ? err.message : String(err),
+        ip: socket.handshake.address
+      });
       next(new Error("Authentication error"));
     }
   });
@@ -49,17 +153,49 @@ export function setupSocketIO(io: Server) {
   io.on("connection", (socket: AuthenticatedSocket) => {
     logger.info(`User connected to socket`, { userId: socket.userId });
 
+    // Handle connection errors
+    socket.on("connect_error", (error) => {
+      logger.warn("Socket connection error", {
+        userId: socket.userId,
+        error: error.message
+      });
+    });
+
+    socket.on("error", (error) => {
+      handleSocketError(socket, "socket-error", error, "Connection error occurred");
+    });
+
     const stopRecognition = () => {
-      if (socket.recognizeStream) {
-        socket.recognizeStream.end();
-        socket.recognizeStream = undefined;
+      try {
+        if (socket.recognizeStream) {
+          socket.recognizeStream.end();
+          socket.recognizeStream = undefined;
+        }
+      } catch (error) {
+        logger.warn("Error stopping recognition", {
+          userId: socket.userId,
+          error: error instanceof Error ? error.message : String(error)
+        });
       }
     };
 
     socket.on(
       "start-speech",
       (data: { languageCode: string; soloMode?: boolean; soloTargetLang?: string }) => {
-      if (!socket.roomId || !socket.userId) return;
+      if (!validateSocketData(data, speechStartSchema)) {
+        handleSocketError(socket, "start-speech", new Error("Invalid speech start data"));
+        return;
+      }
+
+      if (!socket.userId || !checkRateLimit(socket.userId, 'start-speech', 10, 60000)) {
+        socket.emit("speech-error", "Too many speech start attempts - please wait");
+        return;
+      }
+
+      if (!socket.roomId) {
+        socket.emit("speech-error", "Not in a room");
+        return;
+      }
 
       stopRecognition();
 
@@ -71,23 +207,38 @@ export function setupSocketIO(io: Server) {
           { languageCode: data.languageCode },
           async (transcript, isFinal) => {
             if (isFinal) {
-              handleTranscript(transcript, data.languageCode.split("-")[0]);
+              try {
+                await withRetry(() => handleTranscript(transcript, data.languageCode.split("-")[0]), 2, 500);
+              } catch (error) {
+                handleSocketError(socket, "handleTranscript", error, "Failed to process speech - please try again", {
+                  transcript: transcript.substring(0, 100)
+                });
+              }
             }
           },
-          (_error) => {
-            socket.emit("speech-error", "Recognition failed");
-            stopRecognition();
+          (error) => {
+            handleSpeechError(socket, error, "stream error");
           }
         );
       } catch (error) {
-        socket.emit("speech-error", "Failed to start recognition");
+        handleSpeechError(socket, error, "failed to start recognition");
       }
     }
     );
 
     socket.on("speech-data", (data: Buffer) => {
+      // Validate that data is a Buffer and not too large
+      if (!(data instanceof Buffer) || data.length === 0 || data.length > 102400) { // 100KB max
+        handleSocketError(socket, "speech-data", new Error("Invalid speech data"));
+        return;
+      }
+
       if (socket.recognizeStream) {
-        socket.recognizeStream.write(data);
+        try {
+          socket.recognizeStream.write(data);
+        } catch (error) {
+          handleSpeechError(socket, error, "writing to stream");
+        }
       }
     });
 
@@ -96,17 +247,22 @@ export function setupSocketIO(io: Server) {
     });
 
     const handleTranscript = async (transcript: string, sourceLang: string) => {
-      if (!socket.roomId || !socket.userId) return;
+      if (!socket.roomId || !socket.userId) {
+        handleSocketError(socket, "handleTranscript", new Error("Missing room or user ID"));
+        return;
+      }
 
       const messageId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
       try {
-        const participants = await db.query.roomParticipants.findMany({
-          where: eq(roomParticipants.roomId, socket.roomId),
-          with: {
-            user: true,
-          },
-        });
+        const participants = await withRetry(() =>
+          db.query.roomParticipants.findMany({
+            where: eq(roomParticipants.roomId, socket.roomId!),
+            with: {
+              user: true,
+            },
+          }), 2, 500
+        );
 
         const otherParticipants = participants.filter((p) => p.userId !== socket.userId);
         if (otherParticipants.length === 0 && !socket.soloMode) return;
@@ -124,23 +280,42 @@ export function setupSocketIO(io: Server) {
         if (otherParticipants.length > 0) {
           const translationPromises = Array.from(participantsByLanguage.entries()).map(
             async ([targetLang, participants]) => {
-              const translatedText = await translateText(transcript, sourceLang, targetLang);
-              return { targetLang, translatedText, participants };
+              try {
+                const translatedText = await withRetry(
+                  () => translateText(transcript, sourceLang, targetLang),
+                  2, 1000
+                );
+                return { targetLang, translatedText, participants, success: true };
+              } catch (error) {
+                return { targetLang, participants, error, success: false };
+              }
             }
           );
 
           const translations = await Promise.all(translationPromises);
 
-          for (const { targetLang, translatedText, participants } of translations) {
-            for (const participant of participants) {
-              socket.to(socket.roomId!).emit("translated-message", {
-                originalText: transcript,
-                translatedText,
-                sourceLang,
-                targetLang,
-                fromUserId: socket.userId,
-                toUserId: participant.userId,
+          for (const result of translations) {
+            if (result.success) {
+              const { targetLang, translatedText, participants } = result as any;
+              for (const participant of participants) {
+                socket.to(socket.roomId!).emit("translated-message", {
+                  originalText: transcript,
+                  translatedText,
+                  sourceLang,
+                  targetLang,
+                  fromUserId: socket.userId,
+                  toUserId: participant.userId,
+                });
+              }
+            } else {
+              const { targetLang, error } = result as any;
+              logger.warn("Translation failed for language group", {
+                userId: socket.userId,
+                roomId: socket.roomId,
+                error,
+                targetLang
               });
+              // Continue with other translations even if one fails
             }
           }
         }
@@ -153,53 +328,84 @@ export function setupSocketIO(io: Server) {
         });
 
         if (socket.soloMode && socket.soloTargetLang) {
-          const translatedText = await translateText(
-            transcript,
-            sourceLang,
-            socket.soloTargetLang
-          );
+          try {
+            const translatedText = await withRetry(
+              () => translateText(transcript, sourceLang, socket.soloTargetLang!),
+              2, 1000
+            );
 
-          socket.emit("solo-translated", {
-            id: messageId,
-            originalText: transcript,
-            translatedText,
-            sourceLang,
-            targetLang: socket.soloTargetLang,
-          });
+            socket.emit("solo-translated", {
+              id: messageId,
+              originalText: transcript,
+              translatedText,
+              sourceLang,
+              targetLang: socket.soloTargetLang,
+            });
+          } catch (error) {
+            handleSocketError(socket, "solo-translation", error, "Translation failed in solo mode", {
+              transcript: transcript.substring(0, 100)
+            });
+          }
         }
       } catch (error) {
-        logger.error("Error processing transcript", error, {
-          userId: socket.userId,
-          roomId: socket.roomId,
-          transcript,
+        handleSocketError(socket, "handleTranscript", error, "Failed to process your speech", {
+          transcript: transcript.substring(0, 100)
         });
       }
     };
 
     socket.on("join-room", async (roomCode: string) => {
+      if (!validateSocketData({ roomCode }, roomCodeSchema)) {
+        handleSocketError(socket, "join-room", new Error("Invalid room code format"));
+        return;
+      }
+
+      if (!socket.userId || !checkRateLimit(socket.userId, 'join-room', 5, 60000)) {
+        socket.emit("error", "Too many join attempts - please wait");
+        return;
+      }
+
       try {
-        const room = await db.query.rooms.findFirst({
-          where: eq(rooms.code, roomCode),
-        });
+
+        const normalizedCode = roomCode.toUpperCase();
+
+        const room = await withRetry(() =>
+          db.query.rooms.findFirst({
+            where: eq(rooms.code, normalizedCode),
+          }), 2, 500
+        );
 
         if (!room) {
-          socket.emit("error", "Room not found");
+          socket.emit("error", "Room not found or expired");
           return;
         }
 
         // Check if user is already a participant
-        const existingParticipant = await db.query.roomParticipants.findFirst({
-          where: (rp, { and }) => and(
-            eq(rp.roomId, room.id),
-            eq(rp.userId, socket.userId!)
-          ),
-        });
+        const existingParticipant = await withRetry(() =>
+          db.query.roomParticipants.findFirst({
+            where: (rp, { and }) => and(
+              eq(rp.roomId, room.id),
+              eq(rp.userId, socket.userId!)
+            ),
+          }), 2, 500
+        );
 
         if (!existingParticipant) {
-          await db.insert(roomParticipants).values({
-            roomId: room.id,
-            userId: socket.userId!,
-          });
+          // Check room capacity
+          const participantCount = await withRetry(() =>
+            db.$count(roomParticipants, eq(roomParticipants.roomId, room.id)), 2, 500
+          );
+          if (participantCount >= 10) {
+            socket.emit("error", "Room is full");
+            return;
+          }
+
+          await withRetry(() =>
+            db.insert(roomParticipants).values({
+              roomId: room.id,
+              userId: socket.userId!,
+            }), 2, 500
+          );
         }
 
         socket.roomId = room.id;
@@ -210,8 +416,7 @@ export function setupSocketIO(io: Server) {
 
         socket.emit("joined-room", { roomId: room.id });
       } catch (error) {
-        logger.error("Error joining room", error, { roomCode, userId: socket.userId });
-        socket.emit("error", "Failed to join room");
+        handleSocketError(socket, "join-room", error, "Unable to join room - please try again", { roomCode });
       }
     });
 
@@ -224,22 +429,44 @@ export function setupSocketIO(io: Server) {
     });
 
     socket.on("speech-transcript", async (data: { transcript: string; sourceLang: string }) => {
+      if (!socket.userId || !checkRateLimit(socket.userId, 'speech-transcript', 30, 60000)) {
+        // Don't emit error for transcript rate limiting to avoid spam
+        return;
+      }
       handleTranscript(data.transcript, data.sourceLang);
     });
 
-    socket.on("disconnect", () => {
-      logger.info(`User disconnected from socket`, { userId: socket.userId });
+    socket.on("disconnect", (reason) => {
+      logger.info(`User disconnected from socket`, {
+        userId: socket.userId,
+        reason,
+        roomId: socket.roomId
+      });
       stopRecognition();
       if (socket.roomId) {
         socket.to(socket.roomId).emit("user-left", { userId: socket.userId });
       }
     });
 
+    // Handle reconnection - client will rejoin room automatically
     socket.on("reconnect", () => {
       logger.info(`User reconnected to socket`, { userId: socket.userId });
-      if (socket.roomId) {
-        socket.to(socket.roomId).emit("user-reconnected", { userId: socket.userId });
+      // Note: Client handles room rejoining via React useEffect
+    });
+
+    // Add heartbeat/ping to detect connection issues early
+    const heartbeat = setInterval(() => {
+      if (socket.connected) {
+        socket.emit("ping");
       }
+    }, 30000); // 30 second heartbeat
+
+    socket.on("pong", () => {
+      // Client responds to ping - connection is healthy
+    });
+
+    socket.on("disconnect", () => {
+      clearInterval(heartbeat);
     });
   });
 }

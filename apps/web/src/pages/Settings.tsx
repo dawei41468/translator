@@ -92,7 +92,7 @@ const Settings = () => {
                   <div className="text-sm font-medium">{t("settings.tts.enable")}</div>
                   <div className="text-xs text-muted-foreground">{t("settings.tts.enableDescription")}</div>
                 </div>
-                <Button type="button" variant={ttsEnabled ? "default" : "outline"} onClick={handleToggleTts} className="shrink-0">
+                <Button type="button" variant={ttsEnabled ? "default" : "outline"} onClick={handleToggleTts} className="shrink-0" aria-pressed={ttsEnabled} aria-label={ttsEnabled ? t("settings.tts.disableAria") : t("settings.tts.enableAria")}>
                   {ttsEnabled ? t("settings.tts.enabled") : t("settings.tts.disabled")}
                 </Button>
               </div>

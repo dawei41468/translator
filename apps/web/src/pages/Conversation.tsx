@@ -118,6 +118,15 @@ const Conversation = () => {
       return false;
     }
   });
+  const [ttsStatus, setTtsStatus] = useState<{
+    voicesCount: number;
+    isSpeaking: boolean;
+    lastError?: string;
+    lastAttempt?: string;
+  }>({
+    voicesCount: 0,
+    isSpeaking: false,
+  });
   const synthRef = useRef<SpeechSynthesis | null>(null);
   const voicesRef = useRef<SpeechSynthesisVoice[]>([]);
   const pendingTtsRef = useRef<{ text: string; language: string | null | undefined } | null>(null);
@@ -139,17 +148,20 @@ const Conversation = () => {
   const speakTextNow = (text: string, language: string | null | undefined) => {
     if (!audioEnabledRef.current) {
       console.log('TTS: Audio disabled, skipping speech');
+      setTtsStatus(prev => ({ ...prev, lastAttempt: 'Audio disabled' }));
       return;
     }
     const synth = synthRef.current;
     if (!synth) {
       console.error('TTS: SpeechSynthesis not available');
+      setTtsStatus(prev => ({ ...prev, lastError: 'SpeechSynthesis not available', lastAttempt: 'Failed - no synth' }));
       toast.error(t('conversation.ttsNotSupported'));
       return;
     }
 
     const locale = getTtsLocale(language);
     console.log('TTS: Attempting to speak text:', text.substring(0, 50) + '...', 'in locale:', locale);
+    setTtsStatus(prev => ({ ...prev, lastAttempt: `Speaking "${text.substring(0, 20)}..." in ${locale}` }));
 
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = locale;
@@ -157,21 +169,25 @@ const Conversation = () => {
     // Add error handling
     utterance.onerror = (event) => {
       console.error('TTS: Speech synthesis error:', event.error, event);
+      setTtsStatus(prev => ({ ...prev, lastError: `Error: ${event.error}`, isSpeaking: false }));
       toast.error(t('conversation.ttsError', 'Speech synthesis failed. Check device permissions.'));
     };
 
     utterance.onstart = () => {
       console.log('TTS: Speech started successfully');
+      setTtsStatus(prev => ({ ...prev, isSpeaking: true, lastError: undefined }));
     };
 
     utterance.onend = () => {
       console.log('TTS: Speech completed');
+      setTtsStatus(prev => ({ ...prev, isSpeaking: false }));
     };
 
     const voices =
       voicesRef.current.length > 0 ? voicesRef.current : synth.getVoices();
 
     console.log('TTS: Available voices:', voices.length, voices.map(v => `${v.name} (${v.lang})`));
+    setTtsStatus(prev => ({ ...prev, voicesCount: voices.length }));
 
     const localeLower = locale.toLowerCase();
     const primary = localeLower.split("-")[0];
@@ -186,6 +202,7 @@ const Conversation = () => {
       console.log('TTS: Using voice:', voice.name, '(', voice.lang, ')');
     } else {
       console.warn('TTS: No suitable voice found for locale:', locale);
+      setTtsStatus(prev => ({ ...prev, lastError: `No voice for ${locale}` }));
     }
 
     try {
@@ -194,6 +211,7 @@ const Conversation = () => {
       console.log('TTS: Speech synthesis initiated');
     } catch (error) {
       console.error('TTS: Failed to initiate speech synthesis:', error);
+      setTtsStatus(prev => ({ ...prev, lastError: `Exception: ${error}`, isSpeaking: false }));
       toast.error(t('conversation.ttsError', 'Speech synthesis failed. Check device permissions.'));
     }
   };
@@ -380,15 +398,26 @@ const Conversation = () => {
 
       const syncVoices = () => {
         voicesRef.current = synth.getVoices();
+        setTtsStatus(prev => ({ ...prev, voicesCount: voicesRef.current.length }));
+        console.log('TTS: Voices loaded:', voicesRef.current.length);
       };
 
       syncVoices();
       synth.addEventListener("voiceschanged", syncVoices);
 
+      // Initial status update
+      setTtsStatus(prev => ({
+        ...prev,
+        voicesCount: synth.getVoices().length,
+        isSpeaking: synth.speaking
+      }));
+
       return () => {
         synth.removeEventListener("voiceschanged", syncVoices);
         stopRecordingInternal();
       };
+    } else {
+      setTtsStatus(prev => ({ ...prev, lastError: 'SpeechSynthesis not supported' }));
     }
     return () => {
       stopRecordingInternal();
@@ -617,6 +646,14 @@ const Conversation = () => {
             <p className="text-xs text-muted-foreground max-w-xs ml-4">
               {t('conversation.languageDescription', 'Select your language for speech recognition and translations')}
             </p>
+          </div>
+
+          {/* TTS Diagnostic Panel (for debugging) */}
+          <div className="mt-2 p-2 bg-muted/50 rounded text-xs space-y-1">
+            <div className="font-medium">TTS Debug:</div>
+            <div>Voices: {ttsStatus.voicesCount} | Speaking: {ttsStatus.isSpeaking ? 'Yes' : 'No'}</div>
+            {ttsStatus.lastAttempt && <div>Last attempt: {ttsStatus.lastAttempt}</div>}
+            {ttsStatus.lastError && <div className="text-red-600">Error: {ttsStatus.lastError}</div>}
           </div>
         </header>
 

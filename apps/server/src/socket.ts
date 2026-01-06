@@ -199,7 +199,7 @@ export function setupSocketIO(io: Server) {
         return;
       }
 
-      if (!socket.userId || !checkRateLimit(socket.userId, 'start-speech', 10, 60000)) {
+      if (!socket.userId || !checkRateLimit(socket.userId, 'start-speech', 20, 60000)) {
         socket.emit("speech-error", "Too many speech start attempts - please wait");
         return;
       }
@@ -385,7 +385,7 @@ export function setupSocketIO(io: Server) {
         return;
       }
 
-      if (!socket.userId || !checkRateLimit(socket.userId, 'join-room', 5, 60000)) {
+      if (!socket.userId || !checkRateLimit(socket.userId, 'join-room', 10, 60000)) {
         socket.emit("error", "Too many join attempts - please wait");
         return;
       }
@@ -459,7 +459,7 @@ export function setupSocketIO(io: Server) {
     });
 
     socket.on("speech-transcript", async (data: { transcript: string; sourceLang: string }) => {
-      if (!socket.userId || !checkRateLimit(socket.userId, 'speech-transcript', 30, 60000)) {
+      if (!socket.userId || !checkRateLimit(socket.userId, 'speech-transcript', 60, 60000)) {
         // Don't emit error for transcript rate limiting to avoid spam
         return;
       }

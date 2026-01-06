@@ -198,8 +198,10 @@ const Conversation = () => {
 
   useEffect(() => {
     const next = meData?.user?.language ?? user?.language;
-    if (next) setSoloTargetLang(next);
-  }, [meData?.user?.language, user?.language]);
+    if (next && next !== soloTargetLang) {
+      setSoloTargetLang(next);
+    }
+  }, [meData?.user?.language, user?.language, soloTargetLang]);
 
   // Get room info
   const { data: roomData, isLoading, error, refetch } = useRoom(code);
@@ -337,7 +339,7 @@ const Conversation = () => {
     return () => {
       socketInstance.disconnect();
     };
-  }, [code, t]);
+  }, [code]);
 
   useEffect(() => {
     try {

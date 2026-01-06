@@ -123,9 +123,11 @@ const Conversation = () => {
     isSpeaking: boolean;
     lastError?: string;
     lastAttempt?: string;
+    voicesLoaded: boolean;
   }>({
     voicesCount: 0,
     isSpeaking: false,
+    voicesLoaded: false,
   });
   const synthRef = useRef<SpeechSynthesis | null>(null);
   const voicesRef = useRef<SpeechSynthesisVoice[]>([]);
@@ -170,7 +172,13 @@ const Conversation = () => {
     utterance.onerror = (event) => {
       console.error('TTS: Speech synthesis error:', event.error, event);
       setTtsStatus(prev => ({ ...prev, lastError: `Error: ${event.error}`, isSpeaking: false }));
-      toast.error(t('conversation.ttsError', 'Speech synthesis failed. Check device permissions.'));
+
+      // Special handling for Xiaomi/Mi AI TTS issues
+      if (event.error === 'not-allowed' || event.error === 'network') {
+        toast.error(t('conversation.ttsXiaomiError', 'TTS failed. On Xiaomi devices, try switching to Google TTS in Settings → Additional settings → Languages & input → Text-to-speech output'));
+      } else {
+        toast.error(t('conversation.ttsError', 'Speech synthesis failed. Check device permissions.'));
+      }
     };
 
     utterance.onstart = () => {
@@ -189,6 +197,16 @@ const Conversation = () => {
     console.log('TTS: Available voices:', voices.length, voices.map(v => `${v.name} (${v.lang})`));
     setTtsStatus(prev => ({ ...prev, voicesCount: voices.length }));
 
+    // Check if we have any voices at all
+    if (voices.length === 0) {
+      console.warn('TTS: No voices available - likely Xiaomi/Mi AI TTS issue');
+      setTtsStatus(prev => ({ ...prev, lastError: 'No voices available (Xiaomi/Mi AI issue)' }));
+
+      // Show specific guidance for Xiaomi devices
+      toast.error(t('conversation.ttsNoVoices', 'No TTS voices available. On Xiaomi devices, install Google Speech Services and set Google TTS as default in Settings → Languages & input → Text-to-speech output'));
+      return;
+    }
+
     const localeLower = locale.toLowerCase();
     const primary = localeLower.split("-")[0];
 
@@ -203,6 +221,18 @@ const Conversation = () => {
     } else {
       console.warn('TTS: No suitable voice found for locale:', locale);
       setTtsStatus(prev => ({ ...prev, lastError: `No voice for ${locale}` }));
+
+      // Try fallback to any available voice
+      const fallbackVoice = voices.find(v => v.lang.startsWith(primary)) || voices[0];
+      if (fallbackVoice) {
+        utterance.voice = fallbackVoice;
+        utterance.lang = fallbackVoice.lang;
+        console.log('TTS: Using fallback voice:', fallbackVoice.name, '(', fallbackVoice.lang, ')');
+        setTtsStatus(prev => ({ ...prev, lastError: `Using fallback voice: ${fallbackVoice.name}` }));
+      } else {
+        toast.error(t('conversation.ttsNoVoiceForLanguage', `No voice available for ${locale}. Try changing your language setting.`));
+        return;
+      }
     }
 
     try {
@@ -212,7 +242,13 @@ const Conversation = () => {
     } catch (error) {
       console.error('TTS: Failed to initiate speech synthesis:', error);
       setTtsStatus(prev => ({ ...prev, lastError: `Exception: ${error}`, isSpeaking: false }));
-      toast.error(t('conversation.ttsError', 'Speech synthesis failed. Check device permissions.'));
+
+      // Special error handling for Xiaomi devices
+      if (error instanceof Error && error.message.includes('not-allowed')) {
+        toast.error(t('conversation.ttsXiaomiError', 'TTS failed. On Xiaomi devices, try switching to Google TTS in Settings → Additional settings → Languages & input → Text-to-speech output'));
+      } else {
+        toast.error(t('conversation.ttsError', 'Speech synthesis failed. Check device permissions.'));
+      }
     }
   };
 
@@ -397,27 +433,47 @@ const Conversation = () => {
       synthRef.current = synth;
 
       const syncVoices = () => {
-        voicesRef.current = synth.getVoices();
-        setTtsStatus(prev => ({ ...prev, voicesCount: voicesRef.current.length }));
-        console.log('TTS: Voices loaded:', voicesRef.current.length);
+        const voices = synth.getVoices();
+        voicesRef.current = voices;
+        setTtsStatus(prev => ({
+          ...prev,
+          voicesCount: voices.length,
+          voicesLoaded: voices.length > 0,
+          lastError: voices.length === 0 ? 'No voices loaded' : undefined
+        }));
+        console.log('TTS: Voices loaded:', voices.length, voices.map(v => `${v.name} (${v.lang})`));
       };
 
+      // Initial check
       syncVoices();
+
+      // Set up event listener for when voices change (async loading)
       synth.addEventListener("voiceschanged", syncVoices);
+
+      // Also check periodically for voices (some Android devices load voices asynchronously)
+      const voiceCheckInterval = setInterval(() => {
+        const currentVoices = synth.getVoices();
+        if (currentVoices.length !== voicesRef.current.length) {
+          console.log('TTS: Voice count changed, updating...');
+          syncVoices();
+        }
+      }, 2000); // Check every 2 seconds
 
       // Initial status update
       setTtsStatus(prev => ({
         ...prev,
         voicesCount: synth.getVoices().length,
-        isSpeaking: synth.speaking
+        isSpeaking: synth.speaking,
+        voicesLoaded: synth.getVoices().length > 0
       }));
 
       return () => {
         synth.removeEventListener("voiceschanged", syncVoices);
+        clearInterval(voiceCheckInterval);
         stopRecordingInternal();
       };
     } else {
-      setTtsStatus(prev => ({ ...prev, lastError: 'SpeechSynthesis not supported' }));
+      setTtsStatus(prev => ({ ...prev, lastError: 'SpeechSynthesis not supported', voicesLoaded: false }));
     }
     return () => {
       stopRecordingInternal();
@@ -544,6 +600,42 @@ const Conversation = () => {
     });
   };
 
+  const refreshVoices = () => {
+    console.log('TTS: Manually refreshing voices...');
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      const synth = window.speechSynthesis;
+      const voices = synth.getVoices();
+      voicesRef.current = voices;
+      setTtsStatus(prev => ({
+        ...prev,
+        voicesCount: voices.length,
+        voicesLoaded: voices.length > 0,
+        lastError: voices.length === 0 ? 'No voices found after refresh' : undefined
+      }));
+      console.log('TTS: Refreshed voices:', voices.length, voices.map(v => `${v.name} (${v.lang})`));
+
+      if (voices.length === 0) {
+        // Try to trigger voice loading by creating a dummy utterance
+        const dummyUtterance = new SpeechSynthesisUtterance('');
+        dummyUtterance.volume = 0; // Silent
+        synth.speak(dummyUtterance);
+
+        // Check again after a delay
+        setTimeout(() => {
+          const updatedVoices = synth.getVoices();
+          voicesRef.current = updatedVoices;
+          setTtsStatus(prev => ({
+            ...prev,
+            voicesCount: updatedVoices.length,
+            voicesLoaded: updatedVoices.length > 0,
+            lastError: updatedVoices.length === 0 ? 'Still no voices after dummy utterance' : undefined
+          }));
+          console.log('TTS: Voices after dummy utterance:', updatedVoices.length);
+        }, 1000);
+      }
+    }
+  };
+
 
   if (isLoading) {
     return (
@@ -650,10 +742,26 @@ const Conversation = () => {
 
           {/* TTS Diagnostic Panel (for debugging) */}
           <div className="mt-2 p-2 bg-muted/50 rounded text-xs space-y-1">
-            <div className="font-medium">TTS Debug:</div>
-            <div>Voices: {ttsStatus.voicesCount} | Speaking: {ttsStatus.isSpeaking ? 'Yes' : 'No'}</div>
+            <div className="font-medium flex items-center justify-between">
+              <span>TTS Debug:</span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={refreshVoices}
+                className="h-6 px-2 text-xs"
+              >
+                Refresh
+              </Button>
+            </div>
+            <div>Voices: {ttsStatus.voicesCount} | Speaking: {ttsStatus.isSpeaking ? 'Yes' : 'No'} | Loaded: {ttsStatus.voicesLoaded ? 'Yes' : 'No'}</div>
             {ttsStatus.lastAttempt && <div>Last attempt: {ttsStatus.lastAttempt}</div>}
             {ttsStatus.lastError && <div className="text-red-600">Error: {ttsStatus.lastError}</div>}
+            {ttsStatus.voicesCount === 0 && (
+              <div className="text-orange-600 mt-1">
+                If voices remain 0, try: Settings → Apps → Chrome → Storage → Clear storage, then restart Chrome
+              </div>
+            )}
           </div>
         </header>
 

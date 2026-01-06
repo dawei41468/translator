@@ -25,6 +25,7 @@ interface Message {
   translatedText?: string;
   isOwn: boolean;
   timestamp: Date;
+  speakerName?: string;
 }
 
 const TTS_ENABLED_STORAGE_KEY = "translator_tts_enabled";
@@ -260,6 +261,7 @@ const Conversation = () => {
         translatedText: data.translatedText,
         isOwn: false,
         timestamp: new Date(),
+        speakerName: data.speakerName,
       };
       setMessages(prev => [...prev, message]);
 
@@ -269,19 +271,20 @@ const Conversation = () => {
       }
     });
 
-    socketInstance.on('recognized-speech', (data: { id?: string; text: string; sourceLang: string }) => {
+    socketInstance.on('recognized-speech', (data: { id?: string; text: string; sourceLang: string; speakerName?: string }) => {
       const message: Message = {
         id: data.id ?? Date.now().toString(),
         text: data.text,
         isOwn: true,
         timestamp: new Date(),
+        speakerName: data.speakerName,
       };
       setMessages(prev => [...prev, message]);
     });
 
     socketInstance.on(
       'solo-translated',
-      (data: { id: string; originalText: string; translatedText: string; sourceLang: string; targetLang: string }) => {
+      (data: { id: string; originalText: string; translatedText: string; sourceLang: string; targetLang: string; speakerName?: string }) => {
         setMessages((prev) => {
           const existing = prev.find((m) => m.id === data.id);
           if (existing) {
@@ -296,6 +299,7 @@ const Conversation = () => {
               translatedText: data.translatedText,
               isOwn: true,
               timestamp: new Date(),
+              speakerName: data.speakerName,
             },
           ];
         });
@@ -582,49 +586,61 @@ const Conversation = () => {
 
         {/* Messages */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4" role="log" aria-live="polite" aria-label={t('conversation.messages')} aria-atomic="false">
-          {messages.map((message) => (
-            <div
-              key={message.id}
-              className={`flex ${message.isOwn ? 'justify-end' : 'justify-start'}`}
-              role="article"
-              aria-label={`${message.isOwn ? t('conversation.yourMessage') : t('conversation.otherMessage')} ${new Date(message.timestamp).toLocaleTimeString()}`}
-            >
+          {messages.map((message, index) => {
+            const prevMessage = index > 0 ? messages[index - 1] : null;
+            const showSpeakerName = !prevMessage || prevMessage.speakerName !== message.speakerName;
+
+            return (
               <div
-                className={cn(
-                  "max-w-[85%] sm:max-w-sm lg:max-w-md px-4 py-2 shadow-sm",
-                  message.isOwn
-                    ? "bg-primary text-primary-foreground rounded-2xl rounded-tr-none"
-                    : "bg-card text-card-foreground border rounded-2xl rounded-tl-none"
-                )}
+                key={message.id}
+                className={`flex flex-col ${message.isOwn ? 'items-end' : 'items-start'}`}
+                role="article"
+                aria-label={`${message.isOwn ? t('conversation.yourMessage') : t('conversation.otherMessage')} ${new Date(message.timestamp).toLocaleTimeString()}`}
               >
-                {message.translatedText ? (
-                  <>
-                    {/* Translated text - MOST PROMINENT */}
-                    <p className="text-base font-medium leading-relaxed">
-                      {message.translatedText}
-                    </p>
-                    {/* Original text - de-emphasized */}
-                    <p
-                      className={cn(
-                        "text-xs mt-2 border-t pt-2 italic",
-                        message.isOwn
-                          ? "text-primary-foreground/70 border-primary-foreground/20"
-                          : "text-muted-foreground border-border/50"
-                      )}
-                    >
-                      <span className="sr-only">{t('conversation.originalText', 'Original')}: </span>
-                      {message.text}
-                    </p>
-                  </>
-                ) : (
-                  <p className="leading-relaxed">{message.text}</p>
+                {showSpeakerName && message.speakerName && (
+                  <div className={`text-xs text-muted-foreground mb-1 px-2 ${message.isOwn ? 'text-right' : 'text-left'}`}>
+                    {message.speakerName}
+                  </div>
                 )}
-                <time className="sr-only" dateTime={message.timestamp.toISOString()}>
-                  {new Date(message.timestamp).toLocaleTimeString()}
-                </time>
+                <div className={`flex ${message.isOwn ? 'justify-end' : 'justify-start'}`}>
+                  <div
+                    className={cn(
+                      "max-w-[85%] sm:max-w-sm lg:max-w-md px-4 py-2 shadow-sm",
+                      message.isOwn
+                        ? "bg-primary text-primary-foreground rounded-2xl rounded-tr-none"
+                        : "bg-card text-card-foreground border rounded-2xl rounded-tl-none"
+                    )}
+                  >
+                    {message.translatedText ? (
+                      <>
+                        {/* Translated text - MOST PROMINENT */}
+                        <p className="text-base font-medium leading-relaxed">
+                          {message.translatedText}
+                        </p>
+                        {/* Original text - de-emphasized */}
+                        <p
+                          className={cn(
+                            "text-xs mt-2 border-t pt-2 italic",
+                            message.isOwn
+                              ? "text-primary-foreground/70 border-primary-foreground/20"
+                              : "text-muted-foreground border-border/50"
+                          )}
+                        >
+                          <span className="sr-only">{t('conversation.originalText', 'Original')}: </span>
+                          {message.text}
+                        </p>
+                      </>
+                    ) : (
+                      <p className="leading-relaxed">{message.text}</p>
+                    )}
+                    <time className="sr-only" dateTime={message.timestamp.toISOString()}>
+                      {new Date(message.timestamp).toLocaleTimeString()}
+                    </time>
+                  </div>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
           <div ref={messagesEndRef} aria-hidden="true" />
         </main>
 

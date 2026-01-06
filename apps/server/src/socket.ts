@@ -276,6 +276,10 @@ export function setupSocketIO(io: Server) {
           }), 2, 500
         );
 
+        // Get the speaker's name for this message
+        const speaker = participants.find((p) => p.userId === socket.userId);
+        const speakerName = speaker?.user?.name || "Unknown User";
+
         const otherParticipants = participants.filter((p) => p.userId !== socket.userId);
         if (otherParticipants.length === 0 && !socket.soloMode) return;
 
@@ -317,6 +321,7 @@ export function setupSocketIO(io: Server) {
                   targetLang,
                   fromUserId: socket.userId,
                   toUserId: participant.userId,
+                  speakerName,
                 });
               }
             } else {
@@ -337,6 +342,7 @@ export function setupSocketIO(io: Server) {
           id: messageId,
           text: transcript,
           sourceLang,
+          speakerName,
         });
 
         if (socket.soloMode && socket.soloTargetLang) {
@@ -352,6 +358,7 @@ export function setupSocketIO(io: Server) {
               translatedText,
               sourceLang,
               targetLang: socket.soloTargetLang,
+              speakerName,
             });
           } catch (error) {
             handleSocketError(socket, "solo-translation", error, "Translation failed in solo mode", {

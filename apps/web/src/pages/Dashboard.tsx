@@ -252,6 +252,7 @@ const Dashboard = () => {
               disabled={createRoomMutation.isPending}
               className="w-full"
               size="lg"
+              data-testid="create-room-button"
             >
               {createRoomMutation.isPending ? t("room.creating") : t("room.create")}
             </Button>
@@ -282,12 +283,14 @@ const Dashboard = () => {
                   className="text-center font-mono tracking-wider"
                   maxLength={7}
                   disabled={!isAuthenticated}
+                  data-testid="room-code-input"
                 />
                 <Button
                   onClick={handleManualJoin}
                   disabled={!isAuthenticated || !manualCode.trim() || joinRoomMutation.isPending || isJoining}
                   className="w-full"
                   size="lg"
+                  data-testid="join-room-button"
                 >
                   {joinRoomMutation.isPending || isJoining ? t("room.joining") : t("room.joinByCode")}
                 </Button>
@@ -328,7 +331,7 @@ const Dashboard = () => {
                 <Button type="button" className="w-full" size="lg" onClick={() => setShowQr(true)}>
                   {t("room.showQrButton")}
                 </Button>
-                <Button type="button" className="w-full" variant="secondary" size="lg" onClick={handleJoinConversation}>
+                <Button type="button" className="w-full" variant="secondary" size="lg" onClick={handleJoinConversation} data-testid="enter-room-button">
                   {t("room.enter")}
                 </Button>
               </div>

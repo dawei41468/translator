@@ -49,7 +49,7 @@ describe('Dashboard', () => {
   const renderDashboard = () => {
     return render(
       <QueryClientProvider client={queryClient}>
-        <BrowserRouter>
+        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <Dashboard />
         </BrowserRouter>
       </QueryClientProvider>

@@ -6,38 +6,77 @@ test.describe('Conversation Flow', () => {
     // For now, let's assume we can navigate to register and create a user
     await page.goto('/register');
     const email = `test-${Date.now()}@example.com`;
-    await page.fill('input[type="email"]', email);
-    await page.fill('input[type="password"]', 'Password123!');
-    await page.fill('input[name="name"]', 'Test User');
-    await page.click('button[type="submit"]');
+    await page.getByTestId('register-name').fill('Test User');
+    await page.getByTestId('register-email').fill(email);
+    await page.getByTestId('register-password').fill('Password123!');
+    await page.getByTestId('register-submit').click();
     
     // Should be on dashboard
     await expect(page).toHaveURL(/.*dashboard/);
   });
 
   test('should create a room and enter it', async ({ page }) => {
-    await page.click('text=Start New Conversation');
+    await page.click('[data-testid="create-room-button"]');
+    
+    // Should show the room code and Enter button
+    await expect(page.locator('[data-testid="enter-room-button"]')).toBeVisible();
+    
+    const roomCode = await page.locator('.font-mono.text-2xl').textContent();
+    expect(roomCode).toMatch(/[A-Z0-9]{6}/);
+
+    await page.click('[data-testid="enter-room-button"]');
     
     // Should be in a room
-    await expect(page).toHaveURL(/.*room\/[A-Z0-9]{6}/);
+    await expect(page).toHaveURL(new RegExp(`.*room/${roomCode}`));
     
     // Check for room UI elements
     await expect(page.locator('text=Waiting for others to join')).toBeVisible();
-    await expect(page.locator('button:has-text("Show QR Code")')).toBeVisible();
   });
 
-  test('should allow toggling audio', async ({ page }) => {
-    await page.click('text=Start New Conversation');
+  test('should allow toggling audio and solo mode', async ({ page }) => {
+    await page.click('[data-testid="create-room-button"]');
+    await page.click('[data-testid="enter-room-button"]');
     
-    const audioToggle = page.locator('button[aria-label*="audio"], button[aria-label*="volume"]');
-    
-    // Check initial state (default is off as per code)
-    // Note: The actual label might vary, checking for icon/text
-    const isOff = await audioToggle.locator('svg[class*="lucide-volume-x"]').isVisible();
+    // Toggle audio
+    const audioToggle = page.getByTestId('toggle-audio');
+    await audioToggle.click();
+    // Check if it's "on" (default was off)
+    // The previous test checked for lucide-volume-2, let's stick to that or check aria-pressed
+    await expect(audioToggle).toHaveAttribute('aria-pressed', 'true');
     
     await audioToggle.click();
+    await expect(audioToggle).toHaveAttribute('aria-pressed', 'false');
+
+    // Toggle solo mode
+    const soloToggle = page.getByTestId('toggle-solo-mode');
+    await expect(page.getByTestId('solo-language-select')).not.toBeVisible();
     
-    // Should be on
-    await expect(audioToggle.locator('svg[class*="lucide-volume-2"]')).toBeVisible();
+    await soloToggle.click();
+    await expect(page.getByTestId('solo-language-select')).toBeVisible();
+    await expect(soloToggle).toHaveAttribute('aria-pressed', 'true');
+
+    await soloToggle.click();
+    await expect(page.getByTestId('solo-language-select')).not.toBeVisible();
+  });
+
+  test('should allow recording toggle', async ({ page }) => {
+    await page.click('[data-testid="create-room-button"]');
+    await page.click('[data-testid="enter-room-button"]');
+
+    const recordButton = page.getByTestId('toggle-recording');
+    
+    // Initially disabled because connection takes a moment
+    // Wait for connection (indicator becomes green)
+    await expect(page.locator('.bg-green-500')).toBeVisible({ timeout: 10000 });
+    
+    await expect(recordButton).toBeEnabled();
+    await expect(recordButton).toHaveAttribute('aria-pressed', 'false');
+
+    await recordButton.click();
+    await expect(recordButton).toHaveAttribute('aria-pressed', 'true');
+    await expect(recordButton).toHaveClass(/animate-pulse/);
+
+    await recordButton.click();
+    await expect(recordButton).toHaveAttribute('aria-pressed', 'false');
   });
 });

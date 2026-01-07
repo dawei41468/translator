@@ -59,6 +59,7 @@ export default function Login() {
                   onChange={(e) => setEmail(e.target.value)}
                   autoComplete="email"
                   required
+                  data-testid="login-email"
                 />
               </div>
 
@@ -74,10 +75,11 @@ export default function Login() {
                   onChange={(e) => setPassword(e.target.value)}
                   autoComplete="current-password"
                   required
+                  data-testid="login-password"
                 />
               </div>
 
-              <Button type="submit" disabled={isSubmitting} className="w-full" size="lg">
+              <Button type="submit" disabled={isSubmitting} className="w-full" size="lg" data-testid="login-submit">
                 {isSubmitting ? t("auth.signingIn") : t("auth.signIn")}
               </Button>
             </form>

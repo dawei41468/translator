@@ -60,6 +60,7 @@ export default function Register() {
                   onChange={(e) => setName(e.target.value)}
                   autoComplete="name"
                   required
+                  data-testid="register-name"
                 />
               </div>
 
@@ -75,6 +76,7 @@ export default function Register() {
                   onChange={(e) => setEmail(e.target.value)}
                   autoComplete="email"
                   required
+                  data-testid="register-email"
                 />
               </div>
 
@@ -90,10 +92,11 @@ export default function Register() {
                   onChange={(e) => setPassword(e.target.value)}
                   autoComplete="new-password"
                   required
+                  data-testid="register-password"
                 />
               </div>
 
-              <Button type="submit" disabled={isSubmitting} className="w-full" size="lg">
+              <Button type="submit" disabled={isSubmitting} className="w-full" size="lg" data-testid="register-submit">
                 {isSubmitting ? t("auth.registering") : t("auth.register")}
               </Button>
             </form>

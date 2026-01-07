@@ -35,7 +35,20 @@ export const useJoinRoom = () => {
   return useMutation({
     mutationFn: (code: string) => apiClient.joinRoom(code),
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["rooms"] });
+      // Immediately update the rooms cache with the joined room data
+      queryClient.setQueryData(['rooms'], (oldData: any) => {
+        // If we have old data, merge the new room; otherwise create new array
+        const rooms = oldData || [];
+        const existingIndex = rooms.findIndex((room: any) => room.code === data.roomCode);
+        if (existingIndex >= 0) {
+          // Update existing room
+          rooms[existingIndex] = { ...rooms[existingIndex], ...data };
+        } else {
+          // Add new room
+          rooms.push(data);
+        }
+        return rooms;
+      });
 
       // Use window.location for full page navigation - most reliable
       const targetUrl = `/room/${data.roomCode}`;
@@ -59,9 +72,10 @@ export const useUpdateLanguage = () => {
       console.log('useUpdateLanguage mutationFn called with:', language);
       return apiClient.updateLanguage(language);
     },
-    onSuccess: (_, language) => {
+    onSuccess: async (_, language) => {
       console.log('useUpdateLanguage onSuccess called, invalidating queries and changing i18n to:', language);
-      queryClient.invalidateQueries({ queryKey: ["me"] });
+      // Await the invalidation to ensure user data is updated before changing language
+      await queryClient.invalidateQueries({ queryKey: ["me"] });
       i18n.changeLanguage(language);
       toast.success(t("toast.languageUpdated"));
     },

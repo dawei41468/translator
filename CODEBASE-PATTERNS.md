@@ -89,10 +89,55 @@ This document codifies the existing patterns in the Live Translator codebase so 
 
 ### Server state and caching
 
-- Use TanStack Query.
+- Use TanStack Query for all server state management.
 - Server state in `apps/web/src/lib/hooks.ts` (read via `useQuery`, write via `useMutation`).
 - Auth state via `AuthProvider` (uses `useQuery('me')` for reactive user data).
-- On mutation success, invalidate related keys.
+
+#### Cache Update Patterns (Critical for Race Condition Prevention)
+
+**🚨 IMPORTANT**: Always consider timing when updating cache after mutations. Use the appropriate pattern based on what happens next:
+
+**1. Immediate Cache Updates (for navigation-critical operations)**
+```typescript
+// ✅ CORRECT: When navigation immediately follows mutation
+onSuccess: (data) => {
+  // Update cache immediately before navigation
+  queryClient.setQueryData(['rooms'], (oldData) => ({
+    ...oldData,
+    ...data // merge new data
+  }));
+  navigate('/destination'); // Navigation happens with fresh data
+}
+```
+
+**2. Awaited Invalidation (for UI-dependent updates)**
+```typescript
+// ✅ CORRECT: When UI immediately depends on updated data
+onSuccess: async () => {
+  // Await invalidation to ensure UI updates with fresh data
+  await queryClient.invalidateQueries({ queryKey: ['me'] });
+  updateUI(); // UI updates with guaranteed fresh data
+}
+```
+
+**3. Fire-and-Forget Invalidation (for non-critical updates)**
+```typescript
+// ✅ CORRECT: When timing doesn't matter (toasts, background updates)
+onSuccess: () => {
+  // Fire and forget - UI will update when query refetches
+  queryClient.invalidateQueries({ queryKey: ['stats'] });
+  showToast(); // Toast shows immediately
+}
+```
+
+**❌ AVOID: Un-awaited invalidation before state-dependent actions**
+```typescript
+// ❌ WRONG: Race condition - navigation happens before cache updates
+onSuccess: () => {
+  queryClient.invalidateQueries({ queryKey: ['me'] }); // Async!
+  navigate('/dashboard'); // Happens before cache updates - race condition!
+}
+```
 
 ### UI and styling
 

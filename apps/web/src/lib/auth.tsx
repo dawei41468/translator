@@ -48,8 +48,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (email: string, password: string) => {
     try {
-      await apiClient.login({ email, password });
-      queryClient.invalidateQueries({ queryKey: ['me'] });
+      const result = await apiClient.login({ email, password });
+      // Immediately update the auth state with the user data
+      queryClient.setQueryData(['me'], { user: result.user });
     } catch (error) {
       throw error;
     }
@@ -57,8 +58,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const register = async (email: string, password: string, name: string) => {
     try {
-      await apiClient.register({ email, password, name });
-      queryClient.invalidateQueries({ queryKey: ['me'] });
+      const result = await apiClient.register({ email, password, name });
+      // Immediately update the auth state with the user data
+      queryClient.setQueryData(['me'], { user: result.user });
     } catch (error) {
       throw error;
     }
@@ -66,7 +68,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = () => {
     apiClient.logout().catch(() => undefined);
-    queryClient.invalidateQueries({ queryKey: ['me'] });
+    // Immediately clear the auth state
+    queryClient.setQueryData(['me'], { user: null });
   };
 
   const value: AuthContextType = {

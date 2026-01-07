@@ -40,9 +40,10 @@ const Profile = () => {
   const updateProfileMutation = useMutation({
     mutationFn: (data: { displayName?: string; language?: string; preferences?: any }) =>
       apiClient.updateMe(data),
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success(t('profile.saveSuccess', 'Settings saved successfully'));
-      queryClient.invalidateQueries({ queryKey: ['me'] });
+      // Await invalidation to ensure UI updates with fresh data
+      await queryClient.invalidateQueries({ queryKey: ['me'] });
       setIsEditingDisplayName(false);
     },
     onError: (error: any) => {

@@ -151,6 +151,20 @@ const Conversation = () => {
     isSpeaking: false,
     voicesLoaded: false,
   });
+
+  const [sttStatus, setSttStatus] = useState<{
+    isRecording: boolean;
+    lastError?: string;
+    lastAttempt?: string;
+    recognitionStarted: boolean;
+    transcriptsReceived: number;
+    language: string;
+  }>({
+    isRecording: false,
+    recognitionStarted: false,
+    transcriptsReceived: 0,
+    language: 'en-US',
+  });
   const [debugPanelExpanded, setDebugPanelExpanded] = useState(false);
   const voicesRef = useRef<Array<{ id: string; name: string; lang: string }>>([]);
   const pendingTtsRef = useRef<{ text: string; language: string | null | undefined } | null>(null);
@@ -488,6 +502,14 @@ const Conversation = () => {
       isRecordingRef.current = false;
       setIsRecording(false);
 
+      // Update STT status
+      setSttStatus(prev => ({
+        ...prev,
+        isRecording: false,
+        recognitionStarted: false,
+        lastAttempt: 'Recognition stopped'
+      }));
+
       // Flush any pending TTS
       flushPendingTts();
     } catch (error) {
@@ -497,6 +519,12 @@ const Conversation = () => {
       streamRef.current = null;
       isRecordingRef.current = false;
       setIsRecording(false);
+      setSttStatus(prev => ({
+        ...prev,
+        isRecording: false,
+        recognitionStarted: false,
+        lastError: `Cleanup error: ${error instanceof Error ? error.message : String(error)}`
+      }));
     }
   };
 
@@ -507,20 +535,51 @@ const Conversation = () => {
 
       const languageCode = getSpeechRecognitionLocale(user?.language ?? "en");
 
+      // Update STT status
+      setSttStatus(prev => ({
+        ...prev,
+        lastAttempt: `Starting recognition in ${languageCode}`,
+        language: languageCode,
+        recognitionStarted: false,
+        transcriptsReceived: 0,
+        lastError: undefined
+      }));
+
       // Get STT engine and start recognition
       const sttEngine = speechEngineRegistry.getSttEngine();
       const stream = await sttEngine.startRecognition({
         onResult: (text, isFinal) => {
+          console.log('STT result received:', text, 'isFinal:', isFinal);
+          setSttStatus(prev => ({
+            ...prev,
+            transcriptsReceived: prev.transcriptsReceived + 1,
+            lastAttempt: `Received: "${text.substring(0, 30)}..." (${isFinal ? 'final' : 'interim'})`
+          }));
+
           if (isFinal) {
             activeSocket.emit('speech-transcript', { transcript: text, sourceLang: languageCode.split('-')[0] });
           }
         },
         onError: (error) => {
           console.error('STT recognition error:', error);
+          setSttStatus(prev => ({
+            ...prev,
+            lastError: `Error: ${error.message || error}`,
+            recognitionStarted: false,
+            isRecording: false
+          }));
           toast.error('Speech recognition failed');
           stopRecordingInternal();
         }
       });
+
+      // Update status when recognition starts
+      setSttStatus(prev => ({
+        ...prev,
+        recognitionStarted: true,
+        isRecording: true,
+        lastAttempt: `Recognition started in ${languageCode}`
+      }));
 
       streamRef.current = stream;
       activeSocket.emit('start-speech', {
@@ -552,6 +611,12 @@ const Conversation = () => {
       setIsRecording(true);
     } catch (err) {
       console.error('Failed to start recording', err);
+      setSttStatus(prev => ({
+        ...prev,
+        lastError: `Failed to start: ${err instanceof Error ? err.message : String(err)}`,
+        recognitionStarted: false,
+        isRecording: false
+      }));
       toast.error(t('error.generic'));
       stopRecordingInternal();
     }
@@ -719,7 +784,7 @@ const Conversation = () => {
           </div>
 
 
-          {/* TTS Diagnostic Panel (collapsible) - only shown if enabled via env var */}
+          {/* Speech Debug Panel (collapsible) - only shown if enabled via env var */}
           {isTtsDebugEnabled && (
             <div className="mt-2">
               {!debugPanelExpanded ? (
@@ -737,9 +802,9 @@ const Conversation = () => {
                 </Button>
               ) : (
                 // Expanded state - full panel
-                <div className="p-2 bg-muted/50 rounded text-xs space-y-1">
+                <div className="p-2 bg-muted/50 rounded text-xs space-y-2">
                   <div className="font-medium flex items-center justify-between">
-                    <span>TTS Debug:</span>
+                    <span>Speech Debug:</span>
                     <div className="flex gap-1">
                       <Button
                         type="button"
@@ -764,14 +829,28 @@ const Conversation = () => {
                       </Button>
                     </div>
                   </div>
-                  <div>Voices: {ttsStatus.voicesCount} | Speaking: {ttsStatus.isSpeaking ? 'Yes' : 'No'} | Loaded: {ttsStatus.voicesLoaded ? 'Yes' : 'No'}</div>
-                  {ttsStatus.lastAttempt && <div>Last attempt: {ttsStatus.lastAttempt}</div>}
-                  {ttsStatus.lastError && <div className="text-red-600">Error: {ttsStatus.lastError}</div>}
-                  {ttsStatus.voicesCount === 0 && (
-                    <div className="text-orange-600 mt-1">
-                      If voices remain 0, try: Settings → Apps → Chrome → Storage → Clear storage, then restart Chrome
-                    </div>
-                  )}
+
+                  {/* STT Section */}
+                  <div className="border-t pt-2">
+                    <div className="font-medium text-blue-600 mb-1">STT (Speech-to-Text):</div>
+                    <div>Recording: {sttStatus.isRecording ? 'Yes' : 'No'} | Started: {sttStatus.recognitionStarted ? 'Yes' : 'No'} | Lang: {sttStatus.language}</div>
+                    <div>Transcripts: {sttStatus.transcriptsReceived}</div>
+                    {sttStatus.lastAttempt && <div>Last attempt: {sttStatus.lastAttempt}</div>}
+                    {sttStatus.lastError && <div className="text-red-600">Error: {sttStatus.lastError}</div>}
+                  </div>
+
+                  {/* TTS Section */}
+                  <div className="border-t pt-2">
+                    <div className="font-medium text-green-600 mb-1">TTS (Text-to-Speech):</div>
+                    <div>Voices: {ttsStatus.voicesCount} | Speaking: {ttsStatus.isSpeaking ? 'Yes' : 'No'} | Loaded: {ttsStatus.voicesLoaded ? 'Yes' : 'No'}</div>
+                    {ttsStatus.lastAttempt && <div>Last attempt: {ttsStatus.lastAttempt}</div>}
+                    {ttsStatus.lastError && <div className="text-red-600">Error: {ttsStatus.lastError}</div>}
+                    {ttsStatus.voicesCount === 0 && (
+                      <div className="text-orange-600 mt-1">
+                        If voices remain 0, try: Settings → Apps → Chrome → Storage → Clear storage, then restart Chrome
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>

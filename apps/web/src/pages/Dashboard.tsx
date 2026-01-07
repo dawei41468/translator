@@ -362,7 +362,7 @@ const Dashboard = () => {
                </div>
 
                <div className="space-y-2">
-                 <Button type="button" className="w-full" variant="secondary" onClick={() => setShowQr(false)} aria-label={t("common.closeModal")}>
+                 <Button type="button" className="w-full" variant="secondary" onClick={() => setShowQr(false)} aria-label={t("common.closeModal")} autoFocus>
                    {t("common.cancel")}
                  </Button>
                </div>
@@ -441,6 +441,7 @@ const Dashboard = () => {
                       className="w-full mt-4"
                       variant="secondary"
                       aria-label={t("common.closeModal")}
+                      autoFocus
                     >
                       {t("common.cancel")}
                     </Button>

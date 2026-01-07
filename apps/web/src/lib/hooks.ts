@@ -50,13 +50,6 @@ export const useJoinRoom = () => {
 
 // --- User/Auth Hooks ---
 
-export const useMe = () => {
-  return useQuery({
-    queryKey: ["me"],
-    queryFn: () => apiClient.getMe(),
-  });
-};
-
 export const useUpdateLanguage = () => {
   const queryClient = useQueryClient();
   const { i18n, t } = useTranslation();

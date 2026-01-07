@@ -223,8 +223,11 @@ export function setupSocketIO(io: Server) {
         socket.recognizeStream = createRecognizeStream(
           { languageCode: data.languageCode },
           async (transcript, isFinal) => {
-            // STT stream only handles recognition - transcript processing is done via speech-transcript events
-            // This prevents duplicate processing
+            if (isFinal) {
+              // For server-side STT, emit recognized-speech directly
+              const sourceLang = data.languageCode.split('-')[0];
+              await handleTranscript(transcript, sourceLang);
+            }
           },
           (error) => {
             handleSpeechError(socket, error, "stream error");

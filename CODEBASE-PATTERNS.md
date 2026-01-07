@@ -253,9 +253,9 @@ graph TB
         B --> C[SttEngine Interface]
         B --> D[TtsEngine Interface]
         C --> E[WebSpeechSttEngine]
-        D --> F[WebSpeechTtsEngine]
-        C --> G[GoogleCloudTtsEngine]
-        D --> H[GrokTtsEngine]
+        C --> F[GoogleCloudSttEngine]
+        D --> G[WebSpeechTtsEngine]
+        D --> H[GoogleCloudTtsEngine]
     end
 
     subgraph Backend
@@ -355,6 +355,22 @@ class TranslationEngineRegistry {
 ```
 
 ### Implemented Engines
+
+#### ✅ Google Cloud STT Engine
+
+**Status**: ✅ **COMPLETED** - Ready for production use
+
+**Files:**
+- `apps/web/src/lib/speech-engines/google-cloud-stt.ts` - Server-based STT wrapper
+- `apps/server/src/services/stt.ts` - Google Cloud Speech-to-Text streaming
+- `apps/server/src/socket.ts` - Server STT result emission
+
+**Features:**
+- ✅ **Server-Based Recognition** - Uses Google Cloud Speech API for reliable STT
+- ✅ **Android PWA Compatible** - Works where Web Speech API fails
+- ✅ **Streaming Support** - Real-time transcription with interim results
+- ✅ **Automatic Fallback** - Android PWA uses server STT automatically for Web Speech API
+- ✅ **User-Selectable** - Available in Profile engine preferences
 
 #### ✅ Google Cloud TTS Engine
 
@@ -510,7 +526,7 @@ GROK_API_KEY=your_api_key_here
 | Variable | Description | Engine Type | Required |
 |----------|-------------|-------------|----------|
 | `VITE_GOOGLE_CLOUD_API_KEY` | Google Cloud TTS API key | TTS | Optional |
-| `GOOGLE_CLOUD_PROJECT_ID` | Google Cloud project ID | TTS/Translation | Required for Google services |
+| `GOOGLE_CLOUD_PROJECT_ID` | Google Cloud project ID | STT/TTS/Translation | Required for Google services |
 
 #### User Preferences
 
@@ -609,5 +625,5 @@ try {
 - Auth: httpOnly cookie JWT.
 - Real-time: Socket.io (authenticated via JWT cookie).
 - Translation: Google Cloud Translation (asia-east2) + Engine Abstraction Framework.
-- Speech: Web Speech API (Browser) + Engine Abstraction Framework.
+- Speech: Web Speech API (Browser) + Google Cloud Speech-to-Text (server-fallback) + Engine Abstraction Framework.
 - Deployment: PM2 + NGINX on Tencent Lighthouse HK.

@@ -75,17 +75,8 @@ export class WebSpeechSttEngine implements SttEngine {
       console.log('WebSpeechSttEngine: Recognition ended');
     };
 
-    // Start recognition first - this handles microphone permission internally on Android PWA
-    console.log('WebSpeechSttEngine: Calling recognition.start()');
-    this.recognition.start();
-
-    // Wait a bit for recognition to initialize, then try to get explicit media stream
-    // This is a workaround for Android PWA compatibility
-    await new Promise(resolve => setTimeout(resolve, 100));
-
+    // Get microphone permission first to avoid conflicts on Android PWA
     try {
-      // Try to get the active media stream if available
-      // On Android PWA, speech recognition may work without explicit getUserMedia
       console.log('WebSpeechSttEngine: Attempting to get media stream');
       this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       console.log('WebSpeechSttEngine: Media stream obtained successfully');
@@ -95,6 +86,10 @@ export class WebSpeechSttEngine implements SttEngine {
       // Create an empty stream as fallback
       this.stream = new MediaStream();
     }
+
+    // Start recognition after microphone access is established
+    console.log('WebSpeechSttEngine: Calling recognition.start()');
+    this.recognition.start();
 
     return this.stream;
   }

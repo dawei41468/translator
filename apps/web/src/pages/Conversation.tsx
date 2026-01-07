@@ -465,10 +465,15 @@ const Conversation = () => {
 
   const stopRecordingInternal = () => {
     try {
-      // Stop STT engine
+      const isAndroidPWA = navigator.userAgent.includes('Android') &&
+                          window.matchMedia('(display-mode: standalone)').matches;
       const sttEngine = speechEngineRegistry.getSttEngine();
-      if (sttEngine) {
-        sttEngine.stopRecognition();
+
+      // Stop STT engine (only when not using server-only fallback)
+      if (!(isAndroidPWA && sttEngine.getName().includes('Web Speech'))) {
+        if (sttEngine) {
+          sttEngine.stopRecognition();
+        }
       }
 
       // Stop media recorder
@@ -534,81 +539,139 @@ const Conversation = () => {
       if (!activeSocket) return;
 
       const languageCode = getSpeechRecognitionLocale(user?.language ?? "en");
+      const isAndroidPWA = navigator.userAgent.includes('Android') &&
+                          window.matchMedia('(display-mode: standalone)').matches;
 
-      // Update STT status
-      setSttStatus(prev => ({
-        ...prev,
-        lastAttempt: `Starting recognition in ${languageCode}`,
-        language: languageCode,
-        recognitionStarted: false,
-        transcriptsReceived: 0,
-        lastError: undefined
-      }));
-
-      // Get STT engine and start recognition
+      // Get the selected STT engine
       const sttEngine = speechEngineRegistry.getSttEngine();
-      const stream = await sttEngine.startRecognition({
-        onResult: (text, isFinal) => {
-          console.log('STT result received:', text, 'isFinal:', isFinal);
-          setSttStatus(prev => ({
-            ...prev,
-            transcriptsReceived: prev.transcriptsReceived + 1,
-            lastAttempt: `Received: "${text.substring(0, 30)}..." (${isFinal ? 'final' : 'interim'})`
-          }));
 
-          if (isFinal) {
-            activeSocket.emit('speech-transcript', { transcript: text, sourceLang: languageCode.split('-')[0] });
+      if (isAndroidPWA && sttEngine.getName().includes('Web Speech')) {
+        // Server-only STT fallback ONLY for Web Speech API on Android PWA
+        console.log('Using server-only STT fallback for Web Speech API on Android PWA');
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+        });
+        streamRef.current = stream;
+
+        activeSocket.emit('start-speech', {
+          languageCode,
+          soloMode,
+          soloTargetLang: soloMode ? soloTargetLang : undefined,
+        });
+
+        // Use MediaRecorder to capture audio and send chunks
+        const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+          ? 'audio/webm;codecs=opus'
+          : 'audio/webm';
+
+        const mediaRecorder = new MediaRecorder(stream, {
+          mimeType,
+          audioBitsPerSecond: 128000
+        });
+
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0 && activeSocket.connected) {
+            activeSocket.emit('speech-data', event.data);
           }
-        },
-        onError: (error) => {
-          console.error('STT recognition error:', error);
-          setSttStatus(prev => ({
-            ...prev,
-            lastError: `Error: ${error.message || error}`,
-            recognitionStarted: false,
-            isRecording: false
-          }));
-          toast.error('Speech recognition failed');
-          stopRecordingInternal();
-        }
-      });
+        };
 
-      // Update status when recognition starts
-      setSttStatus(prev => ({
-        ...prev,
-        recognitionStarted: true,
-        isRecording: true,
-        lastAttempt: `Recognition started in ${languageCode}`
-      }));
+        mediaRecorder.start(250); // Send data every 250ms
+        mediaRecorderRef.current = mediaRecorder;
 
-      streamRef.current = stream;
-      activeSocket.emit('start-speech', {
-        languageCode,
-        soloMode,
-        soloTargetLang: soloMode ? soloTargetLang : undefined,
-      });
+        // Update STT status for server-only mode
+        setSttStatus(prev => ({
+          ...prev,
+          lastAttempt: `Server-only recognition started in ${languageCode}`,
+          language: languageCode,
+          recognitionStarted: true,
+          isRecording: true,
+          transcriptsReceived: 0,
+          lastError: undefined
+        }));
 
-      // Use MediaRecorder to capture audio and send chunks
-      // Check for supported mime types
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-        ? 'audio/webm;codecs=opus'
-        : 'audio/webm';
+        isRecordingRef.current = true;
+        setIsRecording(true);
+      } else {
+        // Use local STT engine for other platforms
+        // Update STT status
+        setSttStatus(prev => ({
+          ...prev,
+          lastAttempt: `Starting recognition in ${languageCode}`,
+          language: languageCode,
+          recognitionStarted: false,
+          transcriptsReceived: 0,
+          lastError: undefined
+        }));
 
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType,
-        audioBitsPerSecond: 128000
-      });
+        // Get STT engine and start recognition
+        const sttEngine = speechEngineRegistry.getSttEngine();
+        const stream = await sttEngine.startRecognition({
+          onResult: (text, isFinal) => {
+            console.log('STT result received:', text, 'isFinal:', isFinal);
+            setSttStatus(prev => ({
+              ...prev,
+              transcriptsReceived: prev.transcriptsReceived + 1,
+              lastAttempt: `Received: "${text.substring(0, 30)}..." (${isFinal ? 'final' : 'interim'})`
+            }));
 
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0 && activeSocket.connected) {
-          activeSocket.emit('speech-data', event.data);
-        }
-      };
+            if (isFinal) {
+              activeSocket.emit('speech-transcript', { transcript: text, sourceLang: languageCode.split('-')[0] });
+            }
+          },
+          onError: (error) => {
+            console.error('STT recognition error:', error);
+            setSttStatus(prev => ({
+              ...prev,
+              lastError: `Error: ${error.message || error}`,
+              recognitionStarted: false,
+              isRecording: false
+            }));
+            toast.error('Speech recognition failed');
+            stopRecordingInternal();
+          }
+        });
 
-      mediaRecorder.start(250); // Send data every 250ms
-      mediaRecorderRef.current = mediaRecorder;
-      isRecordingRef.current = true;
-      setIsRecording(true);
+        // Update status when recognition starts
+        setSttStatus(prev => ({
+          ...prev,
+          recognitionStarted: true,
+          isRecording: true,
+          lastAttempt: `Recognition started in ${languageCode}`
+        }));
+
+        streamRef.current = stream;
+        activeSocket.emit('start-speech', {
+          languageCode,
+          soloMode,
+          soloTargetLang: soloMode ? soloTargetLang : undefined,
+        });
+
+        // Use MediaRecorder to capture audio and send chunks
+        const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+          ? 'audio/webm;codecs=opus'
+          : 'audio/webm';
+
+        const mediaRecorder = new MediaRecorder(stream, {
+          mimeType,
+          audioBitsPerSecond: 128000
+        });
+
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0 && activeSocket.connected) {
+            activeSocket.emit('speech-data', event.data);
+          }
+        };
+
+        mediaRecorder.start(250); // Send data every 250ms
+        mediaRecorderRef.current = mediaRecorder;
+        isRecordingRef.current = true;
+        setIsRecording(true);
+      }
     } catch (err) {
       console.error('Failed to start recording', err);
       setSttStatus(prev => ({
@@ -650,6 +713,37 @@ const Conversation = () => {
       return next;
     });
   };
+
+  // Reinitialize TTS engine when audio is re-enabled
+  useEffect(() => {
+    if (audioEnabled) {
+      const reinitializeTTS = async () => {
+        const ttsEngine = speechEngineRegistry.getTtsEngine();
+        if (ttsEngine) {
+          try {
+            await ttsEngine.initialize();
+            // Refresh voices after reinitialization
+            const voices = await ttsEngine.getVoices();
+            voicesRef.current = voices;
+            setTtsStatus(prev => ({
+              ...prev,
+              voicesCount: voices.length,
+              voicesLoaded: voices.length > 0,
+              lastError: voices.length === 0 ? 'No voices loaded after reinitialization' : undefined
+            }));
+          } catch (error) {
+            console.error('Failed to reinitialize TTS engine:', error);
+            setTtsStatus(prev => ({
+              ...prev,
+              lastError: 'Failed to reinitialize TTS engine',
+              voicesLoaded: false
+            }));
+          }
+        }
+      };
+      reinitializeTTS();
+    }
+  }, [audioEnabled, speechEngineRegistry]);
 
   const refreshVoices = async () => {
     console.log('TTS: Manually refreshing voices...');

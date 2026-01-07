@@ -198,7 +198,7 @@ const Profile = () => {
             <div>
               <Label htmlFor="sttEngine">{t('profile.defaultSttEngine', 'Default STT Engine')}</Label>
               <Select
-                value={preferences.sttEngine || "web-speech-api"}
+                value={preferences.sttEngine || "google-cloud-stt"}
                 onValueChange={(value) => handleEnginePreferenceChange('stt', value)}
                 disabled={updateProfileMutation.isPending}
               >
@@ -206,9 +206,11 @@ const Profile = () => {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="web-speech-api">
-                    Web Speech API (Browser)
-                  </SelectItem>
+                  {speechEngineRegistry.getAvailableSttEngines().map((engine) => (
+                    <SelectItem key={engine.id} value={engine.id}>
+                      {engine.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <p className="text-sm text-muted-foreground mt-1">
@@ -227,12 +229,11 @@ const Profile = () => {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="web-speech-api">
-                    Web Speech API (Browser)
-                  </SelectItem>
-                  <SelectItem value="google-cloud">
-                    Google Cloud TTS
-                  </SelectItem>
+                  {speechEngineRegistry.getAvailableTtsEngines().map((engine) => (
+                    <SelectItem key={engine.id} value={engine.id}>
+                      {engine.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <p className="text-sm text-muted-foreground mt-1">

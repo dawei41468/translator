@@ -7,7 +7,7 @@ export class SpeechEngineRegistry {
 
   constructor(preferences: { stt?: string; tts?: string; translation?: string } = {}) {
     this.userPreferences = {
-      stt: preferences.stt || 'web-speech-api',
+      stt: preferences.stt || 'google-cloud-stt', // Better default for Android PWA compatibility
       tts: preferences.tts || 'web-speech-api',
       translation: preferences.translation || 'google-translate'
     };

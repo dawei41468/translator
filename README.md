@@ -10,7 +10,8 @@ A Progressive Web App (PWA) for real-time cross-device conversation translation.
 - **Bluetooth Headset Integration**: Audio input/output routing to headsets
 - **PWA Ready**: Installable on mobile devices, works offline-ready
 - **User Authentication**: Secure login with JWT cookies
-- **Engine Abstraction Framework**: Swappable STT/TTS/Translation engines (iFlyTek, Google, Web Speech API)
+- **Engine Abstraction Framework**: Swappable STT/TTS/Translation engines (Google Cloud STT/TTS, Web Speech API)
+- **Smart Engine Selection**: Automatic fallback to server-based STT for Android PWA compatibility
 - **Profile Management**: User preferences, display names, language settings
 - **Accessibility Compliant**: WCAG 2.1 AA with screen reader support
 - **Cross-Device Sync**: Preferences follow users across browsers/devices
@@ -25,7 +26,7 @@ A Progressive Web App (PWA) for real-time cross-device conversation translation.
 - **Backend**: Node.js 20 + Express + Drizzle ORM + PostgreSQL
 - **Real-Time**: Socket.io (authenticated)
 - **Translation**: Google Cloud Translation API (asia-east2)
-- **TTS**: Browser Web Speech API (SpeechSynthesis)
+- **TTS**: Browser Web Speech API + Google Cloud Text-to-Speech
 - **Deployment**: PM2 + NGINX + Tencent Lighthouse HK
 - **Monorepo**: Turborepo + pnpm
 

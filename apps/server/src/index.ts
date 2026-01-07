@@ -11,6 +11,8 @@ import { Server } from "socket.io";
 import { setupSocketIO } from "./socket.js";
 import cron from "node-cron";
 
+import { CleanupService } from "./services/cleanup.js";
+
 const startupStart = Date.now();
 const PORT = Number(process.env.PORT) || 3003;
 
@@ -28,15 +30,8 @@ const io = new Server(server, {
 
 setupSocketIO(io);
 
-// Schedule room cleanup every hour
-cron.schedule('0 * * * *', async () => {
-  try {
-    await db.execute(sql`delete from rooms where created_at < now() - interval '24 hours'`);
-    logger.info('Room cleanup completed');
-  } catch (error) {
-    logger.error('Error cleaning up rooms', error);
-  }
-});
+// Initialize cleanup service
+CleanupService.init();
 
 server.listen(PORT, "0.0.0.0", async () => {
   // Configuration validation

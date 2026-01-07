@@ -626,4 +626,11 @@ try {
 - Real-time: Socket.io (authenticated via JWT cookie).
 - Translation: Google Cloud Translation (asia-east2) + Engine Abstraction Framework.
 - Speech: Web Speech API (Browser) + Google Cloud Speech-to-Text (server-fallback) + Engine Abstraction Framework.
+- Audio Routing: Handled by device OS; app provides toggle for TTS on/off.
 - Deployment: PM2 + NGINX on Tencent Lighthouse HK.
+
+## Refactoring Guidelines
+
+- **Line Count Threshold**: Files reaching 500 lines of code should be evaluated for refactoring.
+- **Logical Refactoring**: Do not refactor solely for the sake of line count. Refactoring should only be performed if it makes logical sense (e.g., extracting a complex sub-component, centralizing shared logic, improving testability).
+- **Cleanliness**: Keep the codebase organized, but prioritize logical cohesion over strict line limits.

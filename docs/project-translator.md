@@ -14,7 +14,7 @@
 2. Works across platforms — iOS Safari + Android Chrome, installable as PWA.
 3. Privacy by design — no audio stored, no transcripts saved unless explicitly opted-in later.
 4. One device per user — each participant uses their own phone; translation happens live across devices.
-5. Bluetooth headset support — input from headset mic, output to headset (user-toggled).
+5. OS-level audio routing — output follows device system settings (speaker/Bluetooth/headphones); app provides simple audio on/off toggle.
 
 ## Targeted Languages (MVP - Priority Order)
 1. Chinese — Mandarin (Simplified primary; Traditional secondary)
@@ -110,7 +110,7 @@
 | Server-side translation (Google Cloud HK)  | High     | Completed    | Kilo           |
 | Broadcast translated text to other participant | High     | Completed    | Kilo           |
 | Client-side TTS (Web Speech API) + audio toggle | High     | Completed    | You            |
-| Bluetooth headset output routing (Audio Output API) | High     | Completed    | You            |
+| UI-level audio toggle (OS handles routing) | High     | Completed    | You            |
 | Live chat-like UI with bubbles (You / Other) | High     | Completed    | You            |
 | Mobile-responsive conversation screen      | High     | Completed    | You            |
 | Reconnection handling + status indicators | Medium   | Completed    | Kilo           |
@@ -132,7 +132,7 @@
 | Core speech → translate → TTS loop         | Completed    | High     | Both  | End-to-end working with multi-user support |
 | i18n setup (copy OneProject)               | Completed    | High     | You   | en/zh/it/de/nl, separate JSONs, user preference in DB |
 | Loveable UI generation                     | Completed    | High     | Grok + You | Professional, clean, mobile-first design (waiting screen with QR focus) |
-| Headset routing + audio toggle UI          | Completed    | Medium   | You   | Audio Output API implemented in Conversation.tsx |
+| Audio toggle UI (OS-level routing)         | Completed    | Medium   | You   | Toggle implemented in Conversation.tsx |
 | Rate limiting on auth/room endpoints       | Completed    | Medium   | Kilo  | express-rate-limit |
 | Loading/empty/error states                 | Completed    | Medium   | You   | Skeleton, ErrorState, EmptyState components |
 | Accessibility review                       | Completed    | Medium   | You   | ARIA labels, keyboard nav, screen reader support, WCAG compliance |

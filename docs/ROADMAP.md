@@ -4,6 +4,46 @@
 **Current Progress**: 100% MVP ready for production deployment
 **Last Updated**: January 6, 2026
 
+## 🚀 Post-MVP Evolution (Jan 2026)
+
+### Phase 1: Security & Cloud Infrastructure
+**Status**: ✅ Completed  
+**Priority**: High (Critical Security)
+
+- [x] Move Google TTS synthesis to server-side proxy
+- [x] Secure Google Cloud API Key (remove from frontend)
+- [x] Implement server-side synthesis caching (Local store with MD5)
+- [x] Implement audio playback from server-synthesized buffers
+
+### Phase 2: Architectural Refactoring
+**Status**: ✅ Completed  
+**Priority**: High (Maintainability)
+
+- [x] Decompose `Conversation.tsx` into domain-specific components (`RoomHeader`, `MessageList`, `ConversationControls`, `DebugPanel`)
+- [x] Extract speech engine logic into `useSpeechEngine` custom hook
+- [x] Fixed infinite re-render loops and WebSocket reconnection loops using refs for listeners
+- [x] Stabilized `AudioContext` lifecycle (singleton pattern + user gesture resume)
+- [x] Align with 500-line per file logical refactoring policy (`Conversation.tsx` reduced to ~380 lines)
+
+### Phase 3: Cost & Performance Optimization
+**Status**: ✅ Completed  
+**Priority**: Medium
+
+- [x] Implement Client-side VAD (Voice Activity Detection) using `@ricky0123/vad-react`
+- [x] Implement 10-second silence auto-stop to save cloud costs
+- [x] Only stream audio chunks to server when speech is detected
+- [ ] Optimize WebSocket audio chunks with Opus compression (Future)
+- [ ] Add `IndexedDB` caching for common translation/audio pairs (Future)
+
+### Phase 4: Robustness & Testing
+**Status**: ✅ Completed  
+**Priority**: Medium
+
+- [x] Complete E2E "Happy Path" test in Playwright (Multi-user chat flow)
+- [x] Implement `MockSttEngine` and `MockTtsEngine` for stable E2E testing without cloud dependencies
+- [x] Add `data-testid` attributes for reliable component selection in tests
+- [x] Fixed browser permission issues in Playwright for microphone access
+
 ## 🎯 High Priority (MVP Blockers) - ✅ COMPLETED
 
 ### 1. **Accessibility Implementation**
@@ -125,20 +165,22 @@
 - **Testing**: >80% code coverage, all critical paths tested
 - **Performance**: <200ms end-to-end latency for translations
 
-## 🔄 Next Steps
+## Next Steps
 
-**MVP ACHIEVED** ✅ - Ready for production deployment!
+**MVP ACHIEVED** - Ready for production deployment!
 
-1. **Immediate**: Deploy MVP to production (translator.studiodtw.net)
-2. **Short-term**: Begin Premium TTS Integration (iFlyTek + Grok Voice)
-3. **Medium-term**: Performance optimization and mobile polish
-4. **Long-term**: Advanced features and monitoring enhancements
+1. **Phase 1**: Secure TTS synthesis by moving to server-side proxy
+2. **Phase 2**: Refactor `Conversation.tsx` for logical cohesion and maintainability
+3. **Phase 3**: Optimize costs with VAD and audio compression
+4. **Phase 4**: Expand E2E testing for the full user journey
 
 **MVP Success Metrics Achieved:**
-- ✅ Accessibility: WCAG 2.1 AA compliance achieved
-- ✅ Error Handling: <5% user-facing error rate (comprehensive error handling implemented)
-- ✅ Security: Zero security vulnerabilities (audit completed, rate limiting active)
-- ✅ Testing: Testing infrastructure ready (>80% coverage target for future)
+- Accessibility: WCAG 2.1 AA compliance achieved
+- Error Handling: <5% user-facing error rate (comprehensive error handling implemented)
+- Security: Zero security vulnerabilities (audit completed, rate limiting active)
+- Testing: Testing infrastructure ready (>80% coverage target for future)
+- Performance: <200ms end-to-end latency confirmed in testing
+- Core Functionality: Real-time speech translation working across MacBook Android
 - ✅ Performance: <200ms end-to-end latency confirmed in testing
 - ✅ Core Functionality: Real-time speech translation working across MacBook ↔ Android
 

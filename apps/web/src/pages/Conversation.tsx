@@ -952,7 +952,7 @@ const Conversation = () => {
         </header>
 
         {/* Messages */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 pt-32 pb-40" role="log" aria-live="polite" aria-label={t('conversation.messages')} aria-atomic="false">
+        <main className={`flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 pt-32 ${soloMode ? 'pb-48' : 'pb-40'}`} role="log" aria-live="polite" aria-label={t('conversation.messages')} aria-atomic="false">
           {messages.map((message, index) => {
             const prevMessage = index > 0 ? messages[index - 1] : null;
             const showSpeakerName = !prevMessage || prevMessage.speakerName !== message.speakerName;

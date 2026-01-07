@@ -17,6 +17,9 @@ packages/*/build/
 .vite/
 apps/web/.vite/
 
+# Accidental nested web app artifacts
+apps/web/apps/
+
 # Turborepo
 .turbo/
 
@@ -32,6 +35,8 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 logs/
+cache/
+apps/server/cache/
 
 # Editor & OS
 .vscode/

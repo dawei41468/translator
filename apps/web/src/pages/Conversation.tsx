@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { io, Socket } from "socket.io-client";
-import { useRoom, useMe, useUpdateLanguage } from "@/lib/hooks";
+import { useRoom, useUpdateLanguage } from "@/lib/hooks";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -91,8 +91,7 @@ const Conversation = () => {
   const { t } = useTranslation();
   const { code } = useParams<{ code: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const { data: meData } = useMe();
+  const { user, speechEngineRegistry } = useAuth();
   const updateLanguageMutation = useUpdateLanguage();
 
   // Check if TTS debug panel should be enabled
@@ -153,8 +152,7 @@ const Conversation = () => {
     voicesLoaded: false,
   });
   const [debugPanelExpanded, setDebugPanelExpanded] = useState(false);
-  const synthRef = useRef<SpeechSynthesis | null>(null);
-  const voicesRef = useRef<SpeechSynthesisVoice[]>([]);
+  const voicesRef = useRef<Array<{ id: string; name: string; lang: string }>>([]);
   const pendingTtsRef = useRef<{ text: string; language: string | null | undefined } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const audioEnabledRef = useRef<boolean>(audioEnabled);
@@ -171,104 +169,36 @@ const Conversation = () => {
     socketRef.current = socket;
   }, [socket]);
 
-  const speakTextNow = (text: string, language: string | null | undefined) => {
+  const speakTextNow = async (text: string, language: string | null | undefined) => {
     if (!audioEnabledRef.current) {
       console.log('TTS: Audio disabled, skipping speech');
       setTtsStatus(prev => ({ ...prev, lastAttempt: 'Audio disabled' }));
       return;
     }
-    const synth = synthRef.current;
-    if (!synth) {
-      console.error('TTS: SpeechSynthesis not available');
-      setTtsStatus(prev => ({ ...prev, lastError: 'SpeechSynthesis not available', lastAttempt: 'Failed - no synth' }));
+
+    const ttsEngine = speechEngineRegistry.getTtsEngine();
+    if (!ttsEngine) {
+      console.error('TTS: No TTS engine available');
+      setTtsStatus(prev => ({ ...prev, lastError: 'No TTS engine available', lastAttempt: 'Failed - no engine' }));
       toast.error(t('conversation.ttsNotSupported'));
       return;
     }
 
     const locale = getTtsLocale(language);
-    console.log('TTS: Attempting to speak text:', text.substring(0, 50) + '...', 'in locale:', locale);
-    setTtsStatus(prev => ({ ...prev, lastAttempt: `Speaking "${text.substring(0, 20)}..." in ${locale}` }));
-
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = locale;
-
-    // Add error handling
-    utterance.onerror = (event) => {
-      console.error('TTS: Speech synthesis error:', event.error, event);
-      setTtsStatus(prev => ({ ...prev, lastError: `Error: ${event.error}`, isSpeaking: false }));
-
-      // Special handling for Xiaomi/Mi AI TTS issues
-      if (event.error === 'not-allowed' || event.error === 'network') {
-        toast.error(t('conversation.ttsXiaomiError', 'TTS failed. On Xiaomi devices, try switching to Google TTS in Settings → Additional settings → Languages & input → Text-to-speech output'));
-      } else {
-        toast.error(t('conversation.ttsError', 'Speech synthesis failed. Check device permissions.'));
-      }
-    };
-
-    utterance.onstart = () => {
-      console.log('TTS: Speech started successfully');
-      setTtsStatus(prev => ({ ...prev, isSpeaking: true, lastError: undefined }));
-    };
-
-    utterance.onend = () => {
-      console.log('TTS: Speech completed');
-      setTtsStatus(prev => ({ ...prev, isSpeaking: false }));
-    };
-
-    const voices =
-      voicesRef.current.length > 0 ? voicesRef.current : synth.getVoices();
-
-    console.log('TTS: Available voices:', voices.length, voices.map(v => `${v.name} (${v.lang})`));
-    setTtsStatus(prev => ({ ...prev, voicesCount: voices.length }));
-
-    // Check if we have any voices at all
-    if (voices.length === 0) {
-      console.warn('TTS: No voices available - likely Xiaomi/Mi AI TTS issue');
-      setTtsStatus(prev => ({ ...prev, lastError: 'No voices available (Xiaomi/Mi AI issue)' }));
-
-      // Show specific guidance for Xiaomi devices
-      toast.error(t('conversation.ttsNoVoices', 'No TTS voices available. On Xiaomi devices, install Google Speech Services and set Google TTS as default in Settings → Languages & input → Text-to-speech output'));
-      return;
-    }
-
-    const localeLower = locale.toLowerCase();
-    const primary = localeLower.split("-")[0];
-
-    const voice =
-      voices.find((v) => v.lang.toLowerCase() === localeLower) ??
-      voices.find((v) => v.lang.toLowerCase().startsWith(`${primary}-`)) ??
-      voices.find((v) => v.lang.toLowerCase() === primary);
-
-    if (voice) {
-      utterance.voice = voice;
-      console.log('TTS: Using voice:', voice.name, '(', voice.lang, ')');
-    } else {
-      console.warn('TTS: No suitable voice found for locale:', locale);
-      setTtsStatus(prev => ({ ...prev, lastError: `No voice for ${locale}` }));
-
-      // Try fallback to any available voice
-      const fallbackVoice = voices.find(v => v.lang.startsWith(primary)) || voices[0];
-      if (fallbackVoice) {
-        utterance.voice = fallbackVoice;
-        utterance.lang = fallbackVoice.lang;
-        console.log('TTS: Using fallback voice:', fallbackVoice.name, '(', fallbackVoice.lang, ')');
-        setTtsStatus(prev => ({ ...prev, lastError: `Using fallback voice: ${fallbackVoice.name}` }));
-      } else {
-        toast.error(t('conversation.ttsNoVoiceForLanguage', `No voice available for ${locale}. Try changing your language setting.`));
-        return;
-      }
-    }
+    const engineName = ttsEngine.getName();
+    console.log('TTS: Attempting to speak text:', text.substring(0, 50) + '...', 'in locale:', locale, 'using engine:', engineName);
+    setTtsStatus(prev => ({ ...prev, lastAttempt: `Speaking "${text.substring(0, 20)}..." in ${locale} (${engineName})` }));
 
     try {
-      synth.cancel(); // Cancel any ongoing speech
-      synth.speak(utterance);
+      await ttsEngine.speak(text, language || 'en');
       console.log('TTS: Speech synthesis initiated');
+      setTtsStatus(prev => ({ ...prev, isSpeaking: true, lastError: undefined }));
     } catch (error) {
-      console.error('TTS: Failed to initiate speech synthesis:', error);
-      setTtsStatus(prev => ({ ...prev, lastError: `Exception: ${error}`, isSpeaking: false }));
+      console.error('TTS: Speech synthesis error:', error);
+      setTtsStatus(prev => ({ ...prev, lastError: `Error: ${error}`, isSpeaking: false }));
 
-      // Special error handling for Xiaomi devices
-      if (error instanceof Error && error.message.includes('not-allowed')) {
+      // Special handling for Xiaomi/Mi AI TTS issues
+      if (error instanceof Error && (error.message.includes('not-allowed') || error.message.includes('network'))) {
         toast.error(t('conversation.ttsXiaomiError', 'TTS failed. On Xiaomi devices, try switching to Google TTS in Settings → Additional settings → Languages & input → Text-to-speech output'));
       } else {
         toast.error(t('conversation.ttsError', 'Speech synthesis failed. Check device permissions.'));
@@ -295,17 +225,12 @@ const Conversation = () => {
 
   // Only sync soloTargetLang with user language on initial load, not when user has manually selected
   useEffect(() => {
-    const next = meData?.user?.language ?? user?.language;
-    if (next && !hasUserSelectedSoloLang) {
+    if (!hasUserSelectedSoloLang) {
+      const availableLanguages = LANGUAGES.filter(lang => lang.code !== user?.language);
+      const next = availableLanguages[0]?.code || LANGUAGES[0]?.code || "en";
       setSoloTargetLang(next);
     }
-  }, [meData?.user?.language, user?.language, hasUserSelectedSoloLang]);
-
-  // Debug logging for language changes
-  useEffect(() => {
-    console.log('Conversation: meData changed:', meData);
-    console.log('Conversation: current language from meData:', meData?.user?.language);
-  }, [meData]);
+  }, [user?.language, hasUserSelectedSoloLang]);
 
   // Debug logging for solo mode language changes
   useEffect(() => {
@@ -402,8 +327,9 @@ const Conversation = () => {
       };
       setMessages(prev => [...prev, message]);
 
-      // Speak the translated text if audio is enabled
-      if (audioEnabledRef.current && synthRef.current) {
+      // Speak the translated text if audio is enabled AND not in solo mode
+      // (solo mode uses solo-translated event instead)
+      if (audioEnabledRef.current && !soloMode) {
         speakText(data.translatedText, data.targetLang);
       }
     });
@@ -443,7 +369,7 @@ const Conversation = () => {
 
         // In solo mode, speak the translated text in the target language (what user is learning)
         // This allows them to hear how their speech sounds when translated to the target language
-        if (audioEnabledRef.current && synthRef.current) {
+        if (audioEnabledRef.current) {
           speakText(data.translatedText, data.targetLang);
         }
       }
@@ -475,63 +401,62 @@ const Conversation = () => {
   }, [audioEnabled]);
 
 
-  // Initialize speech synthesis and cleanup audio on unmount
+  // Initialize speech engines and cleanup audio on unmount
   useEffect(() => {
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      const synth = window.speechSynthesis;
-      synthRef.current = synth;
+    const initializeEngines = async () => {
+      try {
+        // Initialize TTS engine
+        const ttsEngine = speechEngineRegistry.getTtsEngine();
+        if (ttsEngine) {
+          await ttsEngine.initialize();
 
-      const syncVoices = () => {
-        const voices = synth.getVoices();
-        voicesRef.current = voices;
+          // Get voices and update status
+          const voices = await ttsEngine.getVoices();
+          voicesRef.current = voices;
+
+          setTtsStatus(prev => ({
+            ...prev,
+            voicesCount: voices.length,
+            voicesLoaded: voices.length > 0,
+            lastError: voices.length === 0 ? 'No voices loaded' : undefined
+          }));
+
+          console.log('TTS: Voices loaded:', voices.length, voices.map(v => `${v.name} (${v.lang})`));
+        }
+
+        // Initialize STT engine with user's language
+        const sttEngine = speechEngineRegistry.getSttEngine();
+        if (sttEngine) {
+          const languageCode = getSpeechRecognitionLocale(user?.language ?? "en");
+          await sttEngine.initialize({ language: languageCode });
+          console.log('STT: Engine initialized with language:', languageCode);
+        }
+      } catch (error) {
+        console.error('Failed to initialize speech engines:', error);
         setTtsStatus(prev => ({
           ...prev,
-          voicesCount: voices.length,
-          voicesLoaded: voices.length > 0,
-          lastError: voices.length === 0 ? 'No voices loaded' : undefined
+          lastError: 'Failed to initialize speech engines',
+          voicesLoaded: false
         }));
-        console.log('TTS: Voices loaded:', voices.length, voices.map(v => `${v.name} (${v.lang})`));
-      };
+      }
+    };
 
-      // Initial check
-      syncVoices();
+    initializeEngines();
 
-      // Set up event listener for when voices change (async loading)
-      synth.addEventListener("voiceschanged", syncVoices);
-
-      // Also check periodically for voices (some Android devices load voices asynchronously)
-      const voiceCheckInterval = setInterval(() => {
-        const currentVoices = synth.getVoices();
-        if (currentVoices.length !== voicesRef.current.length) {
-          console.log('TTS: Voice count changed, updating...');
-          syncVoices();
-        }
-      }, 2000); // Check every 2 seconds
-
-      // Initial status update
-      setTtsStatus(prev => ({
-        ...prev,
-        voicesCount: synth.getVoices().length,
-        isSpeaking: synth.speaking,
-        voicesLoaded: synth.getVoices().length > 0
-      }));
-
-      return () => {
-        synth.removeEventListener("voiceschanged", syncVoices);
-        clearInterval(voiceCheckInterval);
-        stopRecordingInternal();
-      };
-    } else {
-      setTtsStatus(prev => ({ ...prev, lastError: 'SpeechSynthesis not supported', voicesLoaded: false }));
-    }
     return () => {
       stopRecordingInternal();
     };
-  }, []);
+  }, [user?.language]);
 
 
   const stopRecordingInternal = () => {
     try {
+      // Stop STT engine
+      const sttEngine = speechEngineRegistry.getSttEngine();
+      if (sttEngine) {
+        sttEngine.stopRecognition();
+      }
+
       // Stop media recorder
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
         mediaRecorderRef.current.stop();
@@ -577,19 +502,27 @@ const Conversation = () => {
 
   const startRecordingInternal = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      });
-      streamRef.current = stream;
-
       const activeSocket = socketRef.current;
       if (!activeSocket) return;
 
-      const languageCode = getSpeechRecognitionLocale(meData?.user?.language ?? user?.language ?? "en");
+      const languageCode = getSpeechRecognitionLocale(user?.language ?? "en");
+
+      // Get STT engine and start recognition
+      const sttEngine = speechEngineRegistry.getSttEngine();
+      const stream = await sttEngine.startRecognition({
+        onResult: (text, isFinal) => {
+          if (isFinal) {
+            activeSocket.emit('speech-transcript', { transcript: text, sourceLang: languageCode.split('-')[0] });
+          }
+        },
+        onError: (error) => {
+          console.error('STT recognition error:', error);
+          toast.error('Speech recognition failed');
+          stopRecordingInternal();
+        }
+      });
+
+      streamRef.current = stream;
       activeSocket.emit('start-speech', {
         languageCode,
         soloMode,
@@ -598,10 +531,10 @@ const Conversation = () => {
 
       // Use MediaRecorder to capture audio and send chunks
       // Check for supported mime types
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
-        ? 'audio/webm;codecs=opus' 
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
         : 'audio/webm';
-      
+
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType,
         audioBitsPerSecond: 128000
@@ -642,46 +575,39 @@ const Conversation = () => {
   const toggleAudio = () => {
     setAudioEnabled((prev) => {
       const next = !prev;
-      if (!next && synthRef.current) {
-        synthRef.current.cancel();
+      if (!next) {
+        // Stop any ongoing TTS when disabling audio
+        const ttsEngine = speechEngineRegistry.getTtsEngine();
+        if (ttsEngine) {
+          ttsEngine.stop();
+        }
       }
       return next;
     });
   };
 
-  const refreshVoices = () => {
+  const refreshVoices = async () => {
     console.log('TTS: Manually refreshing voices...');
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      const synth = window.speechSynthesis;
-      const voices = synth.getVoices();
-      voicesRef.current = voices;
+    try {
+      const ttsEngine = speechEngineRegistry.getTtsEngine();
+      if (ttsEngine) {
+        const voices = await ttsEngine.getVoices();
+        voicesRef.current = voices;
+        setTtsStatus(prev => ({
+          ...prev,
+          voicesCount: voices.length,
+          voicesLoaded: voices.length > 0,
+          lastError: voices.length === 0 ? 'No voices found after refresh' : undefined
+        }));
+        console.log('TTS: Refreshed voices:', voices.length, voices.map(v => `${v.name} (${v.lang})`));
+      }
+    } catch (error) {
+      console.error('TTS: Failed to refresh voices:', error);
       setTtsStatus(prev => ({
         ...prev,
-        voicesCount: voices.length,
-        voicesLoaded: voices.length > 0,
-        lastError: voices.length === 0 ? 'No voices found after refresh' : undefined
+        lastError: 'Failed to refresh voices',
+        voicesLoaded: false
       }));
-      console.log('TTS: Refreshed voices:', voices.length, voices.map(v => `${v.name} (${v.lang})`));
-
-      if (voices.length === 0) {
-        // Try to trigger voice loading by creating a dummy utterance
-        const dummyUtterance = new SpeechSynthesisUtterance('');
-        dummyUtterance.volume = 0; // Silent
-        synth.speak(dummyUtterance);
-
-        // Check again after a delay
-        setTimeout(() => {
-          const updatedVoices = synth.getVoices();
-          voicesRef.current = updatedVoices;
-          setTtsStatus(prev => ({
-            ...prev,
-            voicesCount: updatedVoices.length,
-            voicesLoaded: updatedVoices.length > 0,
-            lastError: updatedVoices.length === 0 ? 'Still no voices after dummy utterance' : undefined
-          }));
-          console.log('TTS: Voices after dummy utterance:', updatedVoices.length);
-        }, 1000);
-      }
     }
   };
 
@@ -769,9 +695,9 @@ const Conversation = () => {
           {/* Second Row: Language selector and description */}
           <div className="flex items-center justify-between">
             <Select
-              value={meData?.user?.language || ""}
+              value={user?.language || ""}
               onValueChange={(value) => {
-                console.log('Language selector onValueChange:', value, 'current meData:', meData?.user?.language);
+                console.log('Language selector onValueChange:', value, 'current user:', user?.language);
                 updateLanguageMutation.mutate(value);
               }}
               disabled={updateLanguageMutation.isPending}
@@ -792,6 +718,7 @@ const Conversation = () => {
             </p>
           </div>
 
+
           {/* TTS Diagnostic Panel (collapsible) - only shown if enabled via env var */}
           {isTtsDebugEnabled && (
             <div className="mt-2">
@@ -803,6 +730,8 @@ const Conversation = () => {
                   size="sm"
                   onClick={() => setDebugPanelExpanded(true)}
                   className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
+                  aria-label={t('conversation.debugPanelExpand')}
+                  aria-expanded="false"
                 >
                   Debug
                 </Button>
@@ -818,6 +747,7 @@ const Conversation = () => {
                         size="sm"
                         onClick={refreshVoices}
                         className="h-6 px-2 text-xs"
+                        aria-label={t('conversation.debugRefreshVoices')}
                       >
                         Refresh
                       </Button>
@@ -827,6 +757,8 @@ const Conversation = () => {
                         size="sm"
                         onClick={() => setDebugPanelExpanded(false)}
                         className="h-6 px-2 text-xs"
+                        aria-label={t('conversation.debugPanelCollapse')}
+                        aria-expanded="true"
                       >
                         ✕
                       </Button>
@@ -939,7 +871,7 @@ const Conversation = () => {
                       <SelectValue placeholder={t('conversation.translateTo')} />
                     </SelectTrigger>
                     <SelectContent>
-                      {LANGUAGES.map((lang) => (
+                      {LANGUAGES.filter((lang) => lang.code !== user?.language).map((lang) => (
                         <SelectItem key={lang.code} value={lang.code}>
                           {lang.name}
                         </SelectItem>

@@ -7,6 +7,7 @@ import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import Dashboard from "@/pages/Dashboard";
 import Conversation from "@/pages/Conversation";
+import Profile from "@/pages/Profile";
 import Layout from "@/components/Layout";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -46,6 +47,11 @@ export const AppRoutes = () => {
           <Dashboard />
         </ProtectedRoute>
       } />
+      <Route path="/profile" element={
+        <ProtectedRoute>
+          <Profile />
+        </ProtectedRoute>
+      } />
       <Route path="/room/:code" element={
         <ProtectedRoute showBottomNav={false}>
           <Conversation />
@@ -60,7 +66,7 @@ const App = () => (
     <BrowserRouter>
       <AuthProvider>
         <AppRoutes />
-        <Toaster />
+        <Toaster position="top-center" />
       </AuthProvider>
     </BrowserRouter>
   </QueryClientProvider>

@@ -1,7 +1,10 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "./api";
 import type { AuthUser } from "./types";
 import { useTranslation } from "react-i18next";
+import { createSpeechEngineRegistry } from "./speech-engines";
+import type { SpeechEngineRegistry } from "./speech-engines/registry";
 
 interface AuthContextType {
   user: AuthUser | null;
@@ -10,37 +13,43 @@ interface AuthContextType {
   logout: () => void;
   isLoading: boolean;
   isAuthenticated: boolean;
+  speechEngineRegistry: SpeechEngineRegistry;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const { i18n } = useTranslation();
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const queryClient = useQueryClient();
+
+  const meQuery = useQuery({
+    queryKey: ['me'],
+    queryFn: () => apiClient.getMe(),
+    retry: false,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+
+  const user = meQuery.data?.user ?? null;
+
+  const speechEngineRegistry = useMemo(
+    () => createSpeechEngineRegistry({
+      stt: user?.preferences?.sttEngine,
+      tts: user?.preferences?.ttsEngine,
+      translation: user?.preferences?.translationEngine,
+    }),
+    [user?.preferences]
+  );
 
   useEffect(() => {
-    // Cookie-based auth: attempt to load current user; 401 means not logged in.
-    apiClient
-      .getMe()
-      .then(({ user }) => {
-        setUser(user);
-        if (user?.language) {
-          i18n.changeLanguage(user.language);
-        }
-      })
-      .catch(() => {
-        setUser(null);
-      })
-      .finally(() => {
-        setIsLoading(false);
-      });
-  }, []);
+    if (user?.language) {
+      i18n.changeLanguage(user.language);
+    }
+  }, [user?.language, i18n]);
 
   const login = async (email: string, password: string) => {
     try {
-      const { user } = await apiClient.login({ email, password });
-      setUser(user);
+      await apiClient.login({ email, password });
+      queryClient.invalidateQueries({ queryKey: ['me'] });
     } catch (error) {
       throw error;
     }
@@ -48,8 +57,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const register = async (email: string, password: string, name: string) => {
     try {
-      const { user } = await apiClient.register({ email, password, name });
-      setUser(user);
+      await apiClient.register({ email, password, name });
+      queryClient.invalidateQueries({ queryKey: ['me'] });
     } catch (error) {
       throw error;
     }
@@ -57,7 +66,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = () => {
     apiClient.logout().catch(() => undefined);
-    setUser(null);
+    queryClient.invalidateQueries({ queryKey: ['me'] });
   };
 
   const value: AuthContextType = {
@@ -65,8 +74,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     login,
     register,
     logout,
-    isLoading,
-    isAuthenticated: !!user,
+    isLoading: meQuery.isLoading,
+    isAuthenticated: !!user && !meQuery.isError,
+    speechEngineRegistry,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -3,7 +3,7 @@ import jwt from "jsonwebtoken";
 import { db } from "../../../packages/db/src/index.js";
 import { users, rooms, roomParticipants } from "../../../packages/db/src/schema.js";
 import { eq } from "drizzle-orm";
-import { translateText } from "./services/translation.js";
+import { translationRegistry } from "./services/translation/index.js";
 import { createRecognizeStream } from "./services/stt.js";
 import { logger } from "./logger.js";
 import { parseCookies } from "./middleware/auth.js";
@@ -91,6 +91,11 @@ const speechStartSchema = {
 
 const roomCodeSchema = {
   roomCode: (v: any) => typeof v === 'string' && v.length === 6 && /^[A-Z0-9]+$/.test(v),
+};
+
+const speechTranscriptSchema = {
+  transcript: (v: any) => typeof v === 'string' && v.length > 0 && v.length <= 10000, // Reasonable max length
+  sourceLang: (v: any) => typeof v === 'string' && v.length >= 2 && v.length <= 10,
 };
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
@@ -218,15 +223,8 @@ export function setupSocketIO(io: Server) {
         socket.recognizeStream = createRecognizeStream(
           { languageCode: data.languageCode },
           async (transcript, isFinal) => {
-            if (isFinal) {
-              try {
-                await withRetry(() => handleTranscript(transcript, data.languageCode.split("-")[0]), 2, 500);
-              } catch (error) {
-                handleSocketError(socket, "handleTranscript", error, "Failed to process speech - please try again", {
-                  transcript: transcript.substring(0, 100)
-                });
-              }
-            }
+            // STT stream only handles recognition - transcript processing is done via speech-transcript events
+            // This prevents duplicate processing
           },
           (error) => {
             handleSpeechError(socket, error, "stream error");
@@ -283,6 +281,11 @@ export function setupSocketIO(io: Server) {
         const otherParticipants = participants.filter((p) => p.userId !== socket.userId);
         if (otherParticipants.length === 0 && !socket.soloMode) return;
 
+        // In solo mode, don't emit translated-message events (only solo-translated)
+        if (socket.soloMode) {
+          otherParticipants.length = 0; // Prevent translated-message emission
+        }
+
         const participantsByLanguage = new Map<string, typeof otherParticipants>();
 
         for (const participant of otherParticipants) {
@@ -297,8 +300,14 @@ export function setupSocketIO(io: Server) {
           const translationPromises = Array.from(participantsByLanguage.entries()).map(
             async ([targetLang, participants]) => {
               try {
+                const translationEngine = translationRegistry.getEngine(socket.userId);
                 const translatedText = await withRetry(
-                  () => translateText(transcript, sourceLang, targetLang),
+                  () => translationEngine.translate({
+                    text: transcript,
+                    sourceLang,
+                    targetLang,
+                    context: `Room: ${socket.roomId}`
+                  }),
                   2, 1000
                 );
                 return { targetLang, translatedText, participants, success: true };
@@ -347,8 +356,14 @@ export function setupSocketIO(io: Server) {
 
         if (socket.soloMode && socket.soloTargetLang) {
           try {
+            const translationEngine = translationRegistry.getEngine(socket.userId);
             const translatedText = await withRetry(
-              () => translateText(transcript, sourceLang, socket.soloTargetLang!),
+              () => translationEngine.translate({
+                text: transcript,
+                sourceLang,
+                targetLang: socket.soloTargetLang!,
+                context: `Solo mode - Room: ${socket.roomId}`
+              }),
               2, 1000
             );
 
@@ -459,6 +474,11 @@ export function setupSocketIO(io: Server) {
     });
 
     socket.on("speech-transcript", async (data: { transcript: string; sourceLang: string }) => {
+      if (!validateSocketData(data, speechTranscriptSchema)) {
+        handleSocketError(socket, "speech-transcript", new Error("Invalid transcript data"));
+        return;
+      }
+
       if (!socket.userId || !checkRateLimit(socket.userId, 'speech-transcript', 60, 60000)) {
         // Don't emit error for transcript rate limiting to avoid spam
         return;

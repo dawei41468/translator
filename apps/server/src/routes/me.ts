@@ -49,9 +49,9 @@ router.get("/", async (req, res) => {
         id: user.id,
         name: user.name,
         email: user.email,
-        // businessUnit: user.businessUnit,
-        // role: user.role,
+        displayName: user.displayName,
         language: user.language,
+        preferences: user.preferences,
       },
     });
   } catch {
@@ -74,6 +74,63 @@ router.put("/language", authenticate, async (req, res) => {
     res.json({ message: "Language updated" });
   } catch (err) {
     // logError("Update language error", err as Error, context);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+router.patch("/", authenticate, async (req, res) => {
+  // const context = getRequestContext(req);
+  try {
+    const { displayName, language, preferences } = req.body;
+
+    // Validate displayName
+    if (displayName !== undefined && (typeof displayName !== "string" || displayName.length > 255)) {
+      return res.status(400).json({ error: "Invalid display name" });
+    }
+
+    // Validate language
+    if (language !== undefined && (!language || typeof language !== "string" || !["en", "zh", "it", "de", "nl"].includes(language))) {
+      return res.status(400).json({ error: "Invalid language" });
+    }
+
+    // Validate preferences
+    if (preferences !== undefined) {
+      if (typeof preferences !== "object" || preferences === null) {
+        return res.status(400).json({ error: "Invalid preferences format" });
+      }
+
+      // Validate specific preference fields
+      const validSttEngines = ["web-speech-api"];
+      const validTtsEngines = ["web-speech-api", "google-cloud"];
+      const validTranslationEngines = ["google-translate"];
+
+      if (preferences.sttEngine && !validSttEngines.includes(preferences.sttEngine)) {
+        return res.status(400).json({ error: "Invalid STT engine" });
+      }
+      if (preferences.ttsEngine && !validTtsEngines.includes(preferences.ttsEngine)) {
+        return res.status(400).json({ error: "Invalid TTS engine" });
+      }
+      if (preferences.translationEngine && !validTranslationEngines.includes(preferences.translationEngine)) {
+        return res.status(400).json({ error: "Invalid translation engine" });
+      }
+    }
+
+    const updateData: any = {};
+    if (displayName !== undefined) updateData.displayName = displayName;
+    if (language !== undefined) updateData.language = language;
+    if (preferences !== undefined) updateData.preferences = preferences;
+
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({ error: "No valid fields to update" });
+    }
+
+    await db.update(users).set(updateData).where(eq(users.id, req.user!.id));
+
+    // logInfo("User updated profile", { ...context, updateData });
+
+    res.json({ message: "Profile updated" });
+  } catch (err) {
+    // logError("Update profile error", err as Error, context);
     res.status(500).json({ error: "Server error" });
   }
 });

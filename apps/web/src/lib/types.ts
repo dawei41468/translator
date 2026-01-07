@@ -4,7 +4,13 @@ export interface AuthUser {
   id: string;
   name: string;
   email: string;
+  displayName?: string;
   language: string;
+  preferences?: {
+    sttEngine?: string;
+    ttsEngine?: string;
+    translationEngine?: string;
+  };
 }
 
 export interface ApiError extends Error {

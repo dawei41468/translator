@@ -34,6 +34,9 @@ export function useSpeechEngine({
   const tRef = useRef(t);
   const isUserSpeakingRef = useRef(false);
   const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const requestDataIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const lastSpeechActivityAtRef = useRef<number>(0);
+  const bufferedAudioChunksRef = useRef<Blob[]>([]);
   const SILENCE_THRESHOLD_MS = 10000; // 10 seconds of silence before auto-stop
 
   useEffect(() => {
@@ -113,6 +116,13 @@ export function useSpeechEngine({
         silenceTimeoutRef.current = null;
       }
 
+      if (requestDataIntervalRef.current) {
+        clearInterval(requestDataIntervalRef.current);
+        requestDataIntervalRef.current = null;
+      }
+
+      bufferedAudioChunksRef.current = [];
+
       const sttEngine = speechEngineRegistry.getSttEngine();
       if (sttEngine) {
         sttEngine.stopRecognition();
@@ -177,15 +187,26 @@ export function useSpeechEngine({
   }, [stopRecordingInternalImpl]);
 
   const onVADSpeechStart = useCallback(() => {
+    lastSpeechActivityAtRef.current = Date.now();
     isUserSpeakingRef.current = true;
     console.log("VAD: User started speaking");
+
+    const socket = socketRef.current;
+    if (socket?.connected && bufferedAudioChunksRef.current.length > 0) {
+      for (const chunk of bufferedAudioChunksRef.current) {
+        socket.emit('speech-data', chunk);
+      }
+    }
+    bufferedAudioChunksRef.current = [];
+
     if (silenceTimeoutRef.current) {
       clearTimeout(silenceTimeoutRef.current);
       silenceTimeoutRef.current = null;
     }
-  }, []);
+  }, [socketRef]);
 
   const onVADSpeechEnd = useCallback(() => {
+    lastSpeechActivityAtRef.current = Date.now();
     isUserSpeakingRef.current = false;
     console.log("VAD: User stopped speaking");
 
@@ -307,12 +328,37 @@ export function useSpeechEngine({
       });
 
       mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0 && socket.connected && (soloModeRef.current || isUserSpeakingRef.current)) {
+        if (event.data.size <= 0) return;
+        if (!socket.connected) return;
+
+        const now = Date.now();
+        const recentlySpoke = now - lastSpeechActivityAtRef.current < 1200;
+        const shouldSend = soloModeRef.current || isUserSpeakingRef.current || recentlySpoke;
+        if (shouldSend) {
           socket.emit('speech-data', event.data);
+          return;
+        }
+
+        bufferedAudioChunksRef.current.push(event.data);
+        if (bufferedAudioChunksRef.current.length > 4) {
+          bufferedAudioChunksRef.current.shift();
         }
       };
 
       mediaRecorder.start(250);
+
+      // Android Chrome/PWA can be inconsistent about honoring timeslice; force periodic flush.
+      if (requestDataIntervalRef.current) clearInterval(requestDataIntervalRef.current);
+      requestDataIntervalRef.current = setInterval(() => {
+        try {
+          if (mediaRecorder.state === 'recording') {
+            mediaRecorder.requestData();
+          }
+        } catch {
+          // ignore
+        }
+      }, 250);
+
       mediaRecorderRef.current = mediaRecorder;
       isRecordingRef.current = true;
       setIsRecording(true);

@@ -465,21 +465,15 @@ const Conversation = () => {
 
   const stopRecordingInternal = () => {
     try {
-      const isAndroidPWA = navigator.userAgent.includes('Android') &&
-                          window.matchMedia('(display-mode: standalone)').matches;
       const sttEngine = speechEngineRegistry.getSttEngine();
 
-      // Stop STT engine (only when not using server-only fallback)
-      if (!(isAndroidPWA && sttEngine.getName().includes('Web Speech'))) {
-        if (sttEngine) {
-          sttEngine.stopRecognition();
-        }
+      if (sttEngine) {
+        sttEngine.stopRecognition();
       }
 
       // Stop media recorder
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
         mediaRecorderRef.current.stop();
-        // Clear event listeners to prevent memory leaks
         mediaRecorderRef.current.onstop = null;
         mediaRecorderRef.current.onerror = null;
         mediaRecorderRef.current.ondataavailable = null;
@@ -490,7 +484,6 @@ const Conversation = () => {
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => {
           track.stop();
-          // Remove all track event listeners
           track.onended = null;
           track.onmute = null;
           track.onunmute = null;
@@ -519,7 +512,6 @@ const Conversation = () => {
       flushPendingTts();
     } catch (error) {
       console.error('Error during audio cleanup:', error);
-      // Force reset state even if cleanup fails
       mediaRecorderRef.current = null;
       streamRef.current = null;
       isRecordingRef.current = false;
@@ -539,139 +531,80 @@ const Conversation = () => {
       if (!activeSocket) return;
 
       const languageCode = getSpeechRecognitionLocale(user?.language ?? "en");
-      const isAndroidPWA = navigator.userAgent.includes('Android') &&
-                          window.matchMedia('(display-mode: standalone)').matches;
 
-      // Get the selected STT engine
+      // Update STT status
+      setSttStatus(prev => ({
+        ...prev,
+        lastAttempt: `Starting recognition in ${languageCode}`,
+        language: languageCode,
+        recognitionStarted: false,
+        transcriptsReceived: 0,
+        lastError: undefined
+      }));
+
+      // Get STT engine and start recognition
       const sttEngine = speechEngineRegistry.getSttEngine();
+      const stream = await sttEngine.startRecognition({
+        onResult: (text, isFinal) => {
+          console.log('STT result received:', text, 'isFinal:', isFinal);
+          setSttStatus(prev => ({
+            ...prev,
+            transcriptsReceived: prev.transcriptsReceived + 1,
+            lastAttempt: `Received: "${text.substring(0, 30)}..." (${isFinal ? 'final' : 'interim'})`
+          }));
 
-      if (isAndroidPWA && sttEngine.getName().includes('Web Speech')) {
-        // Server-only STT fallback ONLY for Web Speech API on Android PWA
-        console.log('Using server-only STT fallback for Web Speech API on Android PWA');
-
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-          },
-        });
-        streamRef.current = stream;
-
-        activeSocket.emit('start-speech', {
-          languageCode,
-          soloMode,
-          soloTargetLang: soloMode ? soloTargetLang : undefined,
-        });
-
-        // Use MediaRecorder to capture audio and send chunks
-        const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-          ? 'audio/webm;codecs=opus'
-          : 'audio/webm';
-
-        const mediaRecorder = new MediaRecorder(stream, {
-          mimeType,
-          audioBitsPerSecond: 128000
-        });
-
-        mediaRecorder.ondataavailable = (event) => {
-          if (event.data.size > 0 && activeSocket.connected) {
-            activeSocket.emit('speech-data', event.data);
+          if (isFinal) {
+            activeSocket.emit('speech-transcript', { transcript: text, sourceLang: languageCode.split('-')[0] });
           }
-        };
+        },
+        onError: (error) => {
+          console.error('STT recognition error:', error);
+          setSttStatus(prev => ({
+            ...prev,
+            lastError: `Error: ${error.message || error}`,
+            recognitionStarted: false,
+            isRecording: false
+          }));
+          toast.error('Speech recognition failed');
+          stopRecordingInternal();
+        }
+      });
 
-        mediaRecorder.start(250); // Send data every 250ms
-        mediaRecorderRef.current = mediaRecorder;
+      // Update status when recognition starts
+      setSttStatus(prev => ({
+        ...prev,
+        recognitionStarted: true,
+        isRecording: true,
+        lastAttempt: `Recognition started in ${languageCode}`
+      }));
 
-        // Update STT status for server-only mode
-        setSttStatus(prev => ({
-          ...prev,
-          lastAttempt: `Server-only recognition started in ${languageCode}`,
-          language: languageCode,
-          recognitionStarted: true,
-          isRecording: true,
-          transcriptsReceived: 0,
-          lastError: undefined
-        }));
+      streamRef.current = stream;
+      activeSocket.emit('start-speech', {
+        languageCode,
+        soloMode,
+        soloTargetLang: soloMode ? soloTargetLang : undefined,
+      });
 
-        isRecordingRef.current = true;
-        setIsRecording(true);
-      } else {
-        // Use local STT engine for other platforms
-        // Update STT status
-        setSttStatus(prev => ({
-          ...prev,
-          lastAttempt: `Starting recognition in ${languageCode}`,
-          language: languageCode,
-          recognitionStarted: false,
-          transcriptsReceived: 0,
-          lastError: undefined
-        }));
+      // Use MediaRecorder to capture audio and send chunks
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : 'audio/webm';
 
-        // Get STT engine and start recognition
-        const sttEngine = speechEngineRegistry.getSttEngine();
-        const stream = await sttEngine.startRecognition({
-          onResult: (text, isFinal) => {
-            console.log('STT result received:', text, 'isFinal:', isFinal);
-            setSttStatus(prev => ({
-              ...prev,
-              transcriptsReceived: prev.transcriptsReceived + 1,
-              lastAttempt: `Received: "${text.substring(0, 30)}..." (${isFinal ? 'final' : 'interim'})`
-            }));
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType,
+        audioBitsPerSecond: 128000
+      });
 
-            if (isFinal) {
-              activeSocket.emit('speech-transcript', { transcript: text, sourceLang: languageCode.split('-')[0] });
-            }
-          },
-          onError: (error) => {
-            console.error('STT recognition error:', error);
-            setSttStatus(prev => ({
-              ...prev,
-              lastError: `Error: ${error.message || error}`,
-              recognitionStarted: false,
-              isRecording: false
-            }));
-            toast.error('Speech recognition failed');
-            stopRecordingInternal();
-          }
-        });
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0 && activeSocket.connected) {
+          activeSocket.emit('speech-data', event.data);
+        }
+      };
 
-        // Update status when recognition starts
-        setSttStatus(prev => ({
-          ...prev,
-          recognitionStarted: true,
-          isRecording: true,
-          lastAttempt: `Recognition started in ${languageCode}`
-        }));
-
-        streamRef.current = stream;
-        activeSocket.emit('start-speech', {
-          languageCode,
-          soloMode,
-          soloTargetLang: soloMode ? soloTargetLang : undefined,
-        });
-
-        // Use MediaRecorder to capture audio and send chunks
-        const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-          ? 'audio/webm;codecs=opus'
-          : 'audio/webm';
-
-        const mediaRecorder = new MediaRecorder(stream, {
-          mimeType,
-          audioBitsPerSecond: 128000
-        });
-
-        mediaRecorder.ondataavailable = (event) => {
-          if (event.data.size > 0 && activeSocket.connected) {
-            activeSocket.emit('speech-data', event.data);
-          }
-        };
-
-        mediaRecorder.start(250); // Send data every 250ms
-        mediaRecorderRef.current = mediaRecorder;
-        isRecordingRef.current = true;
-        setIsRecording(true);
-      }
+      mediaRecorder.start(250); // Send data every 250ms
+      mediaRecorderRef.current = mediaRecorder;
+      isRecordingRef.current = true;
+      setIsRecording(true);
     } catch (err) {
       console.error('Failed to start recording', err);
       setSttStatus(prev => ({

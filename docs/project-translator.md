@@ -105,11 +105,11 @@
 | QR scanner integration                     | High     | Completed    | You            |
 | Room code manual entry fallback            | High     | Completed    | You            |
 | Language selection per user (DB stored)    | High     | Completed    | Kilo           |
-| Real-time speech capture (Web Speech API)  | High     | Completed    | You            |
-| Send transcript to server                  | High     | Completed    | Kilo           |
+| Real-time speech capture (Google Cloud STT) | High     | Completed    | You            |
+| Send audio stream to server                | High     | Completed    | Kilo           |
 | Server-side translation (Google Cloud HK)  | High     | Completed    | Kilo           |
 | Broadcast translated text to other participant | High     | Completed    | Kilo           |
-| Client-side TTS (Web Speech API) + audio toggle | High     | Completed    | You            |
+| Client-side TTS (Google Cloud TTS) + audio toggle | High     | Completed    | You            |
 | UI-level audio toggle (OS handles routing) | High     | Completed    | You            |
 | Live chat-like UI with bubbles (You / Other) | High     | Completed    | You            |
 | Mobile-responsive conversation screen      | High     | Completed    | You            |
@@ -129,7 +129,7 @@
 | QR code generation + "Show QR Code" UI     | Completed    | High     | You   | qrcode.react library |
 | Dashboard "Scan QR Code to Join" + scanner | Completed    | High     | You   | html5-qrcode library |
 | Room code display + manual entry fallback  | Completed    | High     | You   | Short code (e.g., ABC-123) |
-| Core speech → translate → TTS loop         | Completed    | High     | Both  | End-to-end working with multi-user support |
+| Core speech → translate → TTS loop         | Completed    | High     | Both  | End-to-end working with Google Cloud STT/TTS |
 | i18n setup (copy OneProject)               | Completed    | High     | You   | en/zh/it/de/nl, separate JSONs, user preference in DB |
 | Loveable UI generation                     | Completed    | High     | Grok + You | Professional, clean, mobile-first design (waiting screen with QR focus) |
 | Audio toggle UI (OS-level routing)         | Completed    | Medium   | You   | Toggle implemented in Conversation.tsx |

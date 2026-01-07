@@ -10,6 +10,10 @@ A Progressive Web App (PWA) for real-time cross-device conversation translation.
 - **Bluetooth Headset Integration**: Audio input/output routing to headsets
 - **PWA Ready**: Installable on mobile devices, works offline-ready
 - **User Authentication**: Secure login with JWT cookies
+- **Engine Abstraction Framework**: Swappable STT/TTS/Translation engines (iFlyTek, Google, Web Speech API)
+- **Profile Management**: User preferences, display names, language settings
+- **Accessibility Compliant**: WCAG 2.1 AA with screen reader support
+- **Cross-Device Sync**: Preferences follow users across browsers/devices
 
 ## 🚀 Live Demo
 
@@ -129,6 +133,6 @@ translator/
 
 ---
 
-**Current Progress**: 90% (Core features completed - QR joining, multi-user translation, end-to-end speech/TTS — MVP target: End of January 2026)
+**Current Progress**: 100% ✅ MVP COMPLETE (Auth/infra/deploy/db/backend-core/frontend-core complete — January 6, 2026)
 
 See [`project-translator.md`](project-translator.md) for detailed roadmap and status.

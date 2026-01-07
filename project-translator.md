@@ -160,9 +160,9 @@
 - **Backend**: Node.js 20 + Express + Drizzle ORM + self-hosted PostgreSQL (local/prod servers)
 - **Real-Time**: Socket.io (authenticated via JWT cookie, room namespaces)
 - **Auth**: JWT in httpOnly cookie
-- **Translation (MVP)**: Google Cloud Translation Advanced v3 (asia-east2 region)
-- **TTS (MVP)**: Browser-native Web Speech API (SpeechSynthesis)
-- **TTS (Phase 2 Experiment)**: iFlyTek Online TTS + Grok Voice TTS
+- **Translation (MVP)**: Google Cloud Translation Advanced v3 (asia-east2 region) + Engine Abstraction Framework
+- **TTS (MVP)**: Browser-native Web Speech API (SpeechSynthesis) + Engine Abstraction Framework
+- **TTS (Phase 2 Experiment)**: iFlyTek Online TTS + Grok Voice TTS (via Engine Framework)
 - **QR Code**: qrcode.react (generation) + html5-qrcode (scanning)
 - **Deployment**: Tencent Lighthouse HK + EdgeOne CDN + NGINX reverse proxy
 - **Monorepo**: Turborepo + pnpm

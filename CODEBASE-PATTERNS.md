@@ -76,8 +76,9 @@ This document codifies the existing patterns in the Live Translator codebase so 
 ### Auth state
 
 - `AuthProvider` is the source of truth.
-  - On mount, it calls `apiClient.getMe()`.
+  - Uses `useQuery('me')` for reactive user state (auto-refetches on invalidations).
   - If user has `language`, it calls `i18n.changeLanguage(user.language)`.
+  - Provides `user`, `isAuthenticated`, `speechEngineRegistry` (reactive to preferences).
 
 ### API access
 
@@ -89,10 +90,9 @@ This document codifies the existing patterns in the Live Translator codebase so 
 ### Server state and caching
 
 - Use TanStack Query.
-- All server state hooks in `apps/web/src/lib/hooks.ts`:
-  - Read hooks via `useQuery`
-  - Write hooks via `useMutation`
-  - On success, invalidate related keys (list + detail).
+- Server state in `apps/web/src/lib/hooks.ts` (read via `useQuery`, write via `useMutation`).
+- Auth state via `AuthProvider` (uses `useQuery('me')` for reactive user data).
+- On mutation success, invalidate related keys.
 
 ### UI and styling
 
@@ -155,7 +155,7 @@ This document codifies the existing patterns in the Live Translator codebase so 
 ### i18n
 
 - `i18next` is initialized in `apps/web/src/lib/i18n.ts`.
-- Languages supported: `en`, `zh`, `it`, `de`, `nl`.
+- Languages supported: `en` (en-US), `zh` (cmn-CN), `it` (it-IT), `de` (de-DE), `nl` (nl-NL).
 
 ## Data model patterns
 
@@ -195,11 +195,374 @@ This document codifies the existing patterns in the Live Translator codebase so 
   - Run against a locally running dev/test server.
   - Target critical user journeys: Login, Room Creation/Join, Real-time Translation Test.
 
+## Engine Abstraction Pattern
+
+The app uses a provider pattern to abstract core speech and translation functions, enabling swappable engines with minimal code changes.
+
+### Architecture
+
+```mermaid
+graph TB
+    subgraph Frontend
+        A[Conversation.tsx] --> B[SpeechEngineRegistry]
+        B --> C[SttEngine Interface]
+        B --> D[TtsEngine Interface]
+        C --> E[WebSpeechSttEngine]
+        D --> F[WebSpeechTtsEngine]
+        C --> G[GoogleCloudTtsEngine]
+        D --> H[GrokTtsEngine]
+    end
+
+    subgraph Backend
+        I[Socket.ts] --> J[TranslationEngineRegistry]
+        J --> K[TranslationEngine Interface]
+        K --> L[GoogleTranslateEngine]
+        K --> M[GrokTranslationEngine]
+        K --> N[OpenAiTranslationEngine]
+    end
+
+    style A fill:#f9f
+    style I fill:#f9f
+    style B fill:#bbf
+    style J fill:#bbf
+    style E fill:#bfb
+    style F fill:#bfb
+    style L fill:#bfb
+```
+
+### Core Interfaces
+
+#### Speech Engines (Frontend)
+
+##### SttEngine Interface
+```typescript
+interface SttEngine {
+  initialize(config: { language: string }): Promise<void>;
+  startRecognition(options: {
+    onResult: (text: string, isFinal: boolean) => void;
+    onError: (error: Error) => void;
+  }): Promise<MediaStream>;
+  stopRecognition(): Promise<void>;
+  isAvailable(): boolean;
+  getName(): string;
+}
+```
+
+##### TtsEngine Interface
+```typescript
+interface TtsEngine {
+  initialize(): Promise<void>;
+  speak(text: string, language: string): Promise<void>;
+  stop(): void;
+  isAvailable(): boolean;
+  getVoices(): Promise<Array<{ id: string; name: string; lang: string }>>;
+  getName(): string;
+}
+```
+
+#### Translation Engine (Backend)
+
+```typescript
+interface TranslationEngine {
+  initialize(): Promise<void>;
+  translate(params: {
+    text: string;
+    sourceLang: string;
+    targetLang: string;
+    context?: string;
+  }): Promise<string>;
+  isAvailable(): boolean;
+  getName(): string;
+  getSupportedLanguages(): Promise<Array<{ code: string; name: string }>>;
+  estimateCost(text: string, sourceLang: string, targetLang: string): number;
+}
+```
+
+### Engine Registries
+
+#### SpeechEngineRegistry
+
+Manages STT and TTS engines with user preferences and automatic fallbacks.
+
+```typescript
+class SpeechEngineRegistry {
+  registerSttEngine(id: string, engine: SttEngine): void;
+  registerTtsEngine(id: string, engine: TtsEngine): void;
+  getSttEngine(): SttEngine;
+  getTtsEngine(): TtsEngine;
+  setEnginePreference(type: 'stt' | 'tts', engineId: string): void;
+  getAvailableSttEngines(): Array<{id: string, name: string}>;
+  getAvailableTtsEngines(): Array<{id: string, name: string}>;
+}
+```
+
+#### TranslationEngineRegistry
+
+Manages translation engines with per-user preferences.
+
+```typescript
+class TranslationEngineRegistry {
+  registerEngine(id: string, engine: TranslationEngine): void;
+  getEngine(userId?: string): TranslationEngine;
+  setUserPreference(userId: string, engineId: string): void;
+  getAvailableEngines(): Array<{id: string, name: string}>;
+}
+```
+
+### Implemented Engines
+
+#### ✅ Google Cloud TTS Engine
+
+**Status**: ✅ **COMPLETED** - Ready for production use
+
+**Files:**
+- `apps/web/src/lib/speech-engines/google-cloud-tts.ts` - Dynamic voice fetching and selection
+- `apps/web/src/lib/speech-engines/index.ts` - Engine registration
+- `.env.example` - Environment variables
+
+**Features:**
+- ✅ **Dynamic Voice Fetching** - Fetches available voices from API, filters to supported languages (en-US, cmn-CN, it-IT, de-DE, nl-NL)
+- ✅ **Reactive Registry** - SpeechEngineRegistry updates instantly on preference changes
+- ✅ **Automatic Fallbacks** - Picks valid voices, falls back to standards if needed
+- ✅ **Global Infrastructure** - Works from any location
+- ✅ **High-Quality Voices** - Standard and Wavenet options
+- ✅ **User-Selectable** - Available in Profile engine preferences
+
+**Environment Variables:**
+```bash
+VITE_GOOGLE_CLOUD_API_KEY=your-google-cloud-api-key
+GOOGLE_CLOUD_PROJECT_ID=your-google-cloud-project-id
+```
+
+### Adding New Engines
+
+#### Example: ElevenLabs TTS Engine
+
+#### Example: Grok Translation Engine
+
+1. **Create the engine implementation:**
+```typescript
+// apps/server/src/services/translation/grok-engine.ts
+import { TranslationEngine } from './translation-engine.js';
+
+export class GrokTranslationEngine implements TranslationEngine {
+  private apiKey: string;
+  private baseUrl: string = 'https://api.x.ai/v1';
+
+  constructor() {
+    this.apiKey = process.env.GROK_API_KEY || '';
+  }
+
+  isAvailable(): boolean {
+    return Boolean(this.apiKey);
+  }
+
+  getName(): string {
+    return 'Grok (xAI)';
+  }
+
+  async initialize(): Promise<void> {
+    // Verify API key
+  }
+
+  async translate(params: {
+    text: string;
+    sourceLang: string;
+    targetLang: string;
+    context?: string;
+  }): Promise<string> {
+    const prompt = this.buildTranslationPrompt(
+      params.text,
+      params.sourceLang,
+      params.targetLang,
+      params.context
+    );
+
+    const response = await fetch(`${this.baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'grok-2-latest',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.1,
+        max_tokens: 1000,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Grok API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.choices[0].message.content.trim();
+  }
+
+  private buildTranslationPrompt(
+    text: string,
+    sourceLang: string,
+    targetLang: string,
+    context?: string
+  ): string {
+    const languageNames = {
+      en: 'English',
+      zh: 'Chinese',
+      it: 'Italian',
+      de: 'German',
+      nl: 'Dutch',
+    };
+
+    const sourceName = languageNames[sourceLang as keyof typeof languageNames] || sourceLang;
+    const targetName = languageNames[targetLang as keyof typeof languageNames] || targetLang;
+
+    let prompt = `Translate the following text from ${sourceName} to ${targetName}.\n\n`;
+    prompt += `Text to translate: "${text}"\n\n`;
+    prompt += `Provide ONLY the translation, no explanations or additional text.`;
+
+    if (context) {
+      prompt += `\n\nContext for better translation: ${context}`;
+    }
+
+    return prompt;
+  }
+
+  async getSupportedLanguages(): Promise<Array<{ code: string; name: string }>> {
+    return [
+      { code: 'en', name: 'English' },
+      { code: 'zh', name: 'Chinese' },
+      { code: 'it', name: 'Italian' },
+      { code: 'de', name: 'German' },
+      { code: 'nl', name: 'Dutch' },
+    ];
+  }
+
+  estimateCost(text: string, sourceLang: string, targetLang: string): number {
+    const tokenCount = Math.ceil(text.length / 4);
+    return tokenCount * 0.000005; // grok-2: ~$5 per million tokens
+  }
+}
+```
+
+2. **Register the engine:**
+```typescript
+// In apps/server/src/services/translation/index.ts
+import { GrokTranslationEngine } from './grok-engine.js';
+
+translationRegistry.registerEngine('grok', new GrokTranslationEngine());
+```
+
+3. **Add environment variable:**
+```bash
+GROK_API_KEY=your_api_key_here
+```
+
+### Configuration
+
+#### Environment Variables
+
+| Variable | Description | Engine Type | Required |
+|----------|-------------|-------------|----------|
+| `VITE_GOOGLE_CLOUD_API_KEY` | Google Cloud TTS API key | TTS | Optional |
+| `GOOGLE_CLOUD_PROJECT_ID` | Google Cloud project ID | TTS/Translation | Required for Google services |
+
+#### User Preferences
+
+Users can select preferred engines through settings (future feature):
+
+```typescript
+// Set user preference
+speechEngineRegistry.setEnginePreference('tts', 'iflytek');
+translationRegistry.setUserPreference(userId, 'grok');
+```
+
+### Testing
+
+#### Unit Tests
+```typescript
+// apps/web/src/lib/speech-engines/__tests__/registry.test.ts
+import { describe, it, expect, vi } from 'vitest';
+import { SpeechEngineRegistry } from '../registry';
+import { SttEngine, TtsEngine } from '../types';
+
+describe('SpeechEngineRegistry', () => {
+  it('should register and retrieve STT engines', () => {
+    const registry = new SpeechEngineRegistry();
+    const mockEngine: SttEngine = {
+      initialize: vi.fn(),
+      startRecognition: vi.fn(),
+      stopRecognition: vi.fn(),
+      isAvailable: () => true,
+      getName: () => 'Mock STT'
+    };
+
+    registry.registerSttEngine('mock', mockEngine);
+    expect(registry.getSttEngine()).toBe(mockEngine);
+  });
+});
+```
+
+#### Integration Tests
+```typescript
+// Test engine switching
+describe('Engine Switching', () => {
+  it('should fallback to available engine when preferred engine fails', async () => {
+    const registry = new SpeechEngineRegistry();
+
+    // Register engines
+    registry.registerTtsEngine('primary', failingEngine);
+    registry.registerTtsEngine('fallback', workingEngine);
+
+    // Set preference to failing engine
+    registry.setEnginePreference('tts', 'primary');
+
+    // Should automatically use fallback
+    const engine = registry.getTtsEngine();
+    expect(engine.getName()).toBe('Working TTS Engine');
+  });
+});
+```
+
+### Best Practices
+
+#### Engine Implementation
+1. **Always implement `isAvailable()`** - Check for API keys, browser support, etc.
+2. **Handle errors gracefully** - Provide meaningful error messages
+3. **Implement cost estimation** - Especially important for LLM-based engines
+4. **Support context** - LLMs benefit from conversation context for better translations
+
+#### Registry Usage
+1. **Use fallbacks** - Always have a working fallback engine
+2. **Cache preferences** - Store user preferences in localStorage/DB
+3. **Lazy initialization** - Only initialize engines when needed
+4. **Monitor performance** - Track latency and success rates
+
+#### Error Handling
+```typescript
+// Always wrap engine calls with try-catch
+try {
+  const result = await engine.translate(params);
+  return result;
+} catch (error) {
+  logger.error('Engine failed', { engine: engine.getName(), error });
+  // Try fallback engine or return original text
+  return params.text;
+}
+```
+
+### Key Benefits
+- **Swappable Engines**: Add new STT/TTS/Translation providers with ~50 lines of code
+- **Automatic Fallbacks**: Graceful degradation when preferred engines are unavailable
+- **User Preferences**: Per-user engine selection (future feature)
+- **Cost Management**: Built-in cost estimation for LLM-based engines
+
 ## Pattern decisions (authoritative)
 
 - Backend: Express + Drizzle/TDSQL-C PostgreSQL.
 - Frontend: React Router + TanStack Query + shadcn/ui + Tailwind.
 - Auth: httpOnly cookie JWT.
 - Real-time: Socket.io (authenticated via JWT cookie).
-- Translation: Google Cloud Translation (asia-east2).
+- Translation: Google Cloud Translation (asia-east2) + Engine Abstraction Framework.
+- Speech: Web Speech API (Browser) + Engine Abstraction Framework.
 - Deployment: PM2 + NGINX on Tencent Lighthouse HK.

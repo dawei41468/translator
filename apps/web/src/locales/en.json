@@ -2,6 +2,7 @@
   "app.name": "Live Translator",
   "app.description": "Real-time translated conversations",
   "nav.dashboard": "Dashboard",
+  "nav.profile": "Profile",
   "nav.settings": "Settings",
   "auth.login": "Login",
   "auth.register": "Register",
@@ -123,5 +124,27 @@
   "error.speechNotSupported": "Speech recognition not supported",
   "error.enterCode": "Please enter a room code",
   "error.invalidQR": "Invalid QR code",
-  "error.roomNotFound": "Room not found"
+  "error.roomNotFound": "Room not found",
+  "profile": {
+    "title": "Profile",
+    "accountInfo": "Account Information",
+    "enginePreferences": "Engine Preferences",
+    "accountActions": "Account Actions",
+    "email": "Email",
+    "displayName": "Display Name",
+    "language": "Language",
+    "defaultSttEngine": "Default STT Engine",
+    "defaultTtsEngine": "Default TTS Engine",
+    "defaultTranslationEngine": "Default Translation Engine",
+    "emailDescription": "Your email address cannot be changed",
+    "displayNameDescription": "This name will be shown in conversations",
+    "displayNamePlaceholder": "Enter your display name",
+    "languageDescription": "Your preferred language for the interface and speech recognition",
+    "sttEngineDescription": "Engine used for speech-to-text conversion",
+    "ttsEngineDescription": "Engine used for text-to-speech playback",
+    "translationEngineDescription": "Engine used for language translation",
+    "saveSuccess": "Settings saved successfully",
+    "saveError": "Failed to save settings",
+    "logout": "Logout"
+  }
 }

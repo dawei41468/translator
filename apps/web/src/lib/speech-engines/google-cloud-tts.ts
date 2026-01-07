@@ -1,17 +1,14 @@
 import { TtsEngine } from './types';
+import { apiClient } from '../api';
 
 export class GoogleCloudTtsEngine implements TtsEngine {
-  private apiKey: string;
-  private baseUrl = 'https://texttospeech.googleapis.com/v1';
   private audioContext: AudioContext | null = null;
   private availableVoices: any[] = [];
 
-  constructor() {
-    this.apiKey = import.meta.env.VITE_GOOGLE_CLOUD_API_KEY || '';
-  }
+  constructor() {}
 
   isAvailable(): boolean {
-    return Boolean(this.apiKey);
+    return true; // Now server-side, always available as long as server is up
   }
 
   getName(): string {
@@ -20,33 +17,25 @@ export class GoogleCloudTtsEngine implements TtsEngine {
 
   async initialize(): Promise<void> {
     // AudioContext for playing the audio
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && !this.audioContext) {
       this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      
+      // Handle state changes
+      this.audioContext.onstatechange = () => {
+        console.log('Google Cloud TTS: AudioContext state changed:', this.audioContext?.state);
+      };
     }
 
-    // Fetch all available voices and filter to supported languages
-    const supportedLanguages = ['en-US', 'cmn-CN', 'it-IT', 'de-DE', 'nl-NL'];
-    try {
-      const response = await fetch(`https://texttospeech.googleapis.com/v1/voices?key=${this.apiKey}`, {
-        method: 'GET',
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Google Cloud TTS: All fetched voices:', data.voices?.length || 0);
-        // Log unique languages
-        const allLangs = [...new Set(data.voices?.map((v: any) => v.languageCodes[0]) || [])];
-        console.log('Available languages:', allLangs);
-        this.availableVoices = (data.voices || []).filter((voice: any) =>
-          supportedLanguages.includes(voice.languageCodes[0])
-        );
-        console.log('Google Cloud TTS: Filtered to', this.availableVoices.length, 'voices for supported languages');
-      } else {
-        console.error('Failed to fetch voices:', response.statusText);
-      }
-    } catch (error) {
-      console.error('Error fetching voices:', error);
-    }
+    // Voice fetching could be moved to server as well for full security,
+    // but for now we'll use a hardcoded set or a server endpoint if we add one later.
+    // The current implementation of speak() uses hardcoded defaults if voices aren't loaded.
+    this.availableVoices = [
+      { name: 'en-US-Neural2-C', languageCodes: ['en-US'], ssmlGender: 'FEMALE' },
+      { name: 'cmn-CN-Wavenet-A', languageCodes: ['cmn-CN'], ssmlGender: 'FEMALE' },
+      { name: 'it-IT-Neural2-A', languageCodes: ['it-IT'], ssmlGender: 'FEMALE' },
+      { name: 'de-DE-Neural2-G', languageCodes: ['de-DE'], ssmlGender: 'FEMALE' },
+      { name: 'nl-NL-Wavenet-F', languageCodes: ['nl-NL'], ssmlGender: 'FEMALE' },
+    ];
   }
 
   async speak(text: string, language: string): Promise<void> {
@@ -54,42 +43,28 @@ export class GoogleCloudTtsEngine implements TtsEngine {
       throw new Error('AudioContext not initialized');
     }
 
+    // Resume AudioContext if it's suspended (browser policy)
+    if (this.audioContext.state === 'suspended') {
+      await this.audioContext.resume();
+    }
+
     // Map language codes to Google Cloud TTS voices
     const voiceConfig = this.getVoiceConfig(language);
 
-    const requestBody = {
-      input: { text },
-      voice: {
+    try {
+      const audioArrayBuffer = await apiClient.synthesizeSpeech({
+        text,
         languageCode: voiceConfig.languageCode,
-        name: voiceConfig.voiceName,
-        ssmlGender: voiceConfig.ssmlGender
-      },
-      audioConfig: {
-        audioEncoding: 'MP3',
-        speakingRate: 1.0,
-        pitch: 0,
-        volumeGainDb: 0
-      }
-    };
+        voiceName: voiceConfig.voiceName,
+        ssmlGender: voiceConfig.ssmlGender,
+      });
 
-    const response = await fetch(`${this.baseUrl}/text:synthesize?key=${this.apiKey}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(requestBody)
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(`Google Cloud TTS error: ${error.error?.message || response.statusText}`);
+      const audioBuffer = await this.audioContext.decodeAudioData(audioArrayBuffer);
+      await this.playAudioBuffer(audioBuffer);
+    } catch (error) {
+      console.error('Google Cloud TTS synthesis failed:', error);
+      throw error;
     }
-
-    const data = await response.json();
-
-    // Play the audio
-    const audioBuffer = await this.decodeBase64Audio(data.audioContent);
-    await this.playAudioBuffer(audioBuffer);
   }
 
   stop(): void {
@@ -127,11 +102,11 @@ export class GoogleCloudTtsEngine implements TtsEngine {
 
     // Fallback to hardcoded defaults if no voice found
     const configs: Record<string, { languageCode: string; voiceName: string; ssmlGender: string }> = {
-      'en': { languageCode: 'en-US', voiceName: 'en-US-Standard-A', ssmlGender: 'FEMALE' },
-      'zh': { languageCode: 'zh-CN', voiceName: 'zh-CN-Standard-A', ssmlGender: 'FEMALE' },
-      'it': { languageCode: 'it-IT', voiceName: 'it-IT-Standard-A', ssmlGender: 'FEMALE' },
-      'de': { languageCode: 'de-DE', voiceName: 'de-DE-Standard-A', ssmlGender: 'FEMALE' },
-      'nl': { languageCode: 'nl-NL', voiceName: 'nl-NL-Standard-A', ssmlGender: 'FEMALE' },
+      'en': { languageCode: 'en-US', voiceName: 'en-US-Neural2-C', ssmlGender: 'FEMALE' },
+      'zh': { languageCode: 'cmn-CN', voiceName: 'cmn-CN-Wavenet-A', ssmlGender: 'FEMALE' },
+      'it': { languageCode: 'it-IT', voiceName: 'it-IT-Neural2-A', ssmlGender: 'FEMALE' },
+      'de': { languageCode: 'de-DE', voiceName: 'de-DE-Neural2-G', ssmlGender: 'FEMALE' },
+      'nl': { languageCode: 'nl-NL', voiceName: 'nl-NL-Wavenet-F', ssmlGender: 'FEMALE' },
     };
 
     return configs[language] || configs['en'];
@@ -146,20 +121,6 @@ export class GoogleCloudTtsEngine implements TtsEngine {
       'nl': 'nl-NL',
     };
     return codes[language] || 'en-US';
-  }
-
-  private async decodeBase64Audio(base64Audio: string): Promise<AudioBuffer> {
-    if (!this.audioContext) {
-      throw new Error('AudioContext not initialized');
-    }
-
-    const binaryString = atob(base64Audio);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
-
-    return await this.audioContext.decodeAudioData(bytes.buffer);
   }
 
   private async playAudioBuffer(audioBuffer: AudioBuffer): Promise<void> {

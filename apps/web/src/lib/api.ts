@@ -107,6 +107,34 @@ class ApiClient {
     });
   }
 
+  // TTS endpoint
+  async synthesizeSpeech(data: {
+    text: string;
+    languageCode: string;
+    voiceName?: string;
+    ssmlGender?: string;
+  }) {
+    const url = `${this.baseURL}/api/tts/synthesize`;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(data),
+      credentials: "include",
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.json().catch(() => ({ error: "TTS failed" }));
+      const err = new Error(getErrorMessage(errorBody, `HTTP ${response.status}`)) as ApiError;
+      err.status = response.status;
+      err.data = errorBody;
+      throw err;
+    }
+
+    return response.arrayBuffer();
+  }
+
   // Room endpoints
   async createRoom() {
     return this.request<{ roomId: string; roomCode: string }>("/api/rooms", {

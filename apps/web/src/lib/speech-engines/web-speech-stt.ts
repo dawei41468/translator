@@ -26,8 +26,7 @@ export class WebSpeechSttEngine implements SttEngine {
     onResult: (text: string, isFinal: boolean) => void;
     onError: (error: Error) => void;
   }): Promise<MediaStream> {
-    this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
+    // Set up event handlers before starting recognition
     this.recognition.onresult = (event: any) => {
       let finalTranscript = '';
       let interimTranscript = '';
@@ -52,7 +51,24 @@ export class WebSpeechSttEngine implements SttEngine {
       options.onError(new Error(event.error));
     };
 
+    // Start recognition first - this handles microphone permission internally on Android PWA
     this.recognition.start();
+
+    // Wait a bit for recognition to initialize, then try to get explicit media stream
+    // This is a workaround for Android PWA compatibility
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    try {
+      // Try to get the active media stream if available
+      // On Android PWA, speech recognition may work without explicit getUserMedia
+      this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (error) {
+      console.warn('Could not get explicit media stream, but speech recognition may still work:', error);
+      // Don't throw error here - speech recognition might work without explicit stream access
+      // Create an empty stream as fallback
+      this.stream = new MediaStream();
+    }
+
     return this.stream;
   }
 

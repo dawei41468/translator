@@ -3,6 +3,7 @@ import { SttEngine } from './types';
 export class WebSpeechSttEngine implements SttEngine {
   private recognition: any = null;
   private stream: MediaStream | null = null;
+  private language: string = 'en-US';
 
   isAvailable(): boolean {
     return typeof window !== 'undefined' &&
@@ -14,19 +15,27 @@ export class WebSpeechSttEngine implements SttEngine {
   }
 
   async initialize(config: { language: string }): Promise<void> {
+    this.language = config.language;
+  }
+
+  private createRecognitionInstance(): any {
     const SpeechRecognition = (window as any).SpeechRecognition ||
                              (window as any).webkitSpeechRecognition;
-    this.recognition = new SpeechRecognition();
-    this.recognition.continuous = true;
-    this.recognition.interimResults = true;
-    this.recognition.lang = config.language;
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = this.language;
+    return recognition;
   }
 
   async startRecognition(options: {
     onResult: (text: string, isFinal: boolean) => void;
     onError: (error: Error) => void;
   }): Promise<MediaStream> {
-    // Set up event handlers before starting recognition
+    // Create a new recognition instance each time (required for Android PWA)
+    this.recognition = this.createRecognitionInstance();
+
+    // Set up event handlers
     this.recognition.onresult = (event: any) => {
       let finalTranscript = '';
       let interimTranscript = '';
@@ -48,7 +57,12 @@ export class WebSpeechSttEngine implements SttEngine {
     };
 
     this.recognition.onerror = (event: any) => {
-      options.onError(new Error(event.error));
+      console.error('Speech recognition error:', event.error, event);
+      options.onError(new Error(event.error || 'Speech recognition failed'));
+    };
+
+    this.recognition.onend = () => {
+      console.log('Speech recognition ended');
     };
 
     // Start recognition first - this handles microphone permission internally on Android PWA
@@ -74,7 +88,13 @@ export class WebSpeechSttEngine implements SttEngine {
 
   async stopRecognition(): Promise<void> {
     if (this.recognition) {
-      this.recognition.stop();
+      try {
+        this.recognition.stop();
+      } catch (error) {
+        console.warn('Error stopping recognition:', error);
+      }
+      // Clear the recognition instance so a new one can be created next time
+      this.recognition = null;
     }
     if (this.stream) {
       this.stream.getTracks().forEach(track => track.stop());

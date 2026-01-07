@@ -1,5 +1,5 @@
 // packages/db/src/schema.ts
-import { pgTable, uuid, varchar, timestamp, text, boolean, index } from "drizzle-orm/pg-core";
+import { pgTable, uuid, varchar, timestamp, text, boolean, index, jsonb } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
@@ -8,7 +8,13 @@ export const users = pgTable("users", {
   email: varchar("email", { length: 255 }).unique().notNull(),
   passwordHash: varchar("password_hash", { length: 255 }).notNull(),
   name: varchar("name", { length: 255 }),
+  displayName: varchar("display_name", { length: 255 }),
   language: varchar("language", { length: 10 }).default("en"),
+  preferences: jsonb("preferences").$type<{
+    sttEngine?: string;
+    ttsEngine?: string;
+    translationEngine?: string;
+  }>(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => sql`now()`),
   deletedAt: timestamp("deleted_at"),

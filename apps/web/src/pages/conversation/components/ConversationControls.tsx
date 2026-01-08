@@ -195,7 +195,7 @@ export function ConversationControls({
 
           {!canStartRecording && (
             <p className="text-center text-xs text-muted-foreground" role="note">
-              You're the only person in the room. Enable Solo mode to test speaking.
+              {t('conversation.onlyParticipantHint')}
             </p>
           )}
 

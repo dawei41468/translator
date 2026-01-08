@@ -49,6 +49,7 @@
   "conversation.soloMode": "单人模式",
   "conversation.translateTo": "翻译为",
   "conversation.soloModeHint": "选择输出语言。",
+  "conversation.onlyParticipantHint": "你是房间里唯一的人。启用单人模式来测试说话。",
   "conversation.languageDescription": "选择您的语言用于语音识别和翻译",
   "conversation.originalText": "原文",
   "conversation.ttsNotSupported": "此设备不支持文本转语音功能",

@@ -49,6 +49,7 @@
   "conversation.soloMode": "Solo-Modus",
   "conversation.translateTo": "Übersetzen nach",
   "conversation.soloModeHint": "Wählen Sie die Ausgabesprache.",
+  "conversation.onlyParticipantHint": "Sie sind die einzige Person im Raum. Aktivieren Sie den Solo-Modus, um das Sprechen zu testen.",
   "conversation.languageDescription": "Wählen Sie Ihre Sprache für Spracherkennung und Übersetzungen",
   "conversation.originalText": "Original",
   "conversation.ttsNotSupported": "Text-zu-Sprache wird auf diesem Gerät nicht unterstützt",

@@ -49,6 +49,7 @@
   "conversation.soloMode": "Modalità solo",
   "conversation.translateTo": "Traduci in",
   "conversation.soloModeHint": "Scegli la lingua di output.",
+  "conversation.onlyParticipantHint": "Sei l'unica persona nella stanza. Abilita la modalità Solo per provare a parlare.",
   "conversation.languageDescription": "Seleziona la tua lingua per il riconoscimento vocale e le traduzioni",
   "conversation.originalText": "Originale",
   "conversation.ttsNotSupported": "La sintesi vocale non è supportata su questo dispositivo",

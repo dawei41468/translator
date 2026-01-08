@@ -63,6 +63,7 @@
   "conversation.soloMode": "Solo mode",
   "conversation.translateTo": "Translate to",
   "conversation.soloModeHint": "Choose the output language.",
+  "conversation.onlyParticipantHint": "You're the only person in the room. Enable Solo mode to test speaking.",
   "conversation.connected": "Connected",
   "conversation.reconnecting": "Reconnecting",
   "conversation.reconnected": "Reconnected to conversation",

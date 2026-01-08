@@ -49,6 +49,7 @@
   "conversation.soloMode": "Solomodus",
   "conversation.translateTo": "Vertalen naar",
   "conversation.soloModeHint": "Kies de uitvoertaal.",
+  "conversation.onlyParticipantHint": "Je bent de enige persoon in de kamer. Schakel de solomodus in om spreken te testen.",
   "conversation.languageDescription": "Selecteer uw taal voor spraakherkenning en vertalingen",
   "conversation.originalText": "Origineel",
   "conversation.ttsNotSupported": "Tekst-naar-spraak wordt niet ondersteund op dit apparaat",

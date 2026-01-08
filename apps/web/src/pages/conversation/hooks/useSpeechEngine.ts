@@ -29,6 +29,8 @@ export function useSpeechEngine({
   const { t } = useTranslation();
   const [isRecording, setIsRecording] = useState(false);
   const isRecordingRef = useRef(false);
+  const isStartingRef = useRef(false);
+  const lifecycleTokenRef = useRef(0);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const vadRef = useRef<ReturnType<typeof useMicVAD> | null>(null);
@@ -191,10 +193,14 @@ export function useSpeechEngine({
   }, [speechEngineRegistry, socketRef, flushPendingTts]);
 
   const stopRecordingInternal = useCallback(() => {
+    lifecycleTokenRef.current += 1;
+    isStartingRef.current = false;
     stopRecordingInternalImpl();
   }, [stopRecordingInternalImpl]);
 
   const stopRecordingForUnmount = useCallback(() => {
+    lifecycleTokenRef.current += 1;
+    isStartingRef.current = false;
     stopRecordingInternalImpl({ skipVadPause: true });
   }, [stopRecordingInternalImpl]);
 
@@ -298,6 +304,10 @@ export function useSpeechEngine({
   }, [stopRecordingInternal]);
 
   const startRecordingInternal = useCallback(async () => {
+    if (isRecordingRef.current || isStartingRef.current) return;
+    const token = (lifecycleTokenRef.current += 1);
+    isStartingRef.current = true;
+
     try {
       const socket = socketRef.current;
       if (!socket) return;
@@ -343,6 +353,11 @@ export function useSpeechEngine({
         }
       });
 
+      if (token !== lifecycleTokenRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+
       setSttStatus(prev => ({
         ...prev,
         recognitionStarted: true,
@@ -360,6 +375,11 @@ export function useSpeechEngine({
       // Start VAD
       await vadRef.current?.start();
 
+      if (token !== lifecycleTokenRef.current) {
+        stopRecordingInternalImpl({ skipVadPause: true });
+        return;
+      }
+
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
         ? 'audio/webm;codecs=opus'
         : (MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : null);
@@ -373,13 +393,24 @@ export function useSpeechEngine({
         audioBitsPerSecond: 128000
       });
 
+      if (token !== lifecycleTokenRef.current) {
+        stopRecordingInternalImpl({ skipVadPause: true });
+        return;
+      }
+
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size <= 0) return;
+
         if (!socket.connected) {
           bufferedAudioChunksRef.current.push(event.data);
           if (bufferedAudioChunksRef.current.length > 8) {
             bufferedAudioChunksRef.current.shift();
           }
+          return;
+        }
+
+        if (disableAutoStopOnSilenceRef.current) {
+          socket.emit('speech-data', event.data);
           return;
         }
 
@@ -415,6 +446,14 @@ export function useSpeechEngine({
           if (!sock?.connected) return;
           if (bufferedAudioChunksRef.current.length === 0) return;
 
+          if (disableAutoStopOnSilenceRef.current) {
+            for (const chunk of bufferedAudioChunksRef.current) {
+              sock.emit('speech-data', chunk);
+            }
+            bufferedAudioChunksRef.current = [];
+            return;
+          }
+
           const now = Date.now();
           const recentlySpoke = now - lastSpeechActivityAtRef.current < 1200;
           const shouldSend = soloModeRef.current || isUserSpeakingRef.current || recentlySpoke;
@@ -433,6 +472,9 @@ export function useSpeechEngine({
       isRecordingRef.current = true;
       setIsRecording(true);
     } catch (err) {
+      if (token !== lifecycleTokenRef.current) {
+        return;
+      }
       setSttStatus(prev => ({
         ...prev,
         lastError: `Failed to start: ${err instanceof Error ? err.message : String(err)}`,
@@ -441,6 +483,10 @@ export function useSpeechEngine({
       }));
       toast.error(tRef.current('error.generic'));
       stopRecordingInternal();
+    } finally {
+      if (token === lifecycleTokenRef.current) {
+        isStartingRef.current = false;
+      }
     }
   }, [socketRef, userLanguage, speechEngineRegistry, soloMode, soloTargetLang, stopRecordingInternal]);
 

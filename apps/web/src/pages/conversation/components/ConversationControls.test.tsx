@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ConversationControls } from './ConversationControls';
 
@@ -27,6 +27,7 @@ describe('ConversationControls (push-to-talk)', () => {
       startRecording,
       stopRecording,
       pushToTalkEnabled: opts?.pushToTalkEnabled ?? true,
+      canStartRecording: true,
       connectionStatus: 'connected',
       soloMode: false,
       toggleSoloMode: vi.fn(),
@@ -80,7 +81,9 @@ describe('ConversationControls (push-to-talk)', () => {
     fireEvent.pointerDown(btn, { pointerId: 1, clientY: 200 });
     expect(h.startRecording).toHaveBeenCalledTimes(1);
 
-    vi.advanceTimersByTime(60_000);
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
     expect(h.stopRecording).toHaveBeenCalledTimes(1);
   });
 });

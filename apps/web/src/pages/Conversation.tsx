@@ -79,6 +79,17 @@ const Conversation = () => {
     }
   });
 
+  const pushToTalkEnabled = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    const coarse = typeof window.matchMedia === 'function' && (
+      window.matchMedia('(pointer: coarse)').matches || window.matchMedia('(any-pointer: coarse)').matches
+    );
+    const hoverNone = typeof window.matchMedia === 'function' && (
+      window.matchMedia('(hover: none)').matches || window.matchMedia('(any-hover: none)').matches
+    );
+    return coarse && hoverNone;
+  }, []);
+
   const {
     isRecording,
     sttStatus,
@@ -98,20 +109,8 @@ const Conversation = () => {
     audioEnabled,
     soloMode,
     soloTargetLang,
-    disableAutoStopOnSilence: useMemo(() => {
-      if (typeof window === 'undefined') return false;
-      const coarse = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
-      const touchPoints = typeof navigator !== 'undefined' ? (navigator.maxTouchPoints ?? 0) : 0;
-      return coarse || touchPoints > 0;
-    }, []),
+    disableAutoStopOnSilence: pushToTalkEnabled,
   });
-
-  const pushToTalkEnabled = useMemo(() => {
-    if (typeof window === 'undefined') return false;
-    const coarse = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
-    const touchPoints = typeof navigator !== 'undefined' ? (navigator.maxTouchPoints ?? 0) : 0;
-    return coarse || touchPoints > 0;
-  }, []);
 
   const isRecordingRef = useRef(isRecording);
   useEffect(() => {
@@ -427,6 +426,7 @@ const Conversation = () => {
         startRecording={startRecordingGuarded}
         stopRecording={stopRecording}
         pushToTalkEnabled={pushToTalkEnabled}
+        canStartRecording={canStartRecording}
         connectionStatus={connectionStatus}
         soloMode={soloMode}
         toggleSoloMode={() => setSoloMode(p => !p)}

@@ -18,6 +18,7 @@ interface ConversationControlsProps {
   startRecording: () => void;
   stopRecording: () => void;
   pushToTalkEnabled: boolean;
+  canStartRecording: boolean;
   connectionStatus: string;
   soloMode: boolean;
   toggleSoloMode: () => void;
@@ -32,6 +33,7 @@ export function ConversationControls({
   startRecording,
   stopRecording,
   pushToTalkEnabled,
+  canStartRecording,
   connectionStatus,
   soloMode,
   toggleSoloMode,
@@ -196,6 +198,10 @@ export function ConversationControls({
               if (isLocked) return;
               e.preventDefault();
               e.currentTarget.setPointerCapture?.(e.pointerId);
+              if (!isRecordingRef.current && !canStartRecording) {
+                startRecording();
+                return;
+              }
               startSession(e.clientY);
             } : undefined}
             onPointerMove={pushToTalkEnabled ? (e) => {

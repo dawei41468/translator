@@ -172,7 +172,27 @@ export default defineConfig(({ mode }) => {
         workbox: {
           // Disable precaching in development to avoid workbox warnings
           disableDevLogs: true,
-          globPatterns: isDev ? [] : ['**/*.{js,css,html,ico,png,svg,woff2,wasm,onnx,mjs,json}'],
+          globPatterns: isDev ? [] : ['**/*.{js,css,html,ico,png,svg,woff2,mjs,json}'],
+          globIgnores: [
+            'vad/**/*.wasm',
+            'vad/**/*.onnx',
+          ],
+          runtimeCaching: [
+            {
+              urlPattern: ({ url }) => url.pathname.startsWith('/vad/'),
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'vad-assets',
+                expiration: {
+                  maxEntries: 30,
+                  maxAgeSeconds: 60 * 60 * 24 * 30,
+                },
+                cacheableResponse: {
+                  statuses: [0, 200],
+                },
+              },
+            },
+          ],
         },
         devOptions: {
           enabled: isDev,

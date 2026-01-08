@@ -128,7 +128,8 @@ const Conversation = () => {
     stopRecordingInternal,
     stopRecordingForUnmount,
     speakText,
-    refreshVoices
+    refreshVoices,
+    recordingParamsRef
   } = useSpeechEngine({
     speechEngineRegistry,
     socketRef,
@@ -231,11 +232,12 @@ const Conversation = () => {
       setConnectionStatus('connected');
 
       if (isRecordingRef.current) {
-        socketInstance.emit('start-speech', {
+        const params = recordingParamsRef.current || {
           languageCode: sttStatusRef.current.language,
           soloMode: soloModeRef.current,
           soloTargetLang: soloModeRef.current ? soloTargetLangRef.current : undefined,
-        });
+        };
+        socketInstance.emit('start-speech', params);
       }
     });
 

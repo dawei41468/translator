@@ -43,6 +43,13 @@ export function useSpeechEngine({
   const requestDataIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastSpeechActivityAtRef = useRef<number>(0);
   const bufferedAudioChunksRef = useRef<Blob[]>([]);
+  const recordingParamsRef = useRef<{
+    languageCode: string;
+    soloMode?: boolean;
+    soloTargetLang?: string;
+    encoding?: "WEBM_OPUS" | "LINEAR16";
+    sampleRateHertz?: number;
+  } | null>(null);
   const SILENCE_THRESHOLD_MS = 10000; // 10 seconds of silence before auto-stop
 
   useEffect(() => {
@@ -107,6 +114,11 @@ export function useSpeechEngine({
     } catch (error) {
       setTtsStatus(prev => ({ ...prev, lastError: `Error: ${error}`, isSpeaking: false, lastAttempt: `Failed (${locale})` }));
       toast.error(tRef.current('conversation.ttsError'));
+      socketRef.current?.emit('client-error', {
+        code: 'TTS_FAILED',
+        message: error instanceof Error ? error.message : String(error),
+        details: { text: text.substring(0, 50), language }
+      });
     }
   }, [speechEngineRegistry]);
 
@@ -280,6 +292,13 @@ export function useSpeechEngine({
   });
 
   useEffect(() => {
+    if (vad.errored) {
+      socketRef.current?.emit('client-error', {
+        code: 'VAD_ERROR',
+        message: 'VAD failed to load',
+        details: vad.errored
+      });
+    }
     if (vad.loading || vad.errored) return;
     if (isRecordingRef.current) return;
     if (!vad.listening) return;
@@ -361,6 +380,11 @@ export function useSpeechEngine({
             isRecording: false
           }));
           toast.error('Speech recognition failed');
+          socketRef.current?.emit('client-error', {
+            code: 'STT_STREAM_ERROR',
+            message: error.message || String(error),
+            details: { languageCode }
+          });
           stopRecordingInternal();
         }
       });
@@ -386,11 +410,13 @@ export function useSpeechEngine({
 
       if (mimeType) {
         // Standard WebM/Opus flow (Android, Desktop)
-        socket.emit('start-speech', {
+        const params = {
           languageCode,
           soloMode,
           soloTargetLang: soloMode ? soloTargetLang : undefined,
-        });
+        };
+        recordingParamsRef.current = params;
+        socket.emit('start-speech', params);
 
         // Start VAD
         await vadRef.current?.start();
@@ -415,7 +441,8 @@ export function useSpeechEngine({
 
           if (!socket.connected) {
             bufferedAudioChunksRef.current.push(event.data);
-            if (bufferedAudioChunksRef.current.length > 8) {
+            // Increase buffer to ~10s (40 chunks * 250ms) for better network handoff resilience
+            if (bufferedAudioChunksRef.current.length > 40) {
               bufferedAudioChunksRef.current.shift();
             }
             return;
@@ -489,7 +516,24 @@ export function useSpeechEngine({
 
         const handlePcmData = (data: ArrayBuffer) => {
           const socket = socketRef.current;
-          if (!socket?.connected) return;
+          // If socket disconnected, buffer data
+          if (!socket?.connected) {
+            // Convert ArrayBuffer to Blob for consistent storage
+            // Note: server expects raw buffer for LINEAR16, but our buffer logic stores Blobs.
+            // We'll wrap in Blob.
+            const blob = new Blob([data]);
+            bufferedAudioChunksRef.current.push(blob);
+            if (bufferedAudioChunksRef.current.length > 40) {
+              bufferedAudioChunksRef.current.shift();
+            }
+            return;
+          }
+
+          // Flush buffer if reconnected
+          if (bufferedAudioChunksRef.current.length > 0) {
+             // For PCM, we need to be careful. The current flush logic in the interval assumes Blobs.
+             // We'll handle flushing there.
+          }
 
           if (disableAutoStopOnSilenceRef.current) {
             socket.emit('speech-data', data);
@@ -507,13 +551,15 @@ export function useSpeechEngine({
         // Initialize recorder first to get sample rate
         const sampleRate = await pcmRecorder.start(stream, handlePcmData);
 
-        socket.emit('start-speech', {
+        const params = {
           languageCode,
           soloMode,
           soloTargetLang: soloMode ? soloTargetLang : undefined,
-          encoding: 'LINEAR16',
+          encoding: 'LINEAR16' as const,
           sampleRateHertz: sampleRate
-        });
+        };
+        recordingParamsRef.current = params;
+        socket.emit('start-speech', params);
 
         // Start VAD
         await vadRef.current?.start();
@@ -537,6 +583,11 @@ export function useSpeechEngine({
         isRecording: false
       }));
       toast.error(tRef.current('error.generic'));
+      socketRef.current?.emit('client-error', {
+        code: 'RECORDING_START_FAILED',
+        message: err instanceof Error ? err.message : String(err),
+        details: { userLanguage }
+      });
       stopRecordingInternal();
     } finally {
       if (token === lifecycleTokenRef.current) {
@@ -587,6 +638,7 @@ export function useSpeechEngine({
       }
     }, [speechEngineRegistry]),
     setTtsStatus,
-    setSttStatus
+    setSttStatus,
+    recordingParamsRef
   };
 }

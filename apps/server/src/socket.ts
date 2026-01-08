@@ -651,6 +651,22 @@ export function setupSocketIO(io: Server) {
       handleTranscript(data.transcript, data.sourceLang);
     });
 
+    socket.on("client-error", (data: { code: string; message: string; details?: any }) => {
+      // Rate limit telemetry to prevent log flooding
+      if (!socket.userId || !checkRateLimit(socket.userId, 'client-error', 10, 60000)) {
+        return;
+      }
+
+      logger.error("Client reported error", {
+        userId: socket.userId,
+        roomId: socket.roomId,
+        code: data.code,
+        message: data.message,
+        details: data.details,
+        userAgent: socket.handshake.headers['user-agent']
+      });
+    });
+
     socket.on("disconnect", (reason) => {
       logger.info(`User disconnected from socket`, {
         userId: socket.userId,

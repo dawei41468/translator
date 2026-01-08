@@ -6,7 +6,7 @@ import { MockSttEngine, MockTtsEngine } from './mock-engines';
 export function createSpeechEngineRegistry(preferences?: { stt?: string; tts?: string; translation?: string }) {
   const registry = new SpeechEngineRegistry(preferences);
 
-  const useMocks = import.meta.env.VITE_USE_MOCKS === 'true' || import.meta.env.MODE === 'test';
+  const useMocks = import.meta.env.MODE === 'test';
 
   if (useMocks) {
     registry.registerSttEngine('google-cloud-stt', new MockSttEngine());

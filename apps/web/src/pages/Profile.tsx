@@ -94,6 +94,31 @@ const Profile = () => {
 
   const preferences = user.preferences || {};
 
+	const DEFAULT_STT_ENGINE_ID = "google-cloud-stt";
+	const DEFAULT_TTS_ENGINE_ID = "google-cloud";
+
+	const allSttEngines = speechEngineRegistry.getAvailableSttEngines();
+	const sttEnginesNoMocks = allSttEngines.filter((e) => !e.id.startsWith("mock-"));
+	const availableSttEngines = sttEnginesNoMocks.length > 0 ? sttEnginesNoMocks : allSttEngines;
+	const resolvedSttEngineId =
+		preferences.sttEngine && availableSttEngines.some((e) => e.id === preferences.sttEngine)
+			? preferences.sttEngine
+			: availableSttEngines.some((e) => e.id === DEFAULT_STT_ENGINE_ID)
+					? DEFAULT_STT_ENGINE_ID
+					: availableSttEngines[0]?.id || DEFAULT_STT_ENGINE_ID;
+
+	const allTtsEngines = speechEngineRegistry.getAvailableTtsEngines();
+	const ttsEnginesNoMocks = allTtsEngines.filter((e) => !e.id.startsWith("mock-"));
+	const availableTtsEngines = ttsEnginesNoMocks.length > 0 ? ttsEnginesNoMocks : allTtsEngines;
+	const resolvedTtsEngineId =
+		preferences.ttsEngine && availableTtsEngines.some((e) => e.id === preferences.ttsEngine)
+			? preferences.ttsEngine
+			: availableTtsEngines.some((e) => e.id === DEFAULT_TTS_ENGINE_ID)
+					? DEFAULT_TTS_ENGINE_ID
+					: availableTtsEngines[0]?.id || DEFAULT_TTS_ENGINE_ID;
+
+  const resolvedTranslationEngineId = "google-translate";
+
   return (
     <div className="container mx-auto px-4 py-8 max-w-2xl">
       <div className="flex items-center gap-3 mb-8">
@@ -197,7 +222,7 @@ const Profile = () => {
             <div>
               <Label htmlFor="sttEngine">{t('profile.defaultSttEngine', 'Default STT Engine')}</Label>
               <Select
-                value={preferences.sttEngine || "google-cloud-stt"}
+                value={resolvedSttEngineId}
                 onValueChange={(value) => handleEnginePreferenceChange('stt', value)}
                 disabled={updateProfileMutation.isPending}
               >
@@ -205,7 +230,7 @@ const Profile = () => {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {speechEngineRegistry.getAvailableSttEngines().map((engine) => (
+                  {availableSttEngines.map((engine) => (
                     <SelectItem key={engine.id} value={engine.id}>
                       {engine.name}
                     </SelectItem>
@@ -220,7 +245,7 @@ const Profile = () => {
             <div>
               <Label htmlFor="ttsEngine">{t('profile.defaultTtsEngine', 'Default TTS Engine')}</Label>
               <Select
-                value={preferences.ttsEngine || "web-speech-api"}
+                value={resolvedTtsEngineId}
                 onValueChange={(value) => handleEnginePreferenceChange('tts', value)}
                 disabled={updateProfileMutation.isPending}
               >
@@ -228,7 +253,7 @@ const Profile = () => {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {speechEngineRegistry.getAvailableTtsEngines().map((engine) => (
+                  {availableTtsEngines.map((engine) => (
                     <SelectItem key={engine.id} value={engine.id}>
                       {engine.name}
                     </SelectItem>
@@ -243,7 +268,7 @@ const Profile = () => {
             <div>
               <Label htmlFor="translationEngine">{t('profile.defaultTranslationEngine', 'Default Translation Engine')}</Label>
               <Select
-                value={preferences.translationEngine || "google-translate"}
+                value={resolvedTranslationEngineId}
                 onValueChange={(value) => handleEnginePreferenceChange('translation', value)}
                 disabled={updateProfileMutation.isPending}
               >
@@ -251,7 +276,7 @@ const Profile = () => {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="google-translate">
+                  <SelectItem value={resolvedTranslationEngineId}>
                     Google Cloud Translation
                   </SelectItem>
                 </SelectContent>

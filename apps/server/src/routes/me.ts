@@ -12,6 +12,21 @@ const router = express.Router();
 const AUTH_COOKIE_NAME = "auth_token";
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
 
+function normalizeEnginePreferences(preferences: any): any {
+  if (!preferences || typeof preferences !== "object") return preferences;
+
+  const next = { ...preferences };
+
+  if (next.sttEngine === "web-speech-api") {
+    next.sttEngine = "google-cloud-stt";
+  }
+  if (next.ttsEngine === "web-speech-api") {
+    next.ttsEngine = "google-cloud";
+  }
+
+  return next;
+}
+
 function getUserIdFromJwtPayload(payload: string | JwtPayload): string | null {
   if (typeof payload === "string") return null;
   const userId = payload["userId"];
@@ -51,7 +66,7 @@ router.get("/", async (req, res) => {
         email: user.email,
         displayName: user.displayName,
         language: user.language,
-        preferences: user.preferences,
+        preferences: normalizeEnginePreferences(user.preferences),
       },
     });
   } catch {
@@ -99,20 +114,26 @@ router.patch("/", authenticate, async (req, res) => {
         return res.status(400).json({ error: "Invalid preferences format" });
       }
 
+      const normalizedPreferences = normalizeEnginePreferences(preferences);
+
       // Validate specific preference fields
-      const validSttEngines = ["web-speech-api"];
-      const validTtsEngines = ["web-speech-api", "google-cloud"];
+      const validSttEngines = ["google-cloud-stt"];
+      const validTtsEngines = ["google-cloud"];
       const validTranslationEngines = ["google-translate"];
 
-      if (preferences.sttEngine && !validSttEngines.includes(preferences.sttEngine)) {
+      if (normalizedPreferences.sttEngine && !validSttEngines.includes(normalizedPreferences.sttEngine)) {
         return res.status(400).json({ error: "Invalid STT engine" });
       }
-      if (preferences.ttsEngine && !validTtsEngines.includes(preferences.ttsEngine)) {
+      if (normalizedPreferences.ttsEngine && !validTtsEngines.includes(normalizedPreferences.ttsEngine)) {
         return res.status(400).json({ error: "Invalid TTS engine" });
       }
-      if (preferences.translationEngine && !validTranslationEngines.includes(preferences.translationEngine)) {
+      if (normalizedPreferences.translationEngine && !validTranslationEngines.includes(normalizedPreferences.translationEngine)) {
         return res.status(400).json({ error: "Invalid translation engine" });
       }
+
+      // Always persist normalized preferences
+      preferences.sttEngine = normalizedPreferences.sttEngine;
+      preferences.ttsEngine = normalizedPreferences.ttsEngine;
     }
 
     const updateData: any = {};

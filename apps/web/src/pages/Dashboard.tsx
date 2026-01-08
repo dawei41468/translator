@@ -16,7 +16,6 @@ const Dashboard = () => {
   const { isAuthenticated } = useAuth();
   const [createdRoom, setCreatedRoom] = useState<{ code: string; id: string } | null>(null);
   const [showScanner, setShowScanner] = useState(false);
-  const [showQr, setShowQr] = useState(false);
   const [manualCode, setManualCode] = useState("");
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const [permissionStatus, setPermissionStatus] = useState<'checking' | 'granted' | 'denied' | 'prompt'>('checking');
@@ -365,6 +364,11 @@ const Dashboard = () => {
                 <p className="text-sm text-muted-foreground mb-4">{t("room.waitingPrompt")}</p>
               </div>
 
+              <div className="bg-background p-4 rounded-lg mb-4 flex justify-center border" aria-label={t("room.qrCodeAlt")}
+              >
+                <QRCodeCanvas value={createdRoom.code} size={240} bgColor="#ffffff" fgColor="#000000" aria-hidden="true" />
+              </div>
+
               <div className="rounded-lg border bg-background p-4 text-center">
                 <div className="text-xs text-muted-foreground mb-1">{t("room.code")}</div>
                 <div className="font-mono text-2xl font-bold tracking-widest">{createdRoom.code}</div>
@@ -382,9 +386,6 @@ const Dashboard = () => {
               </div>
 
               <div className="space-y-2 mt-4">
-                <Button type="button" className="w-full" size="lg" onClick={() => setShowQr(true)}>
-                  {t("room.showQrButton")}
-                </Button>
                 <Button type="button" className="w-full" variant="secondary" size="lg" onClick={handleJoinConversation} data-testid="enter-room-button">
                   {t("room.enter")}
                 </Button>
@@ -396,36 +397,6 @@ const Dashboard = () => {
             </Button>
           </div>
         )}
-
-        {createdRoom && showQr && (
-           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" role="dialog" aria-modal="true" aria-labelledby="qr-modal-title">
-             <div className="border rounded-xl bg-card text-card-foreground shadow-sm p-5 max-w-sm w-full mx-4" role="document">
-               <h3 id="qr-modal-title" className="text-lg font-semibold mb-2 text-center">{t("room.qrTitle")}</h3>
-               <p className="text-sm text-muted-foreground mb-4 text-center">{t("room.qrDescription")}</p>
-
-               <div className="bg-background p-4 rounded-lg mb-4 flex justify-center border" aria-label={t("room.qrCodeAlt")}>
-                 <QRCodeCanvas value={createdRoom.code} size={240} bgColor="#ffffff" fgColor="#000000" aria-hidden="true" />
-               </div>
-
-               <div className="rounded-lg border bg-background p-4 text-center mb-4">
-                 <div className="text-xs text-muted-foreground mb-1">{t("room.code")}</div>
-                 <div className="font-mono text-xl font-bold tracking-widest" aria-label={`${t("room.code")}: ${createdRoom.code}`}>{createdRoom.code}</div>
-                 <div className="mt-3">
-                   <Button type="button" variant="outline" onClick={() => handleCopy(createdRoom.code)} className="w-full" aria-describedby="copy-instruction">
-                     {t("room.copyCode")}
-                   </Button>
-                   <span id="copy-instruction" className="sr-only">{t("room.copyCodeDesc")}</span>
-                 </div>
-               </div>
-
-               <div className="space-y-2">
-                 <Button type="button" className="w-full" variant="secondary" onClick={() => setShowQr(false)} aria-label={t("common.closeModal")} autoFocus>
-                   {t("common.cancel")}
-                 </Button>
-               </div>
-             </div>
-           </div>
-         )}
 
         {showScanner && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" role="dialog" aria-modal="true" aria-labelledby="scanner-modal-title">

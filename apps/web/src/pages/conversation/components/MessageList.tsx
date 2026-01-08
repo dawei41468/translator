@@ -5,15 +5,14 @@ import { useTranslation } from "react-i18next";
 
 interface MessageListProps {
   messages: Message[];
-  soloMode: boolean;
 }
 
-export function MessageList({ messages, soloMode }: MessageListProps) {
+export function MessageList({ messages }: MessageListProps) {
   const { t } = useTranslation();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   };
 
   useEffect(() => {
@@ -23,8 +22,7 @@ export function MessageList({ messages, soloMode }: MessageListProps) {
   return (
     <main 
       className={cn(
-        "flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 pt-32",
-        soloMode ? "pb-48" : "pb-40"
+        "flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-4"
       )} 
       role="log" 
       aria-live="polite" 

@@ -35,7 +35,7 @@ export function RoomHeader({
   const { t } = useTranslation();
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-10 bg-background border-b p-4 sm:p-6" role="banner">
+    <header className="p-4 pt-5 sm:p-6 sm:pt-7" role="banner">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-3">
           <div className="inline-flex items-center gap-2 rounded-full bg-muted px-3 py-1" role="status" aria-label={t('conversation.connectionStatus')}>

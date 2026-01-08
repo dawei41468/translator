@@ -138,7 +138,7 @@ export function ConversationControls({
   }, [secondsLeft]);
 
   return (
-    <footer className="fixed bottom-0 left-0 right-0 z-10 bg-background border-t p-4 pb-8 sm:p-6 overscroll-contain touch-none" role="contentinfo">
+    <footer className="relative p-4 pb-8 sm:p-6 overscroll-contain touch-none" role="contentinfo">
       <Button
         type="button"
         variant={soloMode ? "default" : "outline"}

@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/ui/error-state";
+import { Card } from "@/components/ui/card";
 import { useAuth } from "@/lib/auth";
 import { LANGUAGES } from "@/lib/languages";
 
@@ -397,46 +398,52 @@ const Conversation = () => {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-background" style={{ overscrollBehavior: 'none' }}>
-      <RoomHeader
-        roomCode={roomData.code}
-        connectionStatus={connectionStatus}
-        audioEnabled={audioEnabled}
-        toggleAudio={toggleAudio}
-        onLeave={() => navigate('/dashboard')}
-        userLanguage={user?.language}
-        onUpdateLanguage={handleUpdateLanguage}
-        isUpdatingLanguage={updateLanguageMutation.isPending}
-      />
+    <div className="h-[100dvh] bg-background grid grid-rows-[auto_1fr_auto] gap-0 px-0 py-0 sm:px-0 sm:py-0" style={{ overscrollBehavior: 'none' }}>
+      <Card className="rounded-none">
+        <RoomHeader
+          roomCode={roomData.code}
+          connectionStatus={connectionStatus}
+          audioEnabled={audioEnabled}
+          toggleAudio={toggleAudio}
+          onLeave={() => navigate('/dashboard')}
+          userLanguage={user?.language}
+          onUpdateLanguage={handleUpdateLanguage}
+          isUpdatingLanguage={updateLanguageMutation.isPending}
+        />
 
-      <DebugPanel
-        isTtsDebugEnabled={isTtsDebugEnabled}
-        debugPanelExpanded={debugPanelExpanded}
-        setDebugPanelExpanded={setDebugPanelExpanded}
-        sttStatus={sttStatus}
-        ttsStatus={ttsStatus}
-        refreshVoices={refreshVoices}
-      />
+        <DebugPanel
+          isTtsDebugEnabled={isTtsDebugEnabled}
+          debugPanelExpanded={debugPanelExpanded}
+          setDebugPanelExpanded={setDebugPanelExpanded}
+          sttStatus={sttStatus}
+          ttsStatus={ttsStatus}
+          refreshVoices={refreshVoices}
+        />
+      </Card>
 
-      <MessageList messages={messages} soloMode={soloMode} />
+      <Card className="min-h-0 overflow-hidden flex flex-col rounded-none border-t-0 shadow-none">
+        <MessageList messages={messages} />
+      </Card>
 
-      <ConversationControls
-        isRecording={isRecording}
-        toggleRecording={handleToggleRecording}
-        startRecording={startRecordingGuarded}
-        stopRecording={stopRecording}
-        pushToTalkEnabled={pushToTalkEnabled}
-        canStartRecording={canStartRecording}
-        connectionStatus={connectionStatus}
-        soloMode={soloMode}
-        toggleSoloMode={() => setSoloMode(p => !p)}
-        soloTargetLang={soloTargetLang}
-        onSoloLangChange={(val) => {
-          setSoloTargetLang(val);
-          setHasUserSelectedSoloLang(true);
-        }}
-        userLanguage={user?.language}
-      />
+      <Card className="rounded-none border-t-0 shadow-none">
+        <ConversationControls
+          isRecording={isRecording}
+          toggleRecording={handleToggleRecording}
+          startRecording={startRecordingGuarded}
+          stopRecording={stopRecording}
+          pushToTalkEnabled={pushToTalkEnabled}
+          canStartRecording={canStartRecording}
+          connectionStatus={connectionStatus}
+          soloMode={soloMode}
+          toggleSoloMode={() => setSoloMode(p => !p)}
+          soloTargetLang={soloTargetLang}
+          onSoloLangChange={(val) => {
+            setSoloTargetLang(val);
+            setHasUserSelectedSoloLang(true);
+          }}
+          userLanguage={user?.language}
+        />
+      </Card>
     </div>
   );
 };

@@ -381,6 +381,14 @@ export function setupSocketIO(io: Server) {
 
       const messageId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
+      const normalizeLang = (lang: string | null | undefined) => {
+        const raw = (lang ?? "").trim();
+        if (!raw) return "en";
+        return raw.replace(/_/g, "-").split("-")[0]!.toLowerCase();
+      };
+
+      const normalizedSourceLang = normalizeLang(sourceLang);
+
       try {
         const participants = await withRetry(() =>
           db.query.roomParticipants.findMany({
@@ -404,16 +412,36 @@ export function setupSocketIO(io: Server) {
         }
 
         const participantsByLanguage = new Map<string, typeof otherParticipants>();
+        const sameLanguageParticipants: typeof otherParticipants = [];
 
         for (const participant of otherParticipants) {
-          const lang = participant.user.language || "en";
+          const lang = normalizeLang(participant.user.language || "en");
+
+          if (lang === normalizedSourceLang) {
+            sameLanguageParticipants.push(participant);
+            continue;
+          }
+
           if (!participantsByLanguage.has(lang)) {
             participantsByLanguage.set(lang, []);
           }
           participantsByLanguage.get(lang)!.push(participant);
         }
 
-        if (otherParticipants.length > 0) {
+        // Deliver transcript directly (no translation) to participants already using the speaker's language.
+        for (const participant of sameLanguageParticipants) {
+          io.to(`user:${participant.userId}`).emit("translated-message", {
+            originalText: transcript,
+            translatedText: transcript,
+            sourceLang: normalizedSourceLang,
+            targetLang: normalizedSourceLang,
+            fromUserId: socket.userId,
+            toUserId: participant.userId,
+            speakerName,
+          });
+        }
+
+        if (participantsByLanguage.size > 0) {
           const translationPromises = Array.from(participantsByLanguage.entries()).map(
             async ([targetLang, participants]) => {
               try {
@@ -421,7 +449,7 @@ export function setupSocketIO(io: Server) {
                 const translatedText = await withRetry(
                   () => translationEngine.translate({
                     text: transcript,
-                    sourceLang,
+                    sourceLang: normalizedSourceLang,
                     targetLang,
                     context: `Room: ${socket.roomId}`
                   }),
@@ -443,7 +471,7 @@ export function setupSocketIO(io: Server) {
                 io.to(`user:${participant.userId}`).emit("translated-message", {
                   originalText: transcript,
                   translatedText,
-                  sourceLang,
+                  sourceLang: normalizedSourceLang,
                   targetLang,
                   fromUserId: socket.userId,
                   toUserId: participant.userId,
@@ -467,7 +495,7 @@ export function setupSocketIO(io: Server) {
         socket.emit("recognized-speech", {
           id: messageId,
           text: transcript,
-          sourceLang,
+          sourceLang: normalizedSourceLang,
           speakerName,
         });
 
@@ -477,7 +505,7 @@ export function setupSocketIO(io: Server) {
             const translatedText = await withRetry(
               () => translationEngine.translate({
                 text: transcript,
-                sourceLang,
+                sourceLang: normalizedSourceLang,
                 targetLang: socket.soloTargetLang!,
                 context: `Solo mode - Room: ${socket.roomId}`
               }),

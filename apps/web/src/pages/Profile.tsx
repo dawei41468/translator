@@ -96,6 +96,7 @@ const Profile = () => {
 
 	const DEFAULT_STT_ENGINE_ID = "google-cloud-stt";
 	const DEFAULT_TTS_ENGINE_ID = "google-cloud";
+	const DEFAULT_TRANSLATION_ENGINE_ID = "google-translate";
 
 	const allSttEngines = speechEngineRegistry.getAvailableSttEngines();
 	const sttEnginesNoMocks = allSttEngines.filter((e) => !e.id.startsWith("mock-"));
@@ -117,7 +118,16 @@ const Profile = () => {
 					? DEFAULT_TTS_ENGINE_ID
 					: availableTtsEngines[0]?.id || DEFAULT_TTS_ENGINE_ID;
 
-  const resolvedTranslationEngineId = "google-translate";
+	const availableTranslationEngines = [
+		{ id: "google-translate", name: "Google Cloud Translation" },
+		{ id: "grok-translate", name: "Grok (xAI) Translation" },
+	];
+
+	const resolvedTranslationEngineId =
+		preferences.translationEngine &&
+		availableTranslationEngines.some((e) => e.id === preferences.translationEngine)
+			? preferences.translationEngine
+			: DEFAULT_TRANSLATION_ENGINE_ID;
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-2xl">
@@ -276,9 +286,11 @@ const Profile = () => {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={resolvedTranslationEngineId}>
-                    Google Cloud Translation
-                  </SelectItem>
+                  {availableTranslationEngines.map((engine) => (
+                    <SelectItem key={engine.id} value={engine.id}>
+                      {engine.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <p className="text-sm text-muted-foreground mt-1">

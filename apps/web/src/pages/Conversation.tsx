@@ -164,14 +164,22 @@ const Conversation = () => {
     socketRef.current = socket;
   }, [socket]);
 
-  // Sync soloTargetLang with user language on initial load
+  // Sync soloTargetLang with user language on initial load and ensure it remains valid
   useEffect(() => {
+    const availableLanguages = LANGUAGES.filter(lang => lang.code !== user?.language);
     if (!hasUserSelectedSoloLang) {
-      const availableLanguages = LANGUAGES.filter(lang => lang.code !== user?.language);
       const next = availableLanguages[0]?.code || LANGUAGES[0]?.code || "en";
       setSoloTargetLang(next);
+      return;
     }
-  }, [user?.language, hasUserSelectedSoloLang]);
+
+    if (!availableLanguages.some(lang => lang.code === soloTargetLang)) {
+      const fallback = availableLanguages[0]?.code || LANGUAGES[0]?.code || "en";
+      if (fallback && fallback !== soloTargetLang) {
+        setSoloTargetLang(fallback);
+      }
+    }
+  }, [user?.language, hasUserSelectedSoloLang, soloTargetLang]);
 
   // Save messages to sessionStorage
   useEffect(() => {

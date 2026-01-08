@@ -119,7 +119,7 @@ router.patch("/", authenticate, async (req, res) => {
       // Validate specific preference fields
       const validSttEngines = ["google-cloud-stt"];
       const validTtsEngines = ["google-cloud"];
-      const validTranslationEngines = ["google-translate"];
+      const validTranslationEngines = ["google-translate", "grok-translate"];
 
       if (normalizedPreferences.sttEngine && !validSttEngines.includes(normalizedPreferences.sttEngine)) {
         return res.status(400).json({ error: "Invalid STT engine" });
@@ -134,6 +134,7 @@ router.patch("/", authenticate, async (req, res) => {
       // Always persist normalized preferences
       preferences.sttEngine = normalizedPreferences.sttEngine;
       preferences.ttsEngine = normalizedPreferences.ttsEngine;
+      preferences.translationEngine = normalizedPreferences.translationEngine;
     }
 
     const updateData: any = {};

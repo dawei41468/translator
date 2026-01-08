@@ -97,4 +97,62 @@ describe('TranslationEngineRegistry', () => {
       context: 'test context'
     });
   });
+
+  it('should use grok engine when user prefers grok and grok succeeds', async () => {
+    const grokEngine: TranslationEngine = {
+      ...mockEngine,
+      translate: vi.fn().mockResolvedValue('grok translated'),
+      getName: () => 'Grok',
+    };
+    const googleEngine: TranslationEngine = {
+      ...mockEngine,
+      translate: vi.fn().mockResolvedValue('google translated'),
+      getName: () => 'Google',
+    };
+
+    registry.registerEngine('google-translate', googleEngine);
+    registry.registerEngine('grok-translate', grokEngine);
+    registry.setUserPreference('user123', 'grok-translate');
+
+    const engine = registry.getEngine('user123');
+    const result = await engine.translate({
+      text: 'hello',
+      sourceLang: 'en',
+      targetLang: 'es',
+      context: 'ctx'
+    });
+
+    expect(result).toBe('grok translated');
+    expect(grokEngine.translate).toHaveBeenCalledTimes(1);
+    expect(googleEngine.translate).not.toHaveBeenCalled();
+  });
+
+  it('should fallback to google when user prefers grok but grok errors', async () => {
+    const grokEngine: TranslationEngine = {
+      ...mockEngine,
+      translate: vi.fn().mockRejectedValue(new Error('grok down')),
+      getName: () => 'Grok',
+    };
+    const googleEngine: TranslationEngine = {
+      ...mockEngine,
+      translate: vi.fn().mockResolvedValue('google translated'),
+      getName: () => 'Google',
+    };
+
+    registry.registerEngine('google-translate', googleEngine);
+    registry.registerEngine('grok-translate', grokEngine);
+    registry.setUserPreference('user123', 'grok-translate');
+
+    const engine = registry.getEngine('user123');
+    const result = await engine.translate({
+      text: 'hello',
+      sourceLang: 'en',
+      targetLang: 'es',
+      context: 'ctx'
+    });
+
+    expect(result).toBe('google translated');
+    expect(grokEngine.translate).toHaveBeenCalledTimes(1);
+    expect(googleEngine.translate).toHaveBeenCalledTimes(1);
+  });
 });

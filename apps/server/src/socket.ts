@@ -162,6 +162,12 @@ export function setupSocketIO(io: Server) {
       }
 
       socket.userId = userId;
+
+      const preferredTranslationEngine = (user as any)?.preferences?.translationEngine;
+      if (typeof preferredTranslationEngine === 'string' && preferredTranslationEngine.length > 0) {
+        translationRegistry.setUserPreference(userId, preferredTranslationEngine);
+      }
+
       next();
     } catch (err) {
       logger.warn("Socket authentication failed", {

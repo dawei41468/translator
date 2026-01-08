@@ -416,7 +416,10 @@ const Conversation = () => {
   }
 
   return (
-    <div className="h-[100dvh] bg-background grid grid-rows-[auto_1fr_auto] gap-0 px-0 py-0 sm:px-0 sm:py-0" style={{ overscrollBehavior: 'none' }}>
+    <div
+      className="h-[calc(100dvh-64px)] bg-background grid grid-rows-[auto_1fr_auto] gap-0 px-0 py-0 sm:px-0 sm:py-0"
+      style={{ overscrollBehavior: 'none' }}
+    >
       <Card className="rounded-none">
         <RoomHeader
           roomCode={roomData.code}

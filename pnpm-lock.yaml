@@ -87,6 +87,9 @@ importers:
       jsonwebtoken:
         specifier: ^9.0.2
         version: 9.0.3
+      lru-cache:
+        specifier: ^11.2.4
+        version: 11.2.4
       multer:
         specifier: ^2.0.2
         version: 2.0.2

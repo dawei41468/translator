@@ -1,15 +1,26 @@
 import { TranslationEngine } from './translation-engine.js';
 import { TranslationServiceClient } from "@google-cloud/translate";
 import { logger } from '../../logger.js';
+import { LRUCache } from 'lru-cache';
 
 export class GoogleTranslateEngine implements TranslationEngine {
   private client: TranslationServiceClient | null = null;
   private projectId: string;
   private location: string;
+  private cache: LRUCache<string, string>;
 
   constructor() {
     this.projectId = process.env.GOOGLE_CLOUD_PROJECT_ID || '';
     this.location = this.getTranslationLocation();
+    
+    // Initialize LRU Cache
+    // Capacity: 5000 items (approx 5-10MB RAM depending on text length)
+    // TTL: 24 hours
+    this.cache = new LRUCache({
+      max: 5000,
+      ttl: 1000 * 60 * 60 * 24,
+      updateAgeOnGet: true,
+    });
   }
 
   isAvailable(): boolean {
@@ -35,6 +46,23 @@ export class GoogleTranslateEngine implements TranslationEngine {
     const normalizedText = params.text.trim();
     if (!normalizedText) return params.text;
 
+    // Check cache
+    // Key format: source:target:text
+    // Use MD5 or just string if short? String is fine for typical chat messages.
+    // If we wanted to be safer with memory we could limit key length, 
+    // but the LRU max size protects us.
+    const cacheKey = `${params.sourceLang}:${params.targetLang}:${normalizedText}`;
+    
+    const cached = this.cache.get(cacheKey);
+    if (cached) {
+      logger.debug('Translation cache hit', { 
+        source: params.sourceLang, 
+        target: params.targetLang, 
+        textLen: normalizedText.length 
+      });
+      return cached;
+    }
+
     const request = {
       parent: `projects/${this.projectId}/locations/${this.location}`,
       contents: [normalizedText],
@@ -49,7 +77,12 @@ export class GoogleTranslateEngine implements TranslationEngine {
       throw new Error("No translation returned");
     }
 
-    return response.translations[0].translatedText;
+    const translatedText = response.translations[0].translatedText;
+
+    // Store in cache
+    this.cache.set(cacheKey, translatedText);
+
+    return translatedText;
   }
 
   async getSupportedLanguages(): Promise<Array<{ code: string; name: string }>> {

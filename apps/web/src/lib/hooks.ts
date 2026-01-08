@@ -20,7 +20,6 @@ export const useCreateRoom = () => {
     mutationFn: () => apiClient.createRoom(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["rooms"] });
-      toast.success(t("toast.roomCreated"));
     },
     onError: (error: any) => {
       toast.error(error?.message || t("toast.createRoomFailed"));
@@ -77,7 +76,6 @@ export const useUpdateLanguage = () => {
       // Await the invalidation to ensure user data is updated before changing language
       await queryClient.invalidateQueries({ queryKey: ["me"] });
       i18n.changeLanguage(language);
-      toast.success(t("toast.languageUpdated"));
     },
     onError: (error: any) => {
       console.error('useUpdateLanguage onError:', error);
@@ -90,10 +88,9 @@ export const useUpdateUser = () => {
   const queryClient = useQueryClient();
   const { t } = useTranslation();
   return useMutation({
-    mutationFn: (data: { name?: string; language?: string }) => apiClient.updateMe(data),
+    mutationFn: (data: { displayName?: string; language?: string; preferences?: any }) => apiClient.updateMe(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["me"] });
-      toast.success(t("toast.profileUpdated"));
     },
     onError: (error: any) => {
       toast.error(error?.message || t("toast.updateProfileFailed"));

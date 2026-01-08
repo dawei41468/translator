@@ -393,7 +393,7 @@ export function setupSocketIO(io: Server) {
 
         // Get the speaker's name for this message
         const speaker = participants.find((p) => p.userId === socket.userId);
-        const speakerName = speaker?.user?.name || "Unknown User";
+        const speakerName = speaker?.user?.displayName || speaker?.user?.name || "Unknown User";
 
         const otherParticipants = participants.filter((p) => p.userId !== socket.userId);
         if (otherParticipants.length === 0 && !socket.soloMode) return;

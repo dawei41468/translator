@@ -9,11 +9,13 @@ import { useAuth } from "@/lib/auth";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Card } from "@/components/ui/card";
 
 const Dashboard = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
+  const isIOS = typeof navigator !== 'undefined' && /iPhone|iPad|iPod/i.test(navigator.userAgent);
   const [createdRoom, setCreatedRoom] = useState<{ code: string; id: string } | null>(null);
   const [showScanner, setShowScanner] = useState(false);
   const [manualCode, setManualCode] = useState("");
@@ -37,7 +39,6 @@ const Dashboard = () => {
     createRoomMutation.mutate(undefined, {
       onSuccess: (data) => {
         setCreatedRoom({ code: data.roomCode, id: data.roomId });
-        toast.success(t('room.created', 'Room created successfully!'));
       },
       onError: (error) => {
         console.error('Room creation failed:', error);
@@ -53,10 +54,8 @@ const Dashboard = () => {
 
 
   const openAppSettings = () => {
-    if (navigator.userAgent.match(/iPhone|iPad|iPod/i)) {
+    if (isIOS) {
       window.location.href = 'app-settings:';
-    } else {
-      toast.info(t('room.cameraSettingsInstruction'));
     }
   };
 
@@ -149,21 +148,18 @@ const Dashboard = () => {
           }
 
           setIsJoining(true);
-          toast.success(t('room.joiningQR', 'Joining room...'));
 
           // Stop the scanner immediately to prevent multiple detections
           void safeStopScanner();
 
           joinRoomMutation.mutate(code, {
             onSuccess: () => {
-              toast.success(t('room.joined', 'Joined room successfully!'));
               setShowScanner(false);
               setIsScanning(false);
               setIsJoining(false);
             },
             onError: (error) => {
               console.error('Failed to join room:', error);
-              toast.error(t('room.joinFailed', 'Failed to join room'));
               setShowScanner(false);
               setIsScanning(false);
               setIsJoining(false);
@@ -295,67 +291,73 @@ const Dashboard = () => {
         </div>
 
         {!createdRoom ? (
-          <>
-            <p className="text-sm text-muted-foreground mb-6 text-center">
-              {t("room.startPrompt")}
-            </p>
+          <div className="space-y-4">
+            <Card>
+              <div className="p-4">
+                <p className="text-sm text-muted-foreground mb-6 text-center">
+                  {t("room.startPrompt")}
+                </p>
 
-            <Button
-              onClick={handleStartConversation}
-              disabled={createRoomMutation.isPending}
-              className="w-full"
-              size="lg"
-              data-testid="create-room-button"
-            >
-              {createRoomMutation.isPending ? t("room.creating") : t("room.create")}
-            </Button>
-
-            <div className="border-t pt-6 mt-8">
-              <h3 className="font-semibold mb-4 text-center">{t("room.joinExisting")}</h3>
-
-              <Button
-                onClick={handleScanQR}
-                disabled={!isAuthenticated || isJoining}
-                className="w-full"
-                variant="secondary"
-                size="lg"
-              >
-                {isJoining ? t("room.joining") : t("room.scan")}
-              </Button>
-
-              <div className="text-center mb-4">
-                <span className="text-muted-foreground">{t("common.or")}</span>
-              </div>
-
-              <div className="space-y-2">
-                <Input
-                  type="text"
-                  value={manualCode}
-                  onChange={(e) => setManualCode(e.target.value.toUpperCase())}
-                  placeholder={t("room.enterCodePlaceholder")}
-                  className="text-center font-mono tracking-wider"
-                  maxLength={7}
-                  disabled={!isAuthenticated}
-                  data-testid="room-code-input"
-                />
                 <Button
-                  onClick={handleManualJoin}
-                  disabled={!isAuthenticated || !manualCode.trim() || joinRoomMutation.isPending || isJoining}
+                  onClick={handleStartConversation}
+                  disabled={createRoomMutation.isPending}
                   className="w-full"
                   size="lg"
-                  data-testid="join-room-button"
+                  data-testid="create-room-button"
                 >
-                  {joinRoomMutation.isPending || isJoining ? t("room.joining") : t("room.joinByCode")}
+                  {createRoomMutation.isPending ? t("room.creating") : t("room.create")}
                 </Button>
               </div>
+            </Card>
 
-              {!isAuthenticated && (
-                <p className="text-sm text-muted-foreground mt-4 text-center">
-                  {t("auth.loginToJoin")}
-                </p>
-              )}
-            </div>
-          </>
+            <Card>
+              <div className="p-4">
+                <h3 className="font-semibold mb-4 text-center">{t("room.joinExisting")}</h3>
+
+                <Button
+                  onClick={handleScanQR}
+                  disabled={!isAuthenticated || isJoining}
+                  className="w-full"
+                  variant="secondary"
+                  size="lg"
+                >
+                  {isJoining ? t("room.joining") : t("room.scan")}
+                </Button>
+
+                <div className="text-center my-4">
+                  <span className="text-muted-foreground">{t("common.or")}</span>
+                </div>
+
+                <div className="space-y-2">
+                  <Input
+                    type="text"
+                    value={manualCode}
+                    onChange={(e) => setManualCode(e.target.value.toUpperCase())}
+                    placeholder={t("room.enterCodePlaceholder")}
+                    className="text-center font-mono tracking-wider"
+                    maxLength={7}
+                    disabled={!isAuthenticated}
+                    data-testid="room-code-input"
+                  />
+                  <Button
+                    onClick={handleManualJoin}
+                    disabled={!isAuthenticated || !manualCode.trim() || joinRoomMutation.isPending || isJoining}
+                    className="w-full"
+                    size="lg"
+                    data-testid="join-room-button"
+                  >
+                    {joinRoomMutation.isPending || isJoining ? t("room.joining") : t("room.joinByCode")}
+                  </Button>
+                </div>
+
+                {!isAuthenticated && (
+                  <p className="text-sm text-muted-foreground mt-4 text-center">
+                    {t("auth.loginToJoin")}
+                  </p>
+                )}
+              </div>
+            </Card>
+          </div>
         ) : (
           <div className="space-y-4">
             <div className="border rounded-xl bg-card text-card-foreground shadow-sm p-4">
@@ -440,9 +442,11 @@ const Dashboard = () => {
                     <p className="text-sm font-medium">{t('room.cameraAccessDenied')}</p>
                     <p className="text-xs text-muted-foreground">{t('room.cameraSettingsHelp')}</p>
                     <div className="space-y-2">
-                      <Button onClick={openAppSettings} className="w-full">
-                        {t('room.goToSettings')}
-                      </Button>
+                      {isIOS && (
+                        <Button onClick={openAppSettings} className="w-full">
+                          {t('room.goToSettings')}
+                        </Button>
+                      )}
                       <Button
                         onClick={() => {
                           void safeStopScanner();

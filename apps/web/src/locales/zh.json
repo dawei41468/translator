@@ -1,6 +1,6 @@
 {
   "app.name": "实时翻译器",
-  "app.description": "实时翻译对话",
+  "app.description": "与任何人、在任何地方进行实时多语言对话。",
   "nav.dashboard": "仪表板",
   "nav.settings": "设置",
   "auth.login": "登录",

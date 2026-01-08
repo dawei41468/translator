@@ -7,6 +7,8 @@ import { useTranslation } from "react-i18next";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/ui/error-state";
 import { Card } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { QRCodeCanvas } from "qrcode.react";
 import { useAuth } from "@/lib/auth";
 import { LANGUAGES } from "@/lib/languages";
 
@@ -29,9 +31,18 @@ const Conversation = () => {
   const updateLanguageMutation = useUpdateLanguage();
   const tRef = useRef(t);
 
+  const ownSpeakerName = useMemo(() => {
+    return user?.displayName || user?.name || undefined;
+  }, [user?.displayName, user?.name]);
+  const ownSpeakerNameRef = useRef<string | undefined>(ownSpeakerName);
+
   useEffect(() => {
     tRef.current = t;
   }, [t]);
+
+  useEffect(() => {
+    ownSpeakerNameRef.current = ownSpeakerName;
+  }, [ownSpeakerName]);
 
   const isTtsDebugEnabled = import.meta.env.VITE_ENABLE_TTS_DEBUG === 'true';
   const [socket, setSocket] = useState<Socket | null>(null);
@@ -55,6 +66,20 @@ const Conversation = () => {
     return [];
   });
 
+  useEffect(() => {
+    if (!ownSpeakerName) return;
+    setMessages((prev) => {
+      let changed = false;
+      const next = prev.map((m) => {
+        if (!m.isOwn) return m;
+        if (m.speakerName === ownSpeakerName) return m;
+        changed = true;
+        return { ...m, speakerName: ownSpeakerName };
+      });
+      return changed ? next : prev;
+    });
+  }, [ownSpeakerName]);
+
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>("connecting");
   const [soloMode, setSoloMode] = useState(false);
   const soloModeRef = useRef(soloMode);
@@ -69,6 +94,7 @@ const Conversation = () => {
   }, [soloTargetLang]);
   const [hasUserSelectedSoloLang, setHasUserSelectedSoloLang] = useState(false);
   const [debugPanelExpanded, setDebugPanelExpanded] = useState(false);
+  const [isRoomQrOpen, setIsRoomQrOpen] = useState(false);
   
   const [audioEnabled, setAudioEnabled] = useState(() => {
     try {
@@ -203,7 +229,6 @@ const Conversation = () => {
     socketInstance.on('reconnect_attempt', () => setConnectionStatus('reconnecting'));
     socketInstance.on('reconnect', () => {
       setConnectionStatus('connected');
-      toast.success(tRef.current('conversation.reconnected'));
 
       if (isRecordingRef.current) {
         socketInstance.emit('start-speech', {
@@ -219,11 +244,6 @@ const Conversation = () => {
       setConnectionStatus('disconnected');
       toast.error('Unable to connect to conversation server.');
     });
-
-    socketInstance.on('joined-room', () => toast.success(tRef.current('conversation.connectedToast')));
-    socketInstance.on('user-joined', () => toast.info(tRef.current('conversation.userJoined')));
-    socketInstance.on('user-left', () => toast.info(tRef.current('conversation.userLeft')));
-    socketInstance.on('user-reconnected', () => toast.success(tRef.current('conversation.userReconnected')));
 
     socketInstance.on('translated-message', (data: any) => {
       const message: Message = {
@@ -247,7 +267,7 @@ const Conversation = () => {
         text: data.text,
         isOwn: true,
         timestamp: new Date(),
-        speakerName: data.speakerName,
+        speakerName: ownSpeakerNameRef.current ?? data.speakerName,
       };
       setMessages((prev: Message[]) => [...prev, message]);
     });
@@ -266,7 +286,7 @@ const Conversation = () => {
             translatedText: data.translatedText,
             isOwn: true,
             timestamp: new Date(),
-            speakerName: data.speakerName,
+            speakerName: ownSpeakerNameRef.current ?? data.speakerName,
           },
         ];
       });
@@ -352,7 +372,6 @@ const Conversation = () => {
   const canStartRecording = soloMode || hasOtherParticipants;
   const handleToggleRecording = () => {
     if (!isRecording && !canStartRecording) {
-      toast.info("You're the only person in the room. Enable Solo mode to test speaking.");
       return;
     }
     toggleRecording();
@@ -360,7 +379,6 @@ const Conversation = () => {
 
   const startRecordingGuarded = useCallback(() => {
     if (!isRecordingRef.current && !canStartRecording) {
-      toast.info("You're the only person in the room. Enable Solo mode to test speaking.");
       return;
     }
     startRecording();
@@ -406,6 +424,7 @@ const Conversation = () => {
           audioEnabled={audioEnabled}
           toggleAudio={toggleAudio}
           onLeave={() => navigate('/dashboard')}
+          onRoomCodeClick={() => setIsRoomQrOpen(true)}
           userLanguage={user?.language}
           onUpdateLanguage={handleUpdateLanguage}
           isUpdatingLanguage={updateLanguageMutation.isPending}
@@ -444,6 +463,25 @@ const Conversation = () => {
           userLanguage={user?.language}
         />
       </Card>
+
+      <Dialog open={isRoomQrOpen} onOpenChange={setIsRoomQrOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('room.code')}: {roomData.code}</DialogTitle>
+          </DialogHeader>
+          <div className="flex justify-center">
+            <div className="border bg-background p-3" aria-label={t('room.qrCodeAlt')}>
+              <QRCodeCanvas
+                value={`${window.location.origin}/room/${roomData.code}`}
+                size={216}
+                bgColor="#ffffff"
+                fgColor="#000000"
+                aria-hidden="true"
+              />
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

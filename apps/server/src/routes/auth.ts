@@ -103,6 +103,7 @@ router.post("/login", async (req, res) => {
       user: {
         id: user.id,
         name: user.name,
+        displayName: user.displayName,
         email: user.email,
         language: user.language,
       },
@@ -153,6 +154,7 @@ router.post("/register", async (req, res) => {
     const newUser = await db.insert(users).values({
       email: email.toLowerCase(),
       name: name.trim(),
+      displayName: name.trim(),
       passwordHash,
       language: "en",
     }).returning();
@@ -184,6 +186,7 @@ router.post("/register", async (req, res) => {
       user: {
         id: user.id,
         name: user.name,
+        displayName: user.displayName,
         email: user.email,
         language: user.language,
       },

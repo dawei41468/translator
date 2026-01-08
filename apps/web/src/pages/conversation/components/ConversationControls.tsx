@@ -137,6 +137,8 @@ export function ConversationControls({
     return `${m}:${String(s).padStart(2, '0')}`;
   }, [secondsLeft]);
 
+  const recordingDisabled = connectionStatus !== 'connected' || (!canStartRecording && !isRecording);
+
   return (
     <footer className="relative p-4 pb-8 sm:p-6 overscroll-contain touch-none" role="contentinfo">
       <Button
@@ -191,6 +193,12 @@ export function ConversationControls({
             </div>
           )}
 
+          {!canStartRecording && (
+            <p className="text-center text-xs text-muted-foreground" role="note">
+              You're the only person in the room. Enable Solo mode to test speaking.
+            </p>
+          )}
+
           <Button
             type="button"
             onClick={pushToTalkEnabled ? (isLocked ? stopSession : undefined) : toggleRecording}
@@ -198,10 +206,6 @@ export function ConversationControls({
               if (isLocked) return;
               e.preventDefault();
               e.currentTarget.setPointerCapture?.(e.pointerId);
-              if (!isRecordingRef.current && !canStartRecording) {
-                startRecording();
-                return;
-              }
               startSession(e.clientY);
             } : undefined}
             onPointerMove={pushToTalkEnabled ? (e) => {
@@ -224,7 +228,7 @@ export function ConversationControls({
               e.preventDefault();
               if (!isLocked) stopSession();
             } : undefined}
-            disabled={connectionStatus !== 'connected'}
+            disabled={recordingDisabled}
             variant={isRecording ? "destructive" : "default"}
             size="lg"
             className={cn(

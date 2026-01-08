@@ -17,6 +17,29 @@ vi.mock('../logger.js', () => ({
   },
 }));
 
+function extractSqlText(value: any): string {
+  if (!value) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value.sql === 'string') return value.sql;
+  if (Array.isArray(value.queryChunks)) {
+    return value.queryChunks
+      .map((chunk: any) => {
+        if (typeof chunk === 'string') return chunk;
+        if (typeof chunk?.value === 'string') return chunk.value;
+        if (typeof chunk?.sql === 'string') return chunk.sql;
+        return '';
+      })
+      .join('');
+  }
+  if (Array.isArray(value.sqlChunks)) {
+    return value.sqlChunks
+      .map((chunk: any) => (typeof chunk === 'string' ? chunk : ''))
+      .join('');
+  }
+  if (typeof value.toString === 'function') return String(value);
+  return '';
+}
+
 describe('CleanupService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -27,10 +50,9 @@ describe('CleanupService', () => {
     
     await CleanupService.cleanupExpiredRooms();
     
-    expect(db.execute).toHaveBeenCalledWith(expect.anything());
-    // Verify it contains the delete from rooms logic
-    const calledSql = (db.execute as any).mock.calls[0][0];
-    expect(calledSql.sqlChunks[0]).toContain('delete from rooms where created_at < now() - interval \'24 hours\'');
+    expect(db.execute).toHaveBeenCalledWith(
+      sql`delete from rooms where created_at < now() - interval '24 hours'`
+    );
   });
 
   it('should throw and log error if cleanup fails', async () => {

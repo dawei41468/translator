@@ -100,7 +100,7 @@ class ApiClient {
     });
   }
 
-  async updateMe(data: { name?: string; language?: string }) {
+  async updateMe(data: { displayName?: string; language?: string; preferences?: any }) {
     return this.request<{ user: AuthUser }>("/api/me", {
       method: "PATCH",
       body: JSON.stringify(data),

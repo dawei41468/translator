@@ -248,7 +248,6 @@ export function useSpeechEngine({
     silenceTimeoutRef.current = setTimeout(() => {
       console.log("VAD: Auto-stopping due to silence");
       stopRecordingInternal();
-      toast.info(tRef.current('conversation.autoStoppedSilence', 'Recording stopped due to silence'));
     }, SILENCE_THRESHOLD_MS);
   }, [stopRecordingInternal]);
 

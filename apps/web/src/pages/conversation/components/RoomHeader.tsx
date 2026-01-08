@@ -17,6 +17,7 @@ interface RoomHeaderProps {
   audioEnabled: boolean;
   toggleAudio: () => void;
   onLeave: () => void;
+  onRoomCodeClick: () => void;
   userLanguage: string | undefined;
   onUpdateLanguage: (lang: string) => void;
   isUpdatingLanguage: boolean;
@@ -28,6 +29,7 @@ export function RoomHeader({
   audioEnabled,
   toggleAudio,
   onLeave,
+  onRoomCodeClick,
   userLanguage,
   onUpdateLanguage,
   isUpdatingLanguage,
@@ -38,7 +40,13 @@ export function RoomHeader({
     <header className="p-4 pt-5 sm:p-6 sm:pt-7" role="banner">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-3">
-          <div className="inline-flex items-center gap-2 rounded-full bg-muted px-3 py-1" role="status" aria-label={t('conversation.connectionStatus')}>
+          <button
+            type="button"
+            onClick={onRoomCodeClick}
+            className="inline-flex items-center gap-2 rounded-full bg-muted px-3 py-1 hover:bg-muted/80 transition-colors"
+            aria-label={t('room.code')}
+            data-testid="room-code-badge"
+          >
             <div className={`h-2.5 w-2.5 rounded-full ${
               connectionStatus === 'connected' ? 'bg-green-500' :
               connectionStatus === 'connecting' ? 'bg-yellow-500' :
@@ -46,7 +54,7 @@ export function RoomHeader({
               'bg-red-500'
             }`} aria-hidden="true"></div>
             <span className="text-sm font-medium">{t('room.code')}: {roomCode}</span>
-          </div>
+          </button>
           {connectionStatus === 'reconnecting' && (
             <span className="text-sm text-muted-foreground" aria-live="polite">{t('conversation.reconnecting')}...</span>
           )}

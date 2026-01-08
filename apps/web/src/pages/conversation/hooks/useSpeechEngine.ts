@@ -14,6 +14,7 @@ interface UseSpeechEngineProps {
   audioEnabled: boolean;
   soloMode: boolean;
   soloTargetLang: string;
+  disableAutoStopOnSilence?: boolean;
 }
 
 export function useSpeechEngine({
@@ -23,6 +24,7 @@ export function useSpeechEngine({
   audioEnabled,
   soloMode,
   soloTargetLang,
+  disableAutoStopOnSilence,
 }: UseSpeechEngineProps) {
   const { t } = useTranslation();
   const [isRecording, setIsRecording] = useState(false);
@@ -65,6 +67,11 @@ export function useSpeechEngine({
   useEffect(() => {
     soloModeRef.current = soloMode;
   }, [soloMode]);
+
+  const disableAutoStopOnSilenceRef = useRef(Boolean(disableAutoStopOnSilence));
+  useEffect(() => {
+    disableAutoStopOnSilenceRef.current = Boolean(disableAutoStopOnSilence);
+  }, [disableAutoStopOnSilence]);
 
   useEffect(() => {
     isRecordingRef.current = isRecording;
@@ -214,6 +221,14 @@ export function useSpeechEngine({
     lastSpeechActivityAtRef.current = Date.now();
     isUserSpeakingRef.current = false;
     console.log("VAD: User stopped speaking");
+
+    if (disableAutoStopOnSilenceRef.current) {
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+        silenceTimeoutRef.current = null;
+      }
+      return;
+    }
 
     if (soloModeRef.current && isRecordingRef.current) {
       if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
@@ -429,6 +444,14 @@ export function useSpeechEngine({
     }
   }, [socketRef, userLanguage, speechEngineRegistry, soloMode, soloTargetLang, stopRecordingInternal]);
 
+  const startRecording = useCallback(() => {
+    void startRecordingInternal();
+  }, [startRecordingInternal]);
+
+  const stopRecording = useCallback(() => {
+    stopRecordingInternal();
+  }, [stopRecordingInternal]);
+
   const toggleRecording = useCallback(() => {
     if (isRecording) {
       stopRecordingInternal();
@@ -446,6 +469,8 @@ export function useSpeechEngine({
     sttStatus,
     ttsStatus,
     toggleRecording,
+    startRecording,
+    stopRecording,
     stopRecordingInternal,
     stopRecordingForUnmount,
     speakText,

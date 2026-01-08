@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { io, Socket } from "socket.io-client";
 import { useRoom, useUpdateLanguage } from "@/lib/hooks";
@@ -85,6 +85,8 @@ const Conversation = () => {
     ttsStatus,
     setTtsStatus,
     toggleRecording,
+    startRecording,
+    stopRecording,
     stopRecordingInternal,
     stopRecordingForUnmount,
     speakText,
@@ -95,8 +97,21 @@ const Conversation = () => {
     userLanguage: user?.language,
     audioEnabled,
     soloMode,
-    soloTargetLang
+    soloTargetLang,
+    disableAutoStopOnSilence: useMemo(() => {
+      if (typeof window === 'undefined') return false;
+      const coarse = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
+      const touchPoints = typeof navigator !== 'undefined' ? (navigator.maxTouchPoints ?? 0) : 0;
+      return coarse || touchPoints > 0;
+    }, []),
   });
+
+  const pushToTalkEnabled = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    const coarse = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
+    const touchPoints = typeof navigator !== 'undefined' ? (navigator.maxTouchPoints ?? 0) : 0;
+    return coarse || touchPoints > 0;
+  }, []);
 
   const isRecordingRef = useRef(isRecording);
   useEffect(() => {
@@ -343,6 +358,14 @@ const Conversation = () => {
     toggleRecording();
   };
 
+  const startRecordingGuarded = useCallback(() => {
+    if (!isRecordingRef.current && !canStartRecording) {
+      toast.info("You're the only person in the room. Enable Solo mode to test speaking.");
+      return;
+    }
+    startRecording();
+  }, [canStartRecording, startRecording]);
+
   if (isLoading) {
     return (
       <div className="flex flex-col h-screen bg-background">
@@ -401,6 +424,9 @@ const Conversation = () => {
       <ConversationControls
         isRecording={isRecording}
         toggleRecording={handleToggleRecording}
+        startRecording={startRecordingGuarded}
+        stopRecording={stopRecording}
+        pushToTalkEnabled={pushToTalkEnabled}
         connectionStatus={connectionStatus}
         soloMode={soloMode}
         toggleSoloMode={() => setSoloMode(p => !p)}

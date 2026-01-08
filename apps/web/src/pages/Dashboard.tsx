@@ -23,6 +23,14 @@ const Dashboard = () => {
   const [isScanning, setIsScanning] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
 
+  const scannerStatusRef = useRef<'idle' | 'starting' | 'running' | 'stopping'>('idle');
+  const stopPromiseRef = useRef<Promise<void> | null>(null);
+  const isJoiningRef = useRef(isJoining);
+
+  useEffect(() => {
+    isJoiningRef.current = isJoining;
+  }, [isJoining]);
+
   const createRoomMutation = useCreateRoom();
   const joinRoomMutation = useJoinRoom();
 
@@ -53,10 +61,58 @@ const Dashboard = () => {
     }
   };
 
+  const safeStopScanner = () => {
+    const current = scannerRef.current;
+    if (!current) {
+      scannerStatusRef.current = 'idle';
+      return Promise.resolve();
+    }
+
+    if (scannerStatusRef.current === 'idle') {
+      return Promise.resolve();
+    }
+
+    if (scannerStatusRef.current === 'stopping') {
+      return stopPromiseRef.current ?? Promise.resolve();
+    }
+
+    scannerStatusRef.current = 'stopping';
+
+    const p = (async () => {
+      try {
+        await Promise.resolve(current.stop());
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        if (!msg.includes('not running') && !msg.includes('already under transition')) {
+          console.warn('Failed to stop QR scanner:', error);
+        }
+      }
+
+      try {
+        await Promise.resolve((current as any).clear?.());
+      } catch {
+        // ignore
+      }
+
+      if (scannerRef.current === current) {
+        scannerRef.current = null;
+      }
+      scannerStatusRef.current = 'idle';
+    })();
+
+    stopPromiseRef.current = p;
+    return p.finally(() => {
+      if (stopPromiseRef.current === p) stopPromiseRef.current = null;
+    });
+  };
+
   const initializeScanner = () => {
     if (scannerRef.current) return;
 
     scannerRef.current = new Html5Qrcode("qr-reader");
+
+    if (scannerStatusRef.current === 'starting' || scannerStatusRef.current === 'running') return;
+    scannerStatusRef.current = 'starting';
 
     scannerRef.current.start(
       { facingMode: "environment" }, // Prefer back camera
@@ -66,7 +122,7 @@ const Dashboard = () => {
       },
       (decodedText: string) => {
           // Prevent multiple join attempts
-          if (isJoining) {
+          if (isJoiningRef.current) {
             return;
           }
 
@@ -97,9 +153,7 @@ const Dashboard = () => {
           toast.success(t('room.joiningQR', 'Joining room...'));
 
           // Stop the scanner immediately to prevent multiple detections
-          if (scannerRef.current) {
-            scannerRef.current.stop().catch(console.error);
-          }
+          void safeStopScanner();
 
           joinRoomMutation.mutate(code, {
             onSuccess: () => {
@@ -124,19 +178,17 @@ const Dashboard = () => {
         }
       }
     ).then(() => {
-      // QR scanner started successfully
+      // If the scanner was stopped/unmounted while start() was in-flight, ignore.
+      if (!scannerRef.current) return;
+      scannerStatusRef.current = 'running';
     }).catch((error: any) => {
+      // If the scanner was stopped/unmounted while start() was in-flight, ignore.
+      if (!scannerRef.current) return;
       console.error('Failed to start QR scanner:', error);
       setPermissionStatus('denied');
       setIsScanning(false);
+      scannerStatusRef.current = 'idle';
     });
-
-    // Return cleanup function
-    return () => {
-      if (scannerRef.current) {
-        scannerRef.current.stop().catch(console.error);
-      }
-    };
   };
 
   const handleScanQR = async () => {
@@ -163,11 +215,6 @@ const Dashboard = () => {
       // Now try to initialize the QR scanner
       setPermissionStatus('granted');
       setIsScanning(true);
-
-      // Small delay to ensure state updates
-      setTimeout(() => {
-        initializeScanner();
-      }, 100);
 
     } catch (error) {
       console.error('Camera permission error:', error);
@@ -216,22 +263,29 @@ const Dashboard = () => {
 
   // Initialize QR scanner when permissions are granted
   useEffect(() => {
-    let cleanup: (() => void) | undefined;
-
-    if (permissionStatus === 'granted' && isScanning && !scannerRef.current) {
-      cleanup = initializeScanner();
-    }
-
     return () => {
-      if (cleanup) {
-        cleanup();
-      }
-      if (scannerRef.current) {
-        scannerRef.current.stop().catch(console.error);
-        scannerRef.current = null;
-      }
+      void safeStopScanner();
     };
-  }, [permissionStatus, isScanning, joinRoomMutation, t]);
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (showScanner) return;
+
+    void safeStopScanner();
+    setIsScanning(false);
+    setPermissionStatus('checking');
+    setIsJoining(false);
+  }, [showScanner]);
+
+  useEffect(() => {
+    if (!showScanner) return;
+    if (permissionStatus !== 'granted' || !isScanning) return;
+    if (scannerRef.current) return;
+
+    initializeScanner();
+  }, [showScanner, permissionStatus, isScanning]);
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -395,6 +449,7 @@ const Dashboard = () => {
                       </Button>
                       <Button
                         onClick={() => {
+                          void safeStopScanner();
                           setShowScanner(false);
                           setPermissionStatus('checking');
                           setIsJoining(false);
@@ -419,6 +474,7 @@ const Dashboard = () => {
                       </Button>
                       <Button
                         onClick={() => {
+                          void safeStopScanner();
                           setShowScanner(false);
                           setPermissionStatus('checking');
                         }}
@@ -436,6 +492,7 @@ const Dashboard = () => {
                     <div id="qr-reader" className="w-full" aria-label={t("room.qrScannerAlt")}></div>
                     <Button
                       onClick={() => {
+                        void safeStopScanner();
                         setShowScanner(false);
                         setIsScanning(false);
                         setPermissionStatus('checking');

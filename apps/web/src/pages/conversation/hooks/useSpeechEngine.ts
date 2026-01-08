@@ -85,11 +85,11 @@ export function useSpeechEngine({
 
     const locale = getTtsLocale(language);
     try {
+      setTtsStatus(prev => ({ ...prev, isSpeaking: true, lastError: undefined, lastAttempt: `Speaking (${locale})` }));
       await ttsEngine.speak(text, language || 'en');
-      console.log('TTS: Speech synthesis initiated', { locale });
-      setTtsStatus(prev => ({ ...prev, isSpeaking: true, lastError: undefined }));
+      setTtsStatus(prev => ({ ...prev, isSpeaking: false, lastError: undefined, lastAttempt: `Finished (${locale})` }));
     } catch (error) {
-      setTtsStatus(prev => ({ ...prev, lastError: `Error: ${error}`, isSpeaking: false }));
+      setTtsStatus(prev => ({ ...prev, lastError: `Error: ${error}`, isSpeaking: false, lastAttempt: `Failed (${locale})` }));
       toast.error(tRef.current('conversation.ttsError'));
     }
   }, [speechEngineRegistry]);
@@ -255,6 +255,28 @@ export function useSpeechEngine({
     vadRef.current = vad;
   }, [vad]);
 
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== 'visible' && isRecordingRef.current) {
+        stopRecordingInternal();
+      }
+    };
+
+    const onPageHide = () => {
+      if (isRecordingRef.current) {
+        stopRecordingInternal();
+      }
+    };
+
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('pagehide', onPageHide);
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('pagehide', onPageHide);
+    };
+  }, [stopRecordingInternal]);
+
   const startRecordingInternal = useCallback(async () => {
     try {
       const socket = socketRef.current;
@@ -320,7 +342,11 @@ export function useSpeechEngine({
 
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
         ? 'audio/webm;codecs=opus'
-        : 'audio/webm';
+        : (MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : null);
+
+      if (!mimeType) {
+        throw new Error('Audio recording is not supported on this device/browser. Please use a browser that supports WebM audio.');
+      }
 
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType,
@@ -329,7 +355,13 @@ export function useSpeechEngine({
 
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size <= 0) return;
-        if (!socket.connected) return;
+        if (!socket.connected) {
+          bufferedAudioChunksRef.current.push(event.data);
+          if (bufferedAudioChunksRef.current.length > 8) {
+            bufferedAudioChunksRef.current.shift();
+          }
+          return;
+        }
 
         const now = Date.now();
         const recentlySpoke = now - lastSpeechActivityAtRef.current < 1200;
@@ -354,6 +386,24 @@ export function useSpeechEngine({
           if (mediaRecorder.state === 'recording') {
             mediaRecorder.requestData();
           }
+        } catch {
+          // ignore
+        }
+
+        try {
+          const sock = socketRef.current;
+          if (!sock?.connected) return;
+          if (bufferedAudioChunksRef.current.length === 0) return;
+
+          const now = Date.now();
+          const recentlySpoke = now - lastSpeechActivityAtRef.current < 1200;
+          const shouldSend = soloModeRef.current || isUserSpeakingRef.current || recentlySpoke;
+          if (!shouldSend) return;
+
+          for (const chunk of bufferedAudioChunksRef.current) {
+            sock.emit('speech-data', chunk);
+          }
+          bufferedAudioChunksRef.current = [];
         } catch {
           // ignore
         }

@@ -177,6 +177,10 @@ export function setupSocketIO(io: Server) {
       ip: socket.handshake.address
     });
 
+    if (socket.userId) {
+      socket.join(`user:${socket.userId}`);
+    }
+
     // Handle connection errors
     socket.on("connect_error", (error) => {
       logger.warn("Socket connection error", {
@@ -213,6 +217,9 @@ export function setupSocketIO(io: Server) {
       if (msg.toLowerCase().includes('connection reset by peer')) return true;
       if (msg.toLowerCase().includes('econnreset')) return true;
       if (msg.toLowerCase().includes('rst_stream')) return true;
+      if (msg.toLowerCase().includes('maximum allowed stream duration')) return true;
+      if (msg.toLowerCase().includes('audio timeout')) return true;
+      if (msg.toLowerCase().includes('deadline exceeded')) return true;
       if (typeof err === 'object' && err !== null && 'code' in err) {
         const code = (err as any).code;
         if (code === 14 || code === 2) return true;
@@ -270,6 +277,31 @@ export function setupSocketIO(io: Server) {
             handleSpeechError(socket, error, "stream error");
           }
         );
+
+        if (socket.recognizeStream) {
+          socket.recognizeStream.on('end', () => {
+            socket.recognizeStream = undefined;
+            if (socket.sttActive) {
+              socket.sttNeedsRestart = true;
+              if (socket.sttLanguageCode && canRestartStt()) {
+                startRecognitionStream({ languageCode: socket.sttLanguageCode });
+              } else if (socket.sttLanguageCode) {
+                socket.emit("speech-error", "Speech recognition session ended. Please stop and start again.");
+              }
+            }
+          });
+          socket.recognizeStream.on('close', () => {
+            socket.recognizeStream = undefined;
+            if (socket.sttActive) {
+              socket.sttNeedsRestart = true;
+              if (socket.sttLanguageCode && canRestartStt()) {
+                startRecognitionStream({ languageCode: socket.sttLanguageCode });
+              } else if (socket.sttLanguageCode) {
+                socket.emit("speech-error", "Speech recognition session ended. Please stop and start again.");
+              }
+            }
+          });
+        }
       } catch (error) {
         handleSpeechError(socket, error, "failed to start recognition");
       }
@@ -408,7 +440,7 @@ export function setupSocketIO(io: Server) {
             if (result.success) {
               const { targetLang, translatedText, participants } = result as any;
               for (const participant of participants) {
-                socket.to(socket.roomId!).emit("translated-message", {
+                io.to(`user:${participant.userId}`).emit("translated-message", {
                   originalText: transcript,
                   translatedText,
                   sourceLang,

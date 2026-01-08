@@ -358,22 +358,22 @@ const Dashboard = () => {
           </>
         ) : (
           <div className="space-y-4">
-            <div className="border rounded-xl bg-card text-card-foreground shadow-sm p-5">
+            <div className="border rounded-xl bg-card text-card-foreground shadow-sm p-4">
               <div className="text-center">
                 <h3 className="text-lg font-semibold mb-1">{t("room.createdTitle")}</h3>
-                <p className="text-sm text-muted-foreground mb-4">{t("room.waitingPrompt")}</p>
+                <p className="text-sm text-muted-foreground mb-2">{t("room.waitingPrompt")}</p>
               </div>
 
-              <div className="bg-background p-4 rounded-lg mb-4 flex justify-center border" aria-label={t("room.qrCodeAlt")}
+              <div className="bg-background p-3 rounded-lg mb-3 flex justify-center border" aria-label={t("room.qrCodeAlt")}
               >
-                <QRCodeCanvas value={createdRoom.code} size={240} bgColor="#ffffff" fgColor="#000000" aria-hidden="true" />
+                <QRCodeCanvas value={createdRoom.code} size={216} bgColor="#ffffff" fgColor="#000000" aria-hidden="true" />
               </div>
 
-              <div className="rounded-lg border bg-background p-4 text-center">
+              <div className="rounded-lg border bg-background p-3 text-center">
                 <div className="text-xs text-muted-foreground mb-1">{t("room.code")}</div>
-                <div className="font-mono text-2xl font-bold tracking-widest">{createdRoom.code}</div>
+                <div className="font-mono text-xl font-bold tracking-widest">{createdRoom.code}</div>
 
-                <div className="mt-4">
+                <div className="mt-3">
                   <Button
                     type="button"
                     variant="outline"
@@ -385,7 +385,7 @@ const Dashboard = () => {
                 </div>
               </div>
 
-              <div className="space-y-2 mt-4">
+              <div className="space-y-2 mt-3">
                 <Button type="button" className="w-full" variant="secondary" size="lg" onClick={handleJoinConversation} data-testid="enter-room-button">
                   {t("room.enter")}
                 </Button>

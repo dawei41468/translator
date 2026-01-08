@@ -76,6 +76,11 @@ export function useSpeechEngine({
       return;
     }
 
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      setTtsStatus(prev => ({ ...prev, lastAttempt: 'Offline', lastError: 'Offline', isSpeaking: false }));
+      return;
+    }
+
     const ttsEngine = speechEngineRegistry.getTtsEngine();
     if (!ttsEngine) {
       setTtsStatus(prev => ({ ...prev, lastError: 'No TTS engine available', lastAttempt: 'Failed - no engine' }));
@@ -428,6 +433,10 @@ export function useSpeechEngine({
     if (isRecording) {
       stopRecordingInternal();
     } else {
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        toast.error(tRef.current('error.offline', 'You are offline'));
+        return;
+      }
       startRecordingInternal();
     }
   }, [isRecording, stopRecordingInternal, startRecordingInternal]);

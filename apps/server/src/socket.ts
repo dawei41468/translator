@@ -40,6 +40,8 @@ function handleSpeechError(socket: AuthenticatedSocket, error: any, context: str
     socket.recognizeStream = undefined;
   }
 
+  socket.sttNeedsRestart = true;
+
   socket.emit("speech-error", "Speech recognition temporarily unavailable. Please try again.");
 }
 
@@ -128,6 +130,11 @@ interface AuthenticatedSocket extends Socket {
   recognizeStream?: any;
   soloMode?: boolean;
   soloTargetLang?: string;
+  sttLanguageCode?: string;
+  sttActive?: boolean;
+  sttNeedsRestart?: boolean;
+  sttRestartWindowStartedAt?: number;
+  sttRestartCount?: number;
 }
 
 export function setupSocketIO(io: Server) {
@@ -194,6 +201,78 @@ export function setupSocketIO(io: Server) {
           error: error instanceof Error ? error.message : String(error)
         });
       }
+
+      socket.sttActive = false;
+      socket.sttNeedsRestart = false;
+      socket.sttLanguageCode = undefined;
+    };
+
+    const isRecoverableSttError = (err: any) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.toLowerCase().includes('incomplete envelope')) return true;
+      if (msg.toLowerCase().includes('connection reset by peer')) return true;
+      if (msg.toLowerCase().includes('econnreset')) return true;
+      if (msg.toLowerCase().includes('rst_stream')) return true;
+      if (typeof err === 'object' && err !== null && 'code' in err) {
+        const code = (err as any).code;
+        if (code === 14 || code === 2) return true;
+      }
+      return false;
+    };
+
+    const canRestartStt = () => {
+      const now = Date.now();
+      const windowMs = 30_000;
+      const maxRestarts = 3;
+
+      if (!socket.sttRestartWindowStartedAt || now - socket.sttRestartWindowStartedAt > windowMs) {
+        socket.sttRestartWindowStartedAt = now;
+        socket.sttRestartCount = 0;
+      }
+
+      const count = socket.sttRestartCount ?? 0;
+      if (count >= maxRestarts) return false;
+
+      socket.sttRestartCount = count + 1;
+      return true;
+    };
+
+    const startRecognitionStream = (data: { languageCode: string }) => {
+      stopRecognition();
+
+      socket.sttActive = true;
+      socket.sttLanguageCode = data.languageCode;
+      socket.sttNeedsRestart = false;
+
+      try {
+        socket.recognizeStream = createRecognizeStream(
+          { languageCode: data.languageCode },
+          async (transcript, isFinal) => {
+            if (isFinal) {
+              const sourceLang = data.languageCode.split('-')[0];
+              await handleTranscript(transcript, sourceLang);
+            }
+          },
+          (error) => {
+            if (isRecoverableSttError(error)) {
+              if (socket.recognizeStream) {
+                try {
+                  socket.recognizeStream.end();
+                } catch {
+                  // ignore
+                }
+                socket.recognizeStream = undefined;
+              }
+              socket.sttNeedsRestart = true;
+              return;
+            }
+
+            handleSpeechError(socket, error, "stream error");
+          }
+        );
+      } catch (error) {
+        handleSpeechError(socket, error, "failed to start recognition");
+      }
     };
 
     socket.on(
@@ -214,28 +293,10 @@ export function setupSocketIO(io: Server) {
         return;
       }
 
-      stopRecognition();
-
       socket.soloMode = Boolean(data.soloMode);
       socket.soloTargetLang = data.soloTargetLang;
 
-      try {
-        socket.recognizeStream = createRecognizeStream(
-          { languageCode: data.languageCode },
-          async (transcript, isFinal) => {
-            if (isFinal) {
-              // For server-side STT, emit recognized-speech directly
-              const sourceLang = data.languageCode.split('-')[0];
-              await handleTranscript(transcript, sourceLang);
-            }
-          },
-          (error) => {
-            handleSpeechError(socket, error, "stream error");
-          }
-        );
-      } catch (error) {
-        handleSpeechError(socket, error, "failed to start recognition");
-      }
+      startRecognitionStream({ languageCode: data.languageCode });
     }
     );
 
@@ -246,10 +307,31 @@ export function setupSocketIO(io: Server) {
         return;
       }
 
+      if (!socket.recognizeStream && socket.sttActive && socket.sttLanguageCode && socket.sttNeedsRestart) {
+        if (!canRestartStt()) {
+          socket.emit("speech-error", "Speech recognition is unstable right now. Please stop and try again.");
+          return;
+        }
+
+        startRecognitionStream({ languageCode: socket.sttLanguageCode });
+      }
+
       if (socket.recognizeStream) {
         try {
           socket.recognizeStream.write(data);
         } catch (error) {
+          if (isRecoverableSttError(error)) {
+            if (socket.recognizeStream) {
+              try {
+                socket.recognizeStream.end();
+              } catch {
+                // ignore
+              }
+              socket.recognizeStream = undefined;
+            }
+            socket.sttNeedsRestart = true;
+            return;
+          }
           handleSpeechError(socket, error, "writing to stream");
         }
       }

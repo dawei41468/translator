@@ -98,6 +98,16 @@ const Conversation = () => {
     soloTargetLang
   });
 
+  const isRecordingRef = useRef(isRecording);
+  useEffect(() => {
+    isRecordingRef.current = isRecording;
+  }, [isRecording]);
+
+  const sttStatusRef = useRef(sttStatus);
+  useEffect(() => {
+    sttStatusRef.current = sttStatus;
+  }, [sttStatus]);
+
   const audioEnabledRef = useRef(audioEnabled);
   useEffect(() => {
     audioEnabledRef.current = audioEnabled;
@@ -179,6 +189,14 @@ const Conversation = () => {
     socketInstance.on('reconnect', () => {
       setConnectionStatus('connected');
       toast.success(tRef.current('conversation.reconnected'));
+
+      if (isRecordingRef.current) {
+        socketInstance.emit('start-speech', {
+          languageCode: sttStatusRef.current.language,
+          soloMode: soloModeRef.current,
+          soloTargetLang: soloModeRef.current ? soloTargetLangRef.current : undefined,
+        });
+      }
     });
 
     socketInstance.on('connect_error', (error: any) => {

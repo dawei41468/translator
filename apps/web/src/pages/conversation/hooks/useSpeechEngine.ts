@@ -261,6 +261,12 @@ export function useSpeechEngine({
     baseAssetPath: "/vad/",
     onnxWASMBasePath: "/vad/",
     model: "v5",
+    // Mobile optimization: Robust settings to prevent clipping
+    positiveSpeechThreshold: 0.6,
+    negativeSpeechThreshold: 0.4,
+    redemptionMs: 750, // 24 frames @ ~30ms
+    preSpeechPadMs: 300, // 10 frames @ ~30ms
+    minSpeechMs: 120, // 4 frames @ ~30ms
     onSpeechStart: onVADSpeechStart,
     onSpeechEnd: onVADSpeechEnd,
     onVADMisfire: onVADMisfire,

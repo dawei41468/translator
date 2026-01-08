@@ -89,6 +89,8 @@ const speechStartSchema = {
   languageCode: (v: any) => typeof v === 'string' && v.length >= 2 && v.length <= 10,
   soloMode: (v: any) => typeof v === 'boolean' || v === undefined,
   soloTargetLang: (v: any) => typeof v === 'string' || v === undefined,
+  encoding: (v: any) => v === undefined || v === 'WEBM_OPUS' || v === 'LINEAR16',
+  sampleRateHertz: (v: any) => v === undefined || typeof v === 'number',
 };
 
 const roomCodeSchema = {
@@ -244,7 +246,11 @@ export function setupSocketIO(io: Server) {
       return true;
     };
 
-    const startRecognitionStream = (data: { languageCode: string }) => {
+    const startRecognitionStream = (data: { 
+      languageCode: string;
+      encoding?: "WEBM_OPUS" | "LINEAR16";
+      sampleRateHertz?: number;
+    }) => {
       stopRecognition();
 
       socket.sttActive = true;
@@ -253,7 +259,11 @@ export function setupSocketIO(io: Server) {
 
       try {
         socket.recognizeStream = createRecognizeStream(
-          { languageCode: data.languageCode },
+          { 
+            languageCode: data.languageCode,
+            encoding: data.encoding,
+            sampleRateHertz: data.sampleRateHertz
+          },
           async (transcript, isFinal) => {
             if (isFinal) {
               const sourceLang = data.languageCode.split('-')[0];
@@ -309,7 +319,13 @@ export function setupSocketIO(io: Server) {
 
     socket.on(
       "start-speech",
-      (data: { languageCode: string; soloMode?: boolean; soloTargetLang?: string }) => {
+      (data: { 
+        languageCode: string; 
+        soloMode?: boolean; 
+        soloTargetLang?: string;
+        encoding?: "WEBM_OPUS" | "LINEAR16";
+        sampleRateHertz?: number;
+      }) => {
       if (!validateSocketData(data, speechStartSchema)) {
         handleSocketError(socket, "start-speech", new Error("Invalid speech start data"));
         return;
@@ -328,7 +344,11 @@ export function setupSocketIO(io: Server) {
       socket.soloMode = Boolean(data.soloMode);
       socket.soloTargetLang = data.soloTargetLang;
 
-      startRecognitionStream({ languageCode: data.languageCode });
+      startRecognitionStream({ 
+        languageCode: data.languageCode,
+        encoding: data.encoding,
+        sampleRateHertz: data.sampleRateHertz
+      });
     }
     );
 

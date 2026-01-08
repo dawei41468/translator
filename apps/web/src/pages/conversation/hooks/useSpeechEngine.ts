@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { useMicVAD } from "@ricky0123/vad-react";
 import { SpeechEngineRegistry } from "@/lib/speech-engines/registry";
+import { PcmRecorder } from "@/lib/audio/pcm-recorder";
 import { SttStatus, TtsStatus } from "../types";
 import { getTtsLocale, getSpeechRecognitionLocale } from "../utils";
 
@@ -32,6 +33,7 @@ export function useSpeechEngine({
   const isStartingRef = useRef(false);
   const lifecycleTokenRef = useRef(0);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const pcmRecorderRef = useRef<PcmRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const vadRef = useRef<ReturnType<typeof useMicVAD> | null>(null);
   const pendingTtsRef = useRef<{ text: string; language: string | null | undefined } | null>(null);
@@ -155,6 +157,11 @@ export function useSpeechEngine({
         mediaRecorderRef.current.ondataavailable = null;
       }
       mediaRecorderRef.current = null;
+
+      if (pcmRecorderRef.current) {
+        pcmRecorderRef.current.stop();
+        pcmRecorderRef.current = null;
+      }
 
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => {
@@ -371,109 +378,152 @@ export function useSpeechEngine({
       }));
 
       streamRef.current = stream;
-      socket.emit('start-speech', {
-        languageCode,
-        soloMode,
-        soloTargetLang: soloMode ? soloTargetLang : undefined,
-      });
 
-      // Start VAD
-      await vadRef.current?.start();
-
-      if (token !== lifecycleTokenRef.current) {
-        stopRecordingInternalImpl({ skipVadPause: true });
-        return;
-      }
-
+      // Check for WebM support
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
         ? 'audio/webm;codecs=opus'
         : (MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : null);
 
-      if (!mimeType) {
-        throw new Error('Audio recording is not supported on this device/browser. Please use a browser that supports WebM audio.');
-      }
+      if (mimeType) {
+        // Standard WebM/Opus flow (Android, Desktop)
+        socket.emit('start-speech', {
+          languageCode,
+          soloMode,
+          soloTargetLang: soloMode ? soloTargetLang : undefined,
+        });
 
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType,
-        audioBitsPerSecond: 128000
-      });
+        // Start VAD
+        await vadRef.current?.start();
 
-      if (token !== lifecycleTokenRef.current) {
-        stopRecordingInternalImpl({ skipVadPause: true });
-        return;
-      }
+        if (token !== lifecycleTokenRef.current) {
+          stopRecordingInternalImpl({ skipVadPause: true });
+          return;
+        }
 
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size <= 0) return;
+        const mediaRecorder = new MediaRecorder(stream, {
+          mimeType,
+          audioBitsPerSecond: 128000
+        });
 
-        if (!socket.connected) {
-          bufferedAudioChunksRef.current.push(event.data);
-          if (bufferedAudioChunksRef.current.length > 8) {
-            bufferedAudioChunksRef.current.shift();
+        if (token !== lifecycleTokenRef.current) {
+          stopRecordingInternalImpl({ skipVadPause: true });
+          return;
+        }
+
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size <= 0) return;
+
+          if (!socket.connected) {
+            bufferedAudioChunksRef.current.push(event.data);
+            if (bufferedAudioChunksRef.current.length > 8) {
+              bufferedAudioChunksRef.current.shift();
+            }
+            return;
           }
-          return;
-        }
-
-        if (disableAutoStopOnSilenceRef.current) {
-          socket.emit('speech-data', event.data);
-          return;
-        }
-
-        const now = Date.now();
-        const recentlySpoke = now - lastSpeechActivityAtRef.current < 1200;
-        const shouldSend = soloModeRef.current || isUserSpeakingRef.current || recentlySpoke;
-        if (shouldSend) {
-          socket.emit('speech-data', event.data);
-          return;
-        }
-
-        bufferedAudioChunksRef.current.push(event.data);
-        if (bufferedAudioChunksRef.current.length > 4) {
-          bufferedAudioChunksRef.current.shift();
-        }
-      };
-
-      mediaRecorder.start(250);
-
-      // Android Chrome/PWA can be inconsistent about honoring timeslice; force periodic flush.
-      if (requestDataIntervalRef.current) clearInterval(requestDataIntervalRef.current);
-      requestDataIntervalRef.current = setInterval(() => {
-        try {
-          if (mediaRecorder.state === 'recording') {
-            mediaRecorder.requestData();
-          }
-        } catch {
-          // ignore
-        }
-
-        try {
-          const sock = socketRef.current;
-          if (!sock?.connected) return;
-          if (bufferedAudioChunksRef.current.length === 0) return;
 
           if (disableAutoStopOnSilenceRef.current) {
-            for (const chunk of bufferedAudioChunksRef.current) {
-              sock.emit('speech-data', chunk);
-            }
-            bufferedAudioChunksRef.current = [];
+            socket.emit('speech-data', event.data);
             return;
           }
 
           const now = Date.now();
           const recentlySpoke = now - lastSpeechActivityAtRef.current < 1200;
           const shouldSend = soloModeRef.current || isUserSpeakingRef.current || recentlySpoke;
-          if (!shouldSend) return;
-
-          for (const chunk of bufferedAudioChunksRef.current) {
-            sock.emit('speech-data', chunk);
+          if (shouldSend) {
+            socket.emit('speech-data', event.data);
+            return;
           }
-          bufferedAudioChunksRef.current = [];
-        } catch {
-          // ignore
-        }
-      }, 250);
 
-      mediaRecorderRef.current = mediaRecorder;
+          bufferedAudioChunksRef.current.push(event.data);
+          if (bufferedAudioChunksRef.current.length > 4) {
+            bufferedAudioChunksRef.current.shift();
+          }
+        };
+
+        mediaRecorder.start(250);
+        mediaRecorderRef.current = mediaRecorder;
+
+        // Android Chrome/PWA can be inconsistent about honoring timeslice; force periodic flush.
+        if (requestDataIntervalRef.current) clearInterval(requestDataIntervalRef.current);
+        requestDataIntervalRef.current = setInterval(() => {
+          try {
+            if (mediaRecorder.state === 'recording') {
+              mediaRecorder.requestData();
+            }
+          } catch {
+            // ignore
+          }
+
+          try {
+            const sock = socketRef.current;
+            if (!sock?.connected) return;
+            if (bufferedAudioChunksRef.current.length === 0) return;
+
+            if (disableAutoStopOnSilenceRef.current) {
+              for (const chunk of bufferedAudioChunksRef.current) {
+                sock.emit('speech-data', chunk);
+              }
+              bufferedAudioChunksRef.current = [];
+              return;
+            }
+
+            const now = Date.now();
+            const recentlySpoke = now - lastSpeechActivityAtRef.current < 1200;
+            const shouldSend = soloModeRef.current || isUserSpeakingRef.current || recentlySpoke;
+            if (!shouldSend) return;
+
+            for (const chunk of bufferedAudioChunksRef.current) {
+              sock.emit('speech-data', chunk);
+            }
+            bufferedAudioChunksRef.current = [];
+          } catch {
+            // ignore
+          }
+        }, 250);
+
+      } else {
+        // Fallback: iOS Safari / Non-WebM -> PCM (LINEAR16)
+        console.log("WebM not supported, falling back to PCM recorder");
+        const pcmRecorder = new PcmRecorder();
+        pcmRecorderRef.current = pcmRecorder;
+
+        const handlePcmData = (data: ArrayBuffer) => {
+          const socket = socketRef.current;
+          if (!socket?.connected) return;
+
+          if (disableAutoStopOnSilenceRef.current) {
+            socket.emit('speech-data', data);
+            return;
+          }
+
+          const now = Date.now();
+          const recentlySpoke = now - lastSpeechActivityAtRef.current < 1200;
+          const shouldSend = soloModeRef.current || isUserSpeakingRef.current || recentlySpoke;
+          if (shouldSend) {
+            socket.emit('speech-data', data);
+          }
+        };
+
+        // Initialize recorder first to get sample rate
+        const sampleRate = await pcmRecorder.start(stream, handlePcmData);
+
+        socket.emit('start-speech', {
+          languageCode,
+          soloMode,
+          soloTargetLang: soloMode ? soloTargetLang : undefined,
+          encoding: 'LINEAR16',
+          sampleRateHertz: sampleRate
+        });
+
+        // Start VAD
+        await vadRef.current?.start();
+
+        if (token !== lifecycleTokenRef.current) {
+          stopRecordingInternalImpl({ skipVadPause: true });
+          return;
+        }
+      }
+
       isRecordingRef.current = true;
       setIsRecording(true);
     } catch (err) {

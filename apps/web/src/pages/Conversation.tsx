@@ -386,7 +386,7 @@ const Conversation = () => {
 
   if (isLoading) {
     return (
-      <div className="flex flex-col h-screen bg-background">
+      <div className="flex flex-col h-full bg-background">
         <div className="fixed top-0 left-0 right-0 z-10 bg-background border-b p-4 sm:p-6 flex items-center justify-between">
           <Skeleton className="h-6 w-32" />
           <div className="flex space-x-2">
@@ -417,7 +417,7 @@ const Conversation = () => {
 
   return (
     <div
-      className="h-[100dvh] bg-background grid grid-rows-[auto_1fr_auto] gap-0 px-0 py-0 sm:px-0 sm:py-0"
+      className="h-full bg-background grid grid-rows-[auto_1fr_auto] gap-0 px-0 py-0 sm:px-0 sm:py-0"
       style={{ overscrollBehavior: 'none' }}
     >
       <Card className="rounded-none">

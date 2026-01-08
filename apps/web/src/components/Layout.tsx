@@ -7,8 +7,8 @@ interface LayoutProps {
 
 const Layout = ({ children, showBottomNav = true }: LayoutProps) => {
   return (
-    <div className="min-h-screen bg-background">
-      <main className={showBottomNav ? "pb-16" : ""}>
+    <div className={showBottomNav ? "min-h-[100dvh] bg-background" : "h-[100dvh] bg-background overflow-hidden"}>
+      <main className={showBottomNav ? "pb-16" : "h-full overflow-hidden"}>
         {children}
       </main>
       {showBottomNav && <BottomNav />}

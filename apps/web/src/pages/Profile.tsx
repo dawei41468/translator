@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useUpdateLanguage } from "@/lib/hooks";
 import { useAuth } from "@/lib/auth";
@@ -22,6 +23,7 @@ import { apiClient } from "@/lib/api";
 
 const Profile = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { user, logout, speechEngineRegistry } = useAuth();
   const queryClient = useQueryClient();
 
@@ -150,13 +152,15 @@ const Profile = () => {
               <Label htmlFor="email">{t('profile.email', 'Email')}</Label>
               <Input
                 id="email"
-                type="email"
-                value={user.email}
+                type="text"
+                value={user.isGuest ? t('profile.guestAccount', 'Guest Account') : user.email}
                 disabled
                 className="mt-1"
               />
               <p className="text-sm text-muted-foreground mt-1">
-                {t('profile.emailDescription', 'Your email address cannot be changed')}
+                {user.isGuest 
+                  ? t('profile.guestEmailDescription', 'Guest accounts are temporary sessions.') 
+                  : t('profile.emailDescription', 'Your email address cannot be changed')}
               </p>
             </div>
 
@@ -229,12 +233,27 @@ const Profile = () => {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            {user.isGuest && (
+              <div className="bg-muted/50 border rounded-lg p-4 mb-4">
+                <h4 className="font-medium text-sm mb-1">{t('profile.unlockFeatures', 'Unlock Premium Features')}</h4>
+                <p className="text-sm text-muted-foreground mb-3">
+                  {t('profile.guestEngineDescription', 'Sign up to use premium speech engines (OpenAI, Deepgram) and save your preferences.')}
+                </p>
+                <Button 
+                  onClick={() => navigate('/register')} 
+                  variant="default" 
+                  size="sm"
+                >
+                  {t('auth.createAccount', 'Create Account')}
+                </Button>
+              </div>
+            )}
             <div>
               <Label htmlFor="sttEngine">{t('profile.defaultSttEngine', 'Default STT Engine')}</Label>
               <Select
                 value={resolvedSttEngineId}
                 onValueChange={(value) => handleEnginePreferenceChange('stt', value)}
-                disabled={updateProfileMutation.isPending}
+                disabled={updateProfileMutation.isPending || user.isGuest}
               >
                 <SelectTrigger className="mt-1">
                   <SelectValue />
@@ -257,7 +276,7 @@ const Profile = () => {
               <Select
                 value={resolvedTtsEngineId}
                 onValueChange={(value) => handleEnginePreferenceChange('tts', value)}
-                disabled={updateProfileMutation.isPending}
+                disabled={updateProfileMutation.isPending || user.isGuest}
               >
                 <SelectTrigger className="mt-1">
                   <SelectValue />
@@ -280,7 +299,7 @@ const Profile = () => {
               <Select
                 value={resolvedTranslationEngineId}
                 onValueChange={(value) => handleEnginePreferenceChange('translation', value)}
-                disabled={updateProfileMutation.isPending}
+                disabled={updateProfileMutation.isPending || user.isGuest}
               >
                 <SelectTrigger className="mt-1">
                   <SelectValue />

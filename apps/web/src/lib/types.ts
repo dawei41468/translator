@@ -6,6 +6,7 @@ export interface AuthUser {
   email: string;
   displayName?: string;
   language: string;
+  isGuest?: boolean;
   preferences?: {
     sttEngine?: string;
     ttsEngine?: string;

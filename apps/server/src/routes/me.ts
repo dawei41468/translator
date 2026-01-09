@@ -66,6 +66,7 @@ router.get("/", async (req, res) => {
         email: user.email,
         displayName: user.displayName,
         language: user.language,
+        isGuest: user.isGuest,
         preferences: normalizeEnginePreferences(user.preferences),
       },
     });
@@ -78,7 +79,7 @@ router.put("/language", authenticate, async (req, res) => {
   // const context = getRequestContext(req);
   try {
     const { language } = req.body;
-    if (!language || typeof language !== "string" || !["en", "zh", "it", "de", "nl"].includes(language)) {
+    if (!language || typeof language !== "string" || !["en", "zh", "ko", "it", "de", "nl"].includes(language)) {
       return res.status(400).json({ error: "Invalid language" });
     }
 
@@ -104,7 +105,7 @@ router.patch("/", authenticate, async (req, res) => {
     }
 
     // Validate language
-    if (language !== undefined && (!language || typeof language !== "string" || !["en", "zh", "it", "de", "nl"].includes(language))) {
+    if (language !== undefined && (!language || typeof language !== "string" || !["en", "zh", "ko", "it", "de", "nl"].includes(language))) {
       return res.status(400).json({ error: "Invalid language" });
     }
 

@@ -89,6 +89,14 @@ class ApiClient {
     return result;
   }
 
+  async guestLogin(displayName: string) {
+    const result = await this.request<{ user: AuthUser }>("/api/auth/guest-login", {
+      method: "POST",
+      body: JSON.stringify({ displayName }),
+    });
+    return result;
+  }
+
   async getMe() {
     return this.request<{ user: AuthUser | null }>("/api/me");
   }

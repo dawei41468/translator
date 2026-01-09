@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { queryClient } from "@/lib/api";
 import { Toaster } from "sonner";
@@ -13,6 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export function ProtectedRoute({ children, showBottomNav = true }: { children: React.ReactNode; showBottomNav?: boolean }) {
   const { isAuthenticated, isLoading } = useAuth();
+  const location = useLocation();
 
   if (isLoading) {
     return (
@@ -30,7 +31,7 @@ export function ProtectedRoute({ children, showBottomNav = true }: { children: R
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
   return <Layout showBottomNav={showBottomNav}>{children}</Layout>;
@@ -43,9 +44,9 @@ export const AppRoutes = () => {
       <Route path="/register" element={<Register />} />
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route path="/dashboard" element={
-        <ProtectedRoute>
+        <Layout>
           <Dashboard />
-        </ProtectedRoute>
+        </Layout>
       } />
       <Route path="/profile" element={
         <ProtectedRoute>

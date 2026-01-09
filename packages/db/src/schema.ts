@@ -10,6 +10,7 @@ export const users = pgTable("users", {
   name: varchar("name", { length: 255 }),
   displayName: varchar("display_name", { length: 255 }),
   language: varchar("language", { length: 10 }).default("en"),
+  isGuest: boolean("is_guest").default(false),
   preferences: jsonb("preferences").$type<{
     sttEngine?: string;
     ttsEngine?: string;

@@ -1,4 +1,5 @@
 import express from "express";
+import crypto from "crypto";
 import rateLimit from "express-rate-limit";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
@@ -193,6 +194,65 @@ router.post("/register", async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: "Server error" });
+  }
+});
+
+router.post("/guest-login", async (req, res) => {
+  const body: unknown = req.body ?? {};
+  const displayName =
+    typeof body === "object" && body !== null && typeof (body as { displayName?: unknown }).displayName === "string"
+      ? (body as { displayName: string }).displayName.trim()
+      : "Guest";
+
+  try {
+    const randomId = crypto.randomUUID();
+    const email = `guest_${randomId}@translator.local`;
+    const password = crypto.randomUUID();
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    const newUser = await db.insert(users).values({
+      email,
+      name: displayName,
+      displayName,
+      passwordHash,
+      language: "en",
+      isGuest: true,
+    }).returning();
+
+    const user = newUser[0];
+
+    const token = jwt.sign(
+      {
+        userId: user.id,
+        email: user.email,
+        name: user.name,
+        language: user.language,
+      },
+      JWT_SECRET,
+      { expiresIn: "30d" }
+    );
+
+    const isProd = process.env.NODE_ENV === "production";
+    res.cookie(AUTH_COOKIE_NAME, token, {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: "lax",
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+      path: "/",
+    });
+
+    res.json({
+      user: {
+        id: user.id,
+        name: user.name,
+        displayName: user.displayName,
+        email: user.email,
+        language: user.language,
+        isGuest: true,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Server error during guest login" });
   }
 });
 

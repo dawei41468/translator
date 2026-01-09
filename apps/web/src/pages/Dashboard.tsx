@@ -10,11 +10,20 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 
 const Dashboard = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, loginAsGuest } = useAuth();
   const isIOS = typeof navigator !== 'undefined' && /iPhone|iPad|iPod/i.test(navigator.userAgent);
   const [createdRoom, setCreatedRoom] = useState<{ code: string; id: string } | null>(null);
   const [showScanner, setShowScanner] = useState(false);
@@ -23,6 +32,11 @@ const Dashboard = () => {
   const [permissionStatus, setPermissionStatus] = useState<'checking' | 'granted' | 'denied' | 'prompt'>('checking');
   const [isScanning, setIsScanning] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
+
+  // Guest mode state
+  const [isGuestDialogOpen, setIsGuestDialogOpen] = useState(false);
+  const [guestName, setGuestName] = useState("");
+  const [pendingAction, setPendingAction] = useState<'create' | 'join' | 'scan' | null>(null);
 
   const scannerStatusRef = useRef<'idle' | 'starting' | 'running' | 'stopping'>('idle');
   const stopPromiseRef = useRef<Promise<void> | null>(null);
@@ -35,7 +49,7 @@ const Dashboard = () => {
   const createRoomMutation = useCreateRoom();
   const joinRoomMutation = useJoinRoom();
 
-  const handleStartConversation = () => {
+  const performCreateRoom = () => {
     createRoomMutation.mutate(undefined, {
       onSuccess: (data) => {
         setCreatedRoom({ code: data.roomCode, id: data.roomId });
@@ -46,12 +60,80 @@ const Dashboard = () => {
     });
   };
 
+  const handleStartConversation = () => {
+    if (!isAuthenticated) {
+      setPendingAction('create');
+      setIsGuestDialogOpen(true);
+      return;
+    }
+    performCreateRoom();
+  };
+
   const handleJoinConversation = () => {
     if (createdRoom) {
       navigate(`/room/${createdRoom.code}`);
     }
   };
 
+  const handleScanQR = async () => {
+    if (!isAuthenticated) {
+      setPendingAction('scan');
+      setIsGuestDialogOpen(true);
+      return;
+    }
+
+    setShowScanner(true);
+    setPermissionStatus('prompt');
+  };
+
+  const handleManualJoin = () => {
+    if (!isAuthenticated) {
+      setPendingAction('join');
+      setIsGuestDialogOpen(true);
+      return;
+    }
+    if (!manualCode.trim()) {
+      toast.error(t('error.enterCode'));
+      return;
+    }
+    if (isJoining) {
+      return;
+    }
+    setIsJoining(true);
+    joinRoomMutation.mutate(manualCode.toUpperCase(), {
+      onSettled: () => {
+        setIsJoining(false);
+      }
+    });
+  };
+
+  const handleGuestSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!guestName.trim()) return;
+
+    try {
+      await loginAsGuest(guestName);
+      setIsGuestDialogOpen(false);
+      
+      // Perform pending action
+      if (pendingAction === 'create') {
+        performCreateRoom();
+      } else if (pendingAction === 'scan') {
+        setShowScanner(true);
+        setPermissionStatus('prompt');
+      } else if (pendingAction === 'join') {
+        if (isJoining) return;
+        setIsJoining(true);
+        joinRoomMutation.mutate(manualCode.toUpperCase(), {
+          onSettled: () => {
+            setIsJoining(false);
+          }
+        });
+      }
+    } catch (error) {
+      toast.error(t('auth.guestLoginFailed', 'Failed to join as guest'));
+    }
+  };
 
   const openAppSettings = () => {
     if (isIOS) {
@@ -186,16 +268,6 @@ const Dashboard = () => {
     });
   };
 
-  const handleScanQR = async () => {
-    if (!isAuthenticated) {
-      navigate("/login");
-      return;
-    }
-
-    setShowScanner(true);
-    setPermissionStatus('prompt');
-  };
-
   const handleRequestPermission = async () => {
     setPermissionStatus('checking');
 
@@ -215,26 +287,6 @@ const Dashboard = () => {
       console.error('Camera permission error:', error);
       setPermissionStatus('denied');
     }
-  };
-
-  const handleManualJoin = () => {
-    if (!isAuthenticated) {
-      navigate("/login");
-      return;
-    }
-    if (!manualCode.trim()) {
-      toast.error(t('error.enterCode'));
-      return;
-    }
-    if (isJoining) {
-      return;
-    }
-    setIsJoining(true);
-    joinRoomMutation.mutate(manualCode.toUpperCase(), {
-      onSettled: () => {
-        setIsJoining(false);
-      }
-    });
   };
 
   const clipboardSupported =
@@ -316,7 +368,7 @@ const Dashboard = () => {
 
                 <Button
                   onClick={handleScanQR}
-                  disabled={!isAuthenticated || isJoining}
+                  disabled={isJoining}
                   className="w-full"
                   variant="secondary"
                   size="lg"
@@ -336,12 +388,11 @@ const Dashboard = () => {
                     placeholder={t("room.enterCodePlaceholder")}
                     className="text-center font-mono tracking-wider"
                     maxLength={7}
-                    disabled={!isAuthenticated}
                     data-testid="room-code-input"
                   />
                   <Button
                     onClick={handleManualJoin}
-                    disabled={!isAuthenticated || !manualCode.trim() || joinRoomMutation.isPending || isJoining}
+                    disabled={!manualCode.trim() || joinRoomMutation.isPending || isJoining}
                     className="w-full"
                     size="lg"
                     data-testid="join-room-button"
@@ -351,9 +402,14 @@ const Dashboard = () => {
                 </div>
 
                 {!isAuthenticated && (
-                  <p className="text-sm text-muted-foreground mt-4 text-center">
-                    {t("auth.loginToJoin")}
-                  </p>
+                  <div className="mt-6 pt-4 border-t text-center">
+                     <p className="text-sm text-muted-foreground mb-3">
+                       {t("auth.haveAccount", "Have an account?")}
+                     </p>
+                     <Button variant="outline" size="sm" onClick={() => navigate("/login")} className="w-full">
+                       {t("auth.login", "Log in")}
+                     </Button>
+                  </div>
                 )}
               </div>
             </Card>
@@ -485,6 +541,44 @@ const Dashboard = () => {
               </div>
             </div>
           )}
+
+        <Dialog open={isGuestDialogOpen} onOpenChange={setIsGuestDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>{t('auth.guestJoin', 'Join as Guest')}</DialogTitle>
+              <DialogDescription>
+                {t('auth.guestJoinDescription', 'Enter your name to join the conversation without an account.')}
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleGuestSubmit} className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="guest-name">{t('auth.displayName', 'Display Name')}</Label>
+                <Input
+                  id="guest-name"
+                  placeholder="e.g. Alice"
+                  value={guestName}
+                  onChange={(e) => setGuestName(e.target.value)}
+                  autoFocus
+                  required
+                />
+              </div>
+              <DialogFooter className="flex-col space-y-2 sm:space-y-0">
+                <Button type="submit" className="w-full" disabled={!guestName.trim()}>
+                  {t('auth.continueAsGuest', 'Continue as Guest')}
+                </Button>
+                <div className="relative flex items-center justify-center my-4">
+                  <span className="bg-background px-2 text-xs text-muted-foreground uppercase">{t('common.or')}</span>
+                  <div className="absolute inset-0 flex items-center -z-10">
+                    <span className="w-full border-t"></span>
+                  </div>
+                </div>
+                <Button type="button" variant="outline" className="w-full" onClick={() => navigate("/login")}>
+                  {t('auth.login', 'Log in')}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );

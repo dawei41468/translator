@@ -10,6 +10,7 @@ interface AuthContextType {
   user: AuthUser | null;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, name: string) => Promise<void>;
+  loginAsGuest: (displayName: string) => Promise<void>;
   logout: () => void;
   isLoading: boolean;
   isAuthenticated: boolean;
@@ -66,6 +67,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const loginAsGuest = async (displayName: string) => {
+    try {
+      const result = await apiClient.guestLogin(displayName);
+      queryClient.setQueryData(['me'], { user: result.user });
+    } catch (error) {
+      throw error;
+    }
+  };
+
   const logout = () => {
     apiClient.logout().catch(() => undefined);
     // Immediately clear the auth state
@@ -76,6 +86,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     user,
     login,
     register,
+    loginAsGuest,
     logout,
     isLoading: meQuery.isLoading,
     isAuthenticated: !!user && !meQuery.isError,

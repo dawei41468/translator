@@ -1,6 +1,12 @@
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 
+// Mock scrollIntoView (not implemented in jsdom)
+Object.defineProperty(Element.prototype, 'scrollIntoView', {
+  configurable: true,
+  value: vi.fn(),
+});
+
 // Mock localStorage
 const localStorageMock = {
   getItem: vi.fn(),

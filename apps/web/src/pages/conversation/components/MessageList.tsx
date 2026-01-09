@@ -57,23 +57,27 @@ export function MessageList({ messages }: MessageListProps) {
                 )}
               >
                 {message.translatedText ? (
-                  <>
-                    <p className="text-base font-medium leading-relaxed" data-testid="message-translated-text">
-                      {message.translatedText}
-                    </p>
-                    <p
-                      className={cn(
-                        "text-xs mt-2 border-t pt-2 italic",
-                        message.isOwn
-                          ? "text-primary-foreground/70 border-primary-foreground/20"
-                          : "text-muted-foreground border-border/50"
-                      )}
-                      data-testid="message-original-text"
-                    >
-                      <span className="sr-only">{t('conversation.originalText', 'Original')}: </span>
-                      {message.text}
-                    </p>
-                  </>
+                  message.translatedText === message.text ? (
+                    <p className="leading-relaxed" data-testid="message-text">{message.text}</p>
+                  ) : (
+                    <>
+                      <p className="text-base font-medium leading-relaxed" data-testid="message-translated-text">
+                        {message.translatedText}
+                      </p>
+                      <p
+                        className={cn(
+                          "text-xs mt-2 border-t pt-2 italic",
+                          message.isOwn
+                            ? "text-primary-foreground/70 border-primary-foreground/20"
+                            : "text-muted-foreground border-border/50"
+                        )}
+                        data-testid="message-original-text"
+                      >
+                        <span className="sr-only">{t('conversation.originalText', 'Original')}: </span>
+                        {message.text}
+                      </p>
+                    </>
+                  )
                 ) : (
                   <p className="leading-relaxed" data-testid="message-text">{message.text}</p>
                 )}

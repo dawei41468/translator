@@ -266,7 +266,13 @@ const Conversation = () => {
       };
       setMessages((prev: Message[]) => [...prev, message]);
 
-      if (audioEnabledRef.current && !soloModeRef.current) {
+      if (
+        audioEnabledRef.current &&
+        !soloModeRef.current &&
+        typeof data?.translatedText === 'string' &&
+        typeof data?.originalText === 'string' &&
+        data.translatedText !== data.originalText
+      ) {
         speakTextRef.current(data.translatedText, data.targetLang);
       }
     });

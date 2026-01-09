@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { QRCodeCanvas } from "qrcode.react";
 import { useAuth } from "@/lib/auth";
 import { LANGUAGES } from "@/lib/languages";
+import { useWakeLock } from "@/lib/useWakeLock";
 
 // Local imports
 import { Message, ConnectionStatus } from "./conversation/types";
@@ -81,6 +82,9 @@ const Conversation = () => {
   }, [ownSpeakerName]);
 
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>("connecting");
+
+  // Keep screen awake while connected to the conversation
+  useWakeLock(connectionStatus === 'connected');
   const [soloMode, setSoloMode] = useState(false);
   const soloModeRef = useRef(soloMode);
   useEffect(() => {

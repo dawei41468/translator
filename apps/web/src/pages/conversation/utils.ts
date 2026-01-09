@@ -2,6 +2,8 @@ export function getTtsLocale(language: string | null | undefined): string {
   switch ((language ?? "en").toLowerCase()) {
     case "zh":
       return "zh-CN";
+    case "ko":
+      return "ko-KR";
     case "it":
       return "it-IT";
     case "de":
@@ -45,6 +47,8 @@ export function getSpeechRecognitionLocale(language: string | null | undefined):
   switch ((language ?? "en").toLowerCase()) {
     case "zh":
       return "zh-CN";
+    case "ko":
+      return "ko-KR";
     case "it":
       return "it-IT";
     case "de":

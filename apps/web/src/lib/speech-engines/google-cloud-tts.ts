@@ -32,6 +32,7 @@ export class GoogleCloudTtsEngine implements TtsEngine {
     this.availableVoices = [
       { name: 'en-US-Neural2-C', languageCodes: ['en-US'], ssmlGender: 'FEMALE' },
       { name: 'cmn-CN-Wavenet-A', languageCodes: ['cmn-CN'], ssmlGender: 'FEMALE' },
+      { name: 'ko-KR-Standard-A', languageCodes: ['ko-KR'], ssmlGender: 'FEMALE' },
       { name: 'it-IT-Neural2-A', languageCodes: ['it-IT'], ssmlGender: 'FEMALE' },
       { name: 'de-DE-Neural2-G', languageCodes: ['de-DE'], ssmlGender: 'FEMALE' },
       { name: 'nl-NL-Wavenet-F', languageCodes: ['nl-NL'], ssmlGender: 'FEMALE' },
@@ -104,6 +105,7 @@ export class GoogleCloudTtsEngine implements TtsEngine {
     const configs: Record<string, { languageCode: string; voiceName: string; ssmlGender: string }> = {
       'en': { languageCode: 'en-US', voiceName: 'en-US-Neural2-C', ssmlGender: 'FEMALE' },
       'zh': { languageCode: 'cmn-CN', voiceName: 'cmn-CN-Wavenet-A', ssmlGender: 'FEMALE' },
+      'ko': { languageCode: 'ko-KR', voiceName: 'ko-KR-Standard-A', ssmlGender: 'FEMALE' },
       'it': { languageCode: 'it-IT', voiceName: 'it-IT-Neural2-A', ssmlGender: 'FEMALE' },
       'de': { languageCode: 'de-DE', voiceName: 'de-DE-Neural2-G', ssmlGender: 'FEMALE' },
       'nl': { languageCode: 'nl-NL', voiceName: 'nl-NL-Wavenet-F', ssmlGender: 'FEMALE' },
@@ -116,6 +118,7 @@ export class GoogleCloudTtsEngine implements TtsEngine {
     const codes: Record<string, string> = {
       'en': 'en-US',
       'zh': 'cmn-CN',
+      'ko': 'ko-KR',
       'it': 'it-IT',
       'de': 'de-DE',
       'nl': 'nl-NL',

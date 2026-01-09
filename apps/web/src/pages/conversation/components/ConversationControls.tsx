@@ -1,16 +1,9 @@
 import { Button } from "@/components/ui/button";
-import { Mic, MicOff } from "lucide-react";
+import { Mic, MicOff, Lock, ChevronUp } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { LANGUAGES } from "@/lib/languages";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
+import { haptics } from "@/lib/haptics";
 
 interface ConversationControlsProps {
   isRecording: boolean;
@@ -20,11 +13,7 @@ interface ConversationControlsProps {
   pushToTalkEnabled: boolean;
   canStartRecording: boolean;
   connectionStatus: string;
-  soloMode: boolean;
-  toggleSoloMode: () => void;
-  soloTargetLang: string;
-  onSoloLangChange: (lang: string) => void;
-  userLanguage: string | undefined;
+  openSettings: () => void;
 }
 
 export function ConversationControls({
@@ -35,11 +24,7 @@ export function ConversationControls({
   pushToTalkEnabled,
   canStartRecording,
   connectionStatus,
-  soloMode,
-  toggleSoloMode,
-  soloTargetLang,
-  onSoloLangChange,
-  userLanguage,
+  openSettings,
 }: ConversationControlsProps) {
   const { t } = useTranslation();
 
@@ -94,6 +79,7 @@ export function ConversationControls({
     setIsHolding(false);
     setIsLocked(false);
     setSecondsLeft(60);
+    haptics.medium();
     stopRecording();
   };
 
@@ -122,6 +108,7 @@ export function ConversationControls({
       }
     }, 200);
 
+    haptics.light();
     startRecording();
   };
 
@@ -141,44 +128,22 @@ export function ConversationControls({
 
   return (
     <footer className="relative p-4 pb-8 sm:p-6 overscroll-contain touch-none" role="contentinfo">
-      <Button
-        type="button"
-        variant={soloMode ? "default" : "outline"}
-        size="sm"
-        onClick={toggleSoloMode}
-        aria-pressed={soloMode}
-        aria-label={t('conversation.soloMode')}
-        className="absolute bottom-4 left-4"
-        data-testid="toggle-solo-mode"
-      >
-        Solo
-      </Button>
-
-      <div className="mb-4 flex flex-col items-center gap-3">
-        {soloMode && (
-          <div className="flex items-center justify-center gap-3">
-            <label htmlFor="solo-language-select" className="sr-only">{t('conversation.translateTo')}</label>
-            <Select
-              value={soloTargetLang}
-              onValueChange={onSoloLangChange}
+      <div className="mb-4 flex flex-col items-center gap-2">
+        {!canStartRecording && (
+          <div className="text-center">
+            <p className="text-xs text-muted-foreground" role="note">
+              {t('conversation.onlyParticipantHint')}
+            </p>
+            <Button
+              type="button"
+              variant="link"
+              size="sm"
+              className="px-0 h-auto"
+              onClick={openSettings}
             >
-              <SelectTrigger id="solo-language-select" className="h-9 w-44" aria-label={t('conversation.translateTo')} data-testid="solo-language-select">
-                <SelectValue placeholder={t('conversation.translateTo')} />
-              </SelectTrigger>
-              <SelectContent>
-                {LANGUAGES.filter((lang) => lang.code !== userLanguage).map((lang) => (
-                  <SelectItem key={lang.code} value={lang.code}>
-                    {lang.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              {t('common.settings', 'Settings')}
+            </Button>
           </div>
-        )}
-        {soloMode && (
-          <p className="text-center text-xs text-muted-foreground" id="solo-mode-description" role="note">
-            {t('conversation.soloModeHint')}
-          </p>
         )}
       </div>
 
@@ -193,58 +158,74 @@ export function ConversationControls({
             </div>
           )}
 
-          {!canStartRecording && (
-            <p className="text-center text-xs text-muted-foreground" role="note">
-              {t('conversation.onlyParticipantHint')}
-            </p>
+          {pushToTalkEnabled && isHolding && !isLocked && (
+            <div className="absolute bottom-28 flex flex-col items-center text-muted-foreground animate-in fade-in slide-in-from-bottom-4 duration-300">
+              <ChevronUp className="h-4 w-4 animate-bounce" />
+              <Lock className={cn("h-4 w-4 mt-1", isLocked ? "text-primary" : "")} />
+            </div>
           )}
 
-          <Button
-            type="button"
-            onClick={pushToTalkEnabled ? (isLocked ? stopSession : undefined) : toggleRecording}
-            onPointerDown={pushToTalkEnabled ? (e) => {
-              if (isLocked) return;
-              e.preventDefault();
-              e.currentTarget.setPointerCapture?.(e.pointerId);
-              startSession(e.clientY);
-            } : undefined}
-            onPointerMove={pushToTalkEnabled ? (e) => {
-              if (!isHolding || isLocked) return;
-              const startY = startYRef.current;
-              if (startY === null) return;
-              const dy = e.clientY - startY;
-              if (dy < -LOCK_THRESHOLD_PX) {
-                setIsLocked(true);
-                setIsHolding(false);
-              }
-            } : undefined}
-            onPointerUp={pushToTalkEnabled ? (e) => {
-              if (!isHolding) return;
-              e.preventDefault();
-              if (!isLocked) stopSession();
-            } : undefined}
-            onPointerCancel={pushToTalkEnabled ? (e) => {
-              if (!isHolding) return;
-              e.preventDefault();
-              if (!isLocked) stopSession();
-            } : undefined}
-            disabled={recordingDisabled}
-            variant={isRecording ? "destructive" : "default"}
-            size="lg"
-            className={cn(
-              "h-16 w-16 rounded-full shadow-lg transition-all focus:ring-4 focus:ring-primary/20",
-              isRecording ? "animate-pulse scale-110" : "hover:scale-105"
+          <div className="relative">
+            {/* Ripple Effects for Active Recording */}
+            {isRecording && (
+              <>
+                <div className="absolute inset-0 rounded-full bg-red-500/20 animate-ping" style={{ animationDuration: '2s' }} />
+                <div className="absolute inset-0 rounded-full bg-red-500/10 animate-ping" style={{ animationDuration: '2s', animationDelay: '0.5s' }} />
+              </>
             )}
-            aria-pressed={isRecording}
-            aria-label={
-              pushToTalkEnabled
-                ? (isLocked ? 'Stop' : (isRecording ? 'Release to stop' : 'Hold to talk'))
-                : (isRecording ? t('conversation.stopSpeaking') : t('conversation.startSpeaking'))
-            }
-            data-testid="toggle-recording"
-          >
-            {isRecording ? <MicOff className="h-8 w-8" /> : <Mic className="h-8 w-8" />}
-          </Button>
+
+            <Button
+              type="button"
+              onClick={pushToTalkEnabled ? (isLocked ? stopSession : undefined) : () => {
+                if (!isRecording) haptics.light();
+                else haptics.medium();
+                toggleRecording();
+              }}
+              onPointerDown={pushToTalkEnabled ? (e) => {
+                if (isLocked) return;
+                e.preventDefault();
+                e.currentTarget.setPointerCapture?.(e.pointerId);
+                startSession(e.clientY);
+              } : undefined}
+              onPointerMove={pushToTalkEnabled ? (e) => {
+                if (!isHolding || isLocked) return;
+                const startY = startYRef.current;
+                if (startY === null) return;
+                const dy = e.clientY - startY;
+                if (dy < -LOCK_THRESHOLD_PX) {
+                  setIsLocked(true);
+                  setIsHolding(false);
+                  haptics.medium();
+                }
+              } : undefined}
+              onPointerUp={pushToTalkEnabled ? (e) => {
+                if (!isHolding) return;
+                e.preventDefault();
+                if (!isLocked) stopSession();
+              } : undefined}
+              onPointerCancel={pushToTalkEnabled ? (e) => {
+                if (!isHolding) return;
+                e.preventDefault();
+                if (!isLocked) stopSession();
+              } : undefined}
+              disabled={recordingDisabled}
+              variant={isRecording ? "destructive" : "default"}
+              size="lg"
+              className={cn(
+                "relative z-10 h-20 w-20 rounded-full shadow-xl transition-all duration-300 focus:ring-4 focus:ring-primary/20 border-4 border-background",
+                isRecording ? "scale-110 bg-red-600 hover:bg-red-700 ring-4 ring-red-500/30" : "hover:scale-105"
+              )}
+              aria-pressed={isRecording}
+              aria-label={
+                pushToTalkEnabled
+                  ? (isLocked ? 'Stop' : (isRecording ? 'Release to stop' : 'Hold to talk'))
+                  : (isRecording ? t('conversation.stopSpeaking') : t('conversation.startSpeaking'))
+              }
+              data-testid="toggle-recording"
+            >
+              {isRecording ? <MicOff className="h-8 w-8 animate-pulse" /> : <Mic className="h-8 w-8" />}
+            </Button>
+          </div>
 
           {pushToTalkEnabled && isLocked && (
             <div className="text-xs text-muted-foreground" aria-live="polite">

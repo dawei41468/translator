@@ -11,10 +11,15 @@ vi.mock('react-i18next', () => ({
 describe('ConversationControls (push-to-talk)', () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    Object.defineProperty(navigator, 'vibrate', {
+      writable: true,
+      value: vi.fn(),
+    });
   });
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.clearAllMocks();
   });
 
   function renderHarness(opts?: { pushToTalkEnabled?: boolean }) {
@@ -29,11 +34,7 @@ describe('ConversationControls (push-to-talk)', () => {
       pushToTalkEnabled: opts?.pushToTalkEnabled ?? true,
       canStartRecording: true,
       connectionStatus: 'connected',
-      soloMode: false,
-      toggleSoloMode: vi.fn(),
-      soloTargetLang: 'en',
-      onSoloLangChange: vi.fn(),
-      userLanguage: 'en',
+      openSettings: vi.fn(),
     } as const;
 
     const { rerender } = render(<ConversationControls {...props} />);
@@ -52,25 +53,30 @@ describe('ConversationControls (push-to-talk)', () => {
 
     fireEvent.pointerDown(btn, { pointerId: 1, clientY: 200 });
     expect(h.startRecording).toHaveBeenCalledTimes(1);
+    expect(navigator.vibrate).toHaveBeenCalledWith(10); // Light haptic on start
 
     fireEvent.pointerUp(btn, { pointerId: 1, clientY: 200 });
     expect(h.stopRecording).toHaveBeenCalledTimes(1);
   });
 
-  it('locks on slide up and does not stop on pointer up; stop button stops', () => {
+  it('locks on slide up and triggers haptic', () => {
     const h = renderHarness();
 
     const btn = screen.getByTestId('toggle-recording');
 
     fireEvent.pointerDown(btn, { pointerId: 1, clientY: 200 });
-    expect(h.startRecording).toHaveBeenCalledTimes(1);
-
+    
+    // Slide up
     fireEvent.pointerMove(btn, { pointerId: 1, clientY: 100 });
+    expect(navigator.vibrate).toHaveBeenCalledWith(50); // Medium haptic on lock
+    
     fireEvent.pointerUp(btn, { pointerId: 1, clientY: 100 });
     expect(h.stopRecording).toHaveBeenCalledTimes(0);
 
+    // Stop manually
     fireEvent.click(btn);
     expect(h.stopRecording).toHaveBeenCalledTimes(1);
+    expect(navigator.vibrate).toHaveBeenCalledWith(50); // Medium haptic on stop
   });
 
   it('auto-stops at 60s', () => {

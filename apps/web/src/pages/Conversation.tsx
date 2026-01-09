@@ -7,8 +7,6 @@ import { useTranslation } from "react-i18next";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/ui/error-state";
 import { Card } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { QRCodeCanvas } from "qrcode.react";
 import { useAuth } from "@/lib/auth";
 import { LANGUAGES } from "@/lib/languages";
 import { useWakeLock } from "@/lib/useWakeLock";
@@ -98,7 +96,7 @@ const Conversation = () => {
   }, [soloTargetLang]);
   const [hasUserSelectedSoloLang, setHasUserSelectedSoloLang] = useState(false);
   const [debugPanelExpanded, setDebugPanelExpanded] = useState(false);
-  const [isRoomQrOpen, setIsRoomQrOpen] = useState(false);
+  const [isRoomSettingsOpen, setIsRoomSettingsOpen] = useState(false);
   
   const [audioEnabled, setAudioEnabled] = useState(() => {
     try {
@@ -447,10 +445,20 @@ const Conversation = () => {
           audioEnabled={audioEnabled}
           toggleAudio={toggleAudio}
           onLeave={() => navigate('/dashboard')}
-          onRoomCodeClick={() => setIsRoomQrOpen(true)}
           userLanguage={user?.language}
           onUpdateLanguage={handleUpdateLanguage}
           isUpdatingLanguage={updateLanguageMutation.isPending}
+          isSettingsOpen={isRoomSettingsOpen}
+          onSettingsOpenChange={setIsRoomSettingsOpen}
+          isRecording={isRecording}
+          hasOtherParticipants={hasOtherParticipants}
+          soloMode={soloMode}
+          toggleSoloMode={() => setSoloMode((p) => !p)}
+          soloTargetLang={soloTargetLang}
+          onSoloLangChange={(val: string) => {
+            setSoloTargetLang(val);
+            setHasUserSelectedSoloLang(true);
+          }}
         />
 
         <DebugPanel
@@ -476,35 +484,9 @@ const Conversation = () => {
           pushToTalkEnabled={pushToTalkEnabled}
           canStartRecording={canStartRecording}
           connectionStatus={connectionStatus}
-          soloMode={soloMode}
-          toggleSoloMode={() => setSoloMode(p => !p)}
-          soloTargetLang={soloTargetLang}
-          onSoloLangChange={(val) => {
-            setSoloTargetLang(val);
-            setHasUserSelectedSoloLang(true);
-          }}
-          userLanguage={user?.language}
+          openSettings={() => setIsRoomSettingsOpen(true)}
         />
       </Card>
-
-      <Dialog open={isRoomQrOpen} onOpenChange={setIsRoomQrOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t('room.code')}: {roomData.code}</DialogTitle>
-          </DialogHeader>
-          <div className="flex justify-center">
-            <div className="border bg-background p-3" aria-label={t('room.qrCodeAlt')}>
-              <QRCodeCanvas
-                value={`${window.location.origin}/room/${roomData.code}`}
-                size={216}
-                bgColor="#ffffff"
-                fgColor="#000000"
-                aria-hidden="true"
-              />
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };

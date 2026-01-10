@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Volume2, VolumeX, Settings, LogOut, Copy, Check } from "lucide-react";
+import { Volume2, VolumeX, Settings, LogOut, Copy, Check, QrCode } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -8,6 +8,11 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Select,
   SelectContent,
@@ -74,15 +79,6 @@ export function RoomHeader({
     }
   };
 
-  const handleCopyLink = async () => {
-    try {
-      await navigator.clipboard.writeText(`${window.location.origin}/room/${roomCode}`);
-      toast.success(t('toast.linkCopied', 'Link copied to clipboard'));
-    } catch {
-      toast.error(t('toast.copyFailed'));
-    }
-  };
-
   const getConnectionColor = (status: ConnectionStatus) => {
     switch (status) {
       case 'connected': return 'bg-green-500';
@@ -133,36 +129,11 @@ export function RoomHeader({
             <DialogHeader>
               <DialogTitle>{t('room.settings', 'Room Settings')}</DialogTitle>
               <DialogDescription>
-                {t('room.settingsDescription', 'Manage room info, language, and solo mode.')}
+                {t('room.settingsDescription', 'Manage language and solo mode.')}
               </DialogDescription>
             </DialogHeader>
             
             <div className="space-y-6 py-4">
-              {/* Room Code Section */}
-              <div className="space-y-3">
-                <Label>{t('room.code', 'Room Code')}</Label>
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 bg-muted/50 p-2 rounded-md font-mono text-center text-lg tracking-widest border">
-                    {roomCode}
-                  </div>
-                  <Button size="icon" variant="outline" onClick={handleCopyCode}>
-                    {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                  </Button>
-                </div>
-                <div className="flex justify-center p-4 bg-white rounded-lg border w-fit mx-auto">
-                  <QRCodeCanvas
-                    value={`${window.location.origin}/room/${roomCode}`}
-                    size={180}
-                    bgColor="#ffffff"
-                    fgColor="#000000"
-                  />
-                </div>
-                <Button variant="outline" className="w-full" onClick={handleCopyLink}>
-                  <Copy className="mr-2 h-4 w-4" />
-                  {t('room.copyLink', 'Copy Invite Link')}
-                </Button>
-              </div>
-
               {/* Language Section */}
               <div className="space-y-3">
                 <Label>{t('settings.language.title', 'My Language')}</Label>
@@ -236,6 +207,43 @@ export function RoomHeader({
             </div>
           </DialogContent>
         </Dialog>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-full text-muted-foreground hover:text-foreground"
+              aria-label={t('room.meta', 'Room info')}
+            >
+              <QrCode className="h-5 w-5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-72">
+            <div className="space-y-3 p-2">
+              <div className="space-y-2">
+                <Label>{t('room.code', 'Room Code')}</Label>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 bg-muted/50 p-2 rounded-md font-mono text-center text-sm tracking-widest border">
+                    {roomCode}
+                  </div>
+                  <Button size="icon" variant="outline" onClick={handleCopyCode} aria-label={t('room.copyCode', 'Copy room code')}>
+                    {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="flex justify-center p-3 bg-white rounded-lg border">
+                <QRCodeCanvas
+                  value={`${window.location.origin}/room/${roomCode}`}
+                  size={180}
+                  bgColor="#ffffff"
+                  fgColor="#000000"
+                />
+              </div>
+            </div>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         <Button
           variant="ghost"

@@ -65,7 +65,8 @@ describe('Dashboard', () => {
 
     renderDashboard();
 
-    expect(screen.getByText('auth.loginToJoin')).toBeInTheDocument();
+    expect(screen.getByText('auth.haveAccount')).toBeInTheDocument();
+    expect(screen.getByText('auth.login')).toBeInTheDocument();
   });
 
   it('should show create room button when authenticated', () => {

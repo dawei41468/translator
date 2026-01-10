@@ -49,7 +49,7 @@ export function DashboardQuickActionsFab({
         type="button"
         size="icon"
         disabled={disabled}
-        className="sm:hidden fixed bottom-6 right-6 z-40 h-14 w-14 rounded-full shadow-lg"
+        className="sm:hidden fixed right-6 z-40 h-14 w-14 rounded-full shadow-lg bottom-[calc(4rem+1.5rem+env(safe-area-inset-bottom))]"
         onClick={() => setOpen(true)}
         aria-label={t("room.quickActions", "Quick actions")}
         data-testid="dashboard-fab"

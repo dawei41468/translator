@@ -6,6 +6,7 @@ import en from '../locales/en.json';
 import zh from '../locales/zh.json';
 import ko from '../locales/ko.json';
 import es from '../locales/es.json';
+import ja from '../locales/ja.json';
 import it from '../locales/it.json';
 import de from '../locales/de.json';
 import nl from '../locales/nl.json';
@@ -15,6 +16,7 @@ const resources = {
   zh: { translation: zh },
   ko: { translation: ko },
   es: { translation: es },
+  ja: { translation: ja },
   it: { translation: it },
   de: { translation: de },
   nl: { translation: nl },

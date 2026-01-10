@@ -6,6 +6,8 @@ export function getTtsLocale(language: string | null | undefined): string {
       return "ko-KR";
     case "es":
       return "es-ES";
+    case "ja":
+      return "ja-JP";
     case "it":
       return "it-IT";
     case "de":
@@ -53,6 +55,8 @@ export function getSpeechRecognitionLocale(language: string | null | undefined):
       return "ko-KR";
     case "es":
       return "es-ES";
+    case "ja":
+      return "ja-JP";
     case "it":
       return "it-IT";
     case "de":

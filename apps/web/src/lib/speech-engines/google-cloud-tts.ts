@@ -32,9 +32,9 @@ export class GoogleCloudTtsEngine implements TtsEngine {
     this.availableVoices = [
       { name: 'en-US-Neural2-C', languageCodes: ['en-US'], ssmlGender: 'FEMALE' },
       { name: 'cmn-CN-Wavenet-A', languageCodes: ['cmn-CN'], ssmlGender: 'FEMALE' },
-      { name: 'ko-KR-Standard-A', languageCodes: ['ko-KR'], ssmlGender: 'FEMALE' },
-      { name: 'es-ES-Standard-A', languageCodes: ['es-ES'], ssmlGender: 'FEMALE' },
-      { name: 'ja-JP-Standard-A', languageCodes: ['ja-JP'], ssmlGender: 'FEMALE' },
+      { name: 'ko-KR-Wavenet-A', languageCodes: ['ko-KR'], ssmlGender: 'FEMALE' },
+      { name: 'es-ES-Neural2-A', languageCodes: ['es-ES'], ssmlGender: 'FEMALE' },
+      { name: 'ja-JP-Neural2-B', languageCodes: ['ja-JP'], ssmlGender: 'FEMALE' },
       { name: 'it-IT-Neural2-A', languageCodes: ['it-IT'], ssmlGender: 'FEMALE' },
       { name: 'de-DE-Neural2-G', languageCodes: ['de-DE'], ssmlGender: 'FEMALE' },
       { name: 'nl-NL-Wavenet-F', languageCodes: ['nl-NL'], ssmlGender: 'FEMALE' },
@@ -88,12 +88,18 @@ export class GoogleCloudTtsEngine implements TtsEngine {
   private getVoiceConfig(language: string): { languageCode: string; voiceName: string; ssmlGender: string } {
     // Try to find a female voice for the language from available voices
     const langCode = this.getLanguageCode(language);
-    const femaleVoice = this.availableVoices.find(
-      (voice: any) =>
-        voice.languageCodes.includes(langCode) &&
-        voice.ssmlGender === 'FEMALE' &&
-        voice.name.includes('Standard') // Prefer Standard over Wavenet for cost
-    );
+    const preferredTiers = ['Neural2', 'Wavenet', 'Standard'];
+
+    const femaleVoice = preferredTiers
+      .map((tier) =>
+        this.availableVoices.find(
+          (voice: any) =>
+            voice.languageCodes.includes(langCode) &&
+            voice.ssmlGender === 'FEMALE' &&
+            voice.name.includes(tier)
+        )
+      )
+      .find(Boolean);
 
     if (femaleVoice) {
       return {
@@ -107,9 +113,9 @@ export class GoogleCloudTtsEngine implements TtsEngine {
     const configs: Record<string, { languageCode: string; voiceName: string; ssmlGender: string }> = {
       'en': { languageCode: 'en-US', voiceName: 'en-US-Neural2-C', ssmlGender: 'FEMALE' },
       'zh': { languageCode: 'cmn-CN', voiceName: 'cmn-CN-Wavenet-A', ssmlGender: 'FEMALE' },
-      'ko': { languageCode: 'ko-KR', voiceName: 'ko-KR-Standard-A', ssmlGender: 'FEMALE' },
-      'es': { languageCode: 'es-ES', voiceName: 'es-ES-Standard-A', ssmlGender: 'FEMALE' },
-      'ja': { languageCode: 'ja-JP', voiceName: 'ja-JP-Standard-A', ssmlGender: 'FEMALE' },
+      'ko': { languageCode: 'ko-KR', voiceName: 'ko-KR-Wavenet-A', ssmlGender: 'FEMALE' },
+      'es': { languageCode: 'es-ES', voiceName: 'es-ES-Neural2-A', ssmlGender: 'FEMALE' },
+      'ja': { languageCode: 'ja-JP', voiceName: 'ja-JP-Neural2-B', ssmlGender: 'FEMALE' },
       'it': { languageCode: 'it-IT', voiceName: 'it-IT-Neural2-A', ssmlGender: 'FEMALE' },
       'de': { languageCode: 'de-DE', voiceName: 'de-DE-Neural2-G', ssmlGender: 'FEMALE' },
       'nl': { languageCode: 'nl-NL', voiceName: 'nl-NL-Wavenet-F', ssmlGender: 'FEMALE' },

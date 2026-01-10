@@ -11,9 +11,15 @@
 **Priority**: High (Critical Security)
 
 - [x] Move Google TTS synthesis to server-side proxy
-- [x] Secure Google Cloud API Key (remove from frontend)
+- [x] Remove client-side Google Cloud API key usage (server uses service account credentials)
 - [x] Implement server-side synthesis caching (Local store with MD5)
 - [x] Implement audio playback from server-synthesized buffers
+
+**Code pointers:**
+- Server TTS endpoint: `apps/server/src/routes/tts.ts`
+- Server TTS implementation + cache keying: `apps/server/src/services/tts.ts`
+- Cache cleanup job: `apps/server/src/services/cleanup.ts`
+- Client playback via server endpoint: `apps/web/src/lib/speech-engines/google-cloud-tts.ts`
 
 ### Phase 2: Architectural Refactoring
 **Status**: ✅ Completed  
@@ -25,6 +31,15 @@
 - [x] Stabilized `AudioContext` lifecycle (singleton pattern + user gesture resume)
 - [x] Align with 500-line per file logical refactoring policy (`Conversation.tsx` reduced to ~380 lines)
 
+**Code pointers:**
+- `apps/web/src/pages/Conversation.tsx`
+- `apps/web/src/pages/conversation/hooks/useSpeechEngine.ts`
+- Components:
+  - `apps/web/src/pages/conversation/components/RoomHeader.tsx`
+  - `apps/web/src/pages/conversation/components/MessageList.tsx`
+  - `apps/web/src/pages/conversation/components/ConversationControls.tsx`
+  - `apps/web/src/pages/conversation/components/DebugPanel.tsx`
+
 ### Phase 3: Cost & Performance Optimization
 **Status**: ✅ Completed  
 **Priority**: Medium
@@ -35,6 +50,10 @@
 - [ ] Optimize WebSocket audio chunks with Opus compression (Future)
 - [ ] Add `IndexedDB` caching for common translation/audio pairs (Future)
 
+**Code pointers:**
+- VAD + silence auto-stop + conditional streaming: `apps/web/src/pages/conversation/hooks/useSpeechEngine.ts`
+- VAD asset staging for PWA builds: `apps/web/vite.config.ts`
+
 ### Phase 4: Robustness & Testing
 **Status**: ✅ Completed  
 **Priority**: Medium
@@ -43,6 +62,13 @@
 - [x] Implement `MockSttEngine` and `MockTtsEngine` for stable E2E testing without cloud dependencies
 - [x] Add `data-testid` attributes for reliable component selection in tests
 - [x] Fixed browser permission issues in Playwright for microphone access
+
+**Code pointers:**
+- Playwright E2E tests:
+  - `apps/web/tests/e2e/auth.spec.ts`
+  - `apps/web/tests/e2e/conversation.spec.ts`
+  - `apps/web/tests/e2e/multi-user.spec.ts`
+- Mock engines (test mode): `apps/web/src/lib/speech-engines/mock-engines.ts`
 
 ## 🎯 High Priority (MVP Blockers) - ✅ COMPLETED
 
@@ -80,6 +106,10 @@
 - [x] Add input validation for all socket events
 - [x] Security review of authentication middleware
 
+**Code pointers:**
+- Socket validation + rate limiting: `apps/server/src/socket.ts`
+- Auth middleware: `apps/server/src/middleware/auth.ts`
+
 ### 4. **Testing Infrastructure**
 **Status**: ✅ Completed
 **Priority**: Critical for reliability
@@ -91,6 +121,13 @@
 - [x] Create tests for speech-to-text and translation pipeline
 - [x] Set up Playwright for E2E testing of conversation flow
 - [x] Add CI/CD pipeline with automated testing
+
+**Code pointers:**
+- Web unit tests (examples):
+  - `apps/web/src/pages/__tests__/Dashboard.test.tsx`
+  - `apps/web/src/pages/conversation/components/ConversationControls.test.tsx`
+  - `apps/web/src/pages/conversation/components/MessageList.test.tsx`
+- CI workflow: `.github/workflows/ci.yml`
 
 ## 📋 Medium Priority (Post-MVP)
 
@@ -121,9 +158,13 @@
 **Timeline**: Post-MVP
 
 - [ ] Add touch gesture optimizations
-- [ ] Implement haptic feedback for speech controls
+- [x] Implement haptic feedback for speech controls
 - [ ] Enhance PWA offline functionality
 - [ ] Test on real iOS/Android devices
+
+**Code pointers:**
+- Haptics wrapper: `apps/web/src/lib/haptics.ts`
+- Used by mic controls: `apps/web/src/pages/conversation/components/ConversationControls.tsx`
 
 ### 8. **Monitoring & Observability**
 **Status**: Partially Complete (logging)  

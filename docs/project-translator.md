@@ -98,6 +98,25 @@
 - If not authenticated, the app offers **Guest Mode** (display name only) and then performs the pending action (create / join / scan).
 - Users can still choose full login/register.
 
+## UX/UI Audit (2026)
+
+The detailed UX audit and recommendations live in [`UX-AUDIT-2026.md`](UX-AUDIT-2026.md).
+
+**Implemented (Current Code):**
+- Guest Mode (display name only)
+- Dashboard FAB quick actions + recent rooms
+- Conversation header cleanup (room code/QR and settings moved into secondary UI)
+- Wake lock enabled while connected
+- Message bubble original text collapsed by default with toggle
+
+**Partially implemented:**
+- Immersive mic (haptics + recording ripple/feedback; waveform + full-screen dimming not yet implemented)
+- Safe area insets (handled for dashboard FAB; verify/extend for conversation footer)
+
+**Not implemented:**
+- Inline QR scanner half-sheet UI
+- Biometric auth (WebAuthn)
+
 ## MVP Features & Priority
 
 | Feature                                    | Priority | Status       | Owner          |

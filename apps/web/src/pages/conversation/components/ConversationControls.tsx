@@ -126,6 +126,30 @@ export function ConversationControls({
 
   const recordingDisabled = connectionStatus !== 'connected' || (!canStartRecording && !isRecording);
 
+  const statusLabel = useMemo(() => {
+    if (isRecording) {
+      if (pushToTalkEnabled && isLocked) return t('conversation.recordingLocked', 'Recording (locked)');
+      return t('conversation.recording', 'Recording...');
+    }
+
+    if (!recordingDisabled) return null;
+
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      return t('connection.disconnected', 'Offline');
+    }
+
+    switch (connectionStatus) {
+      case 'connecting':
+        return t('connection.connecting', 'Connecting...');
+      case 'reconnecting':
+        return t('connection.reconnecting', 'Reconnecting...');
+      case 'disconnected':
+        return t('connection.disconnected', 'Offline');
+      default:
+        return t('connection.disconnected', 'Offline');
+    }
+  }, [canStartRecording, connectionStatus, isLocked, isRecording, pushToTalkEnabled, recordingDisabled, t]);
+
   return (
     <footer className="relative p-4 pb-8 sm:p-6 overscroll-contain touch-none" role="contentinfo">
       <div className="mb-4 flex flex-col items-center gap-2">
@@ -227,9 +251,9 @@ export function ConversationControls({
             </Button>
           </div>
 
-          {pushToTalkEnabled && isLocked && (
-            <div className="text-xs text-muted-foreground" aria-live="polite">
-              Stop
+          {statusLabel && (
+            <div className="text-xs text-muted-foreground" aria-live="polite" data-testid="recording-status">
+              {statusLabel}
             </div>
           )}
         </div>

@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "./api";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
+import { addRecentRoom } from "./recentRooms";
 
 // --- Room Hooks ---
 
@@ -34,6 +35,8 @@ export const useJoinRoom = () => {
   return useMutation({
     mutationFn: (code: string) => apiClient.joinRoom(code),
     onSuccess: (data) => {
+      addRecentRoom(data.roomCode);
+
       // Immediately update the rooms cache with the joined room data
       queryClient.setQueryData(['rooms'], (oldData: any) => {
         // If we have old data, merge the new room; otherwise create new array

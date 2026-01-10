@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { MessageList } from './MessageList';
 
@@ -26,6 +26,10 @@ describe('MessageList', () => {
     );
 
     expect(screen.getByTestId('message-translated-text')).toHaveTextContent('ciao');
+    expect(screen.queryByTestId('message-original-text')).toBeNull();
+    expect(screen.getByTestId('toggle-original-text')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('toggle-original-text'));
     expect(screen.getByTestId('message-original-text')).toHaveTextContent('hello');
   });
 

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter } from 'react-router-dom';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
@@ -40,6 +40,24 @@ describe('Dashboard', () => {
         queries: { retry: false },
         mutations: { retry: false },
       },
+    });
+
+    // JSDOM localStorage can throw (opaque origin). Use an in-memory store per test.
+    const store = new Map<string, string>();
+    Object.defineProperty(window, 'localStorage', {
+      value: {
+        getItem: (key: string) => (store.has(key) ? store.get(key)! : null),
+        setItem: (key: string, value: string) => {
+          store.set(key, String(value));
+        },
+        removeItem: (key: string) => {
+          store.delete(key);
+        },
+        clear: () => {
+          store.clear();
+        },
+      },
+      configurable: true,
     });
 
     // Reset mocks
@@ -91,5 +109,45 @@ describe('Dashboard', () => {
     renderDashboard();
 
     expect(screen.getByPlaceholderText('room.enterCodePlaceholder')).toBeInTheDocument();
+  });
+
+  it('should show recent rooms when stored', () => {
+    window.localStorage.setItem(
+      'recent_rooms_v1',
+      JSON.stringify([
+        { code: 'ABCD12', lastUsedAt: Date.now() },
+      ])
+    );
+
+    (useAuth as any).mockReturnValue({
+      user: { id: 1, email: 'test@example.com' },
+      isAuthenticated: true,
+      isLoading: false,
+    });
+
+    renderDashboard();
+
+    expect(screen.getByText('room.recentRooms')).toBeInTheDocument();
+    expect(screen.getByText('ABCD12')).toBeInTheDocument();
+  });
+
+  it('should open quick actions dialog from the FAB', () => {
+    (useAuth as any).mockReturnValue({
+      user: { id: 1, email: 'test@example.com' },
+      isAuthenticated: true,
+      isLoading: false,
+    });
+
+    renderDashboard();
+
+    const fab = screen.getByTestId('dashboard-fab');
+    expect(fab).toBeInTheDocument();
+
+    fireEvent.click(fab);
+
+    expect(screen.getByText('room.quickActions')).toBeInTheDocument();
+    expect(screen.getAllByText('room.create').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('room.scan').length).toBeGreaterThan(0);
+    expect(screen.getByText('room.enterCode')).toBeInTheDocument();
   });
 });

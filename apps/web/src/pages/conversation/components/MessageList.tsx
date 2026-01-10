@@ -1,7 +1,8 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { Message } from "../types";
 import { useTranslation } from "react-i18next";
+import { Button } from "@/components/ui/button";
 
 interface MessageListProps {
   messages: Message[];
@@ -10,6 +11,7 @@ interface MessageListProps {
 export function MessageList({ messages }: MessageListProps) {
   const { t } = useTranslation();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [expandedOriginalById, setExpandedOriginalById] = useState<Record<string, boolean>>({});
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -32,6 +34,8 @@ export function MessageList({ messages }: MessageListProps) {
       {messages.map((message, index) => {
         const prevMessage = index > 0 ? messages[index - 1] : null;
         const showSpeakerName = !prevMessage || prevMessage.speakerName !== message.speakerName;
+        const canShowOriginal = Boolean(message.translatedText && message.translatedText !== message.text);
+        const originalExpanded = expandedOriginalById[message.id] === true;
 
         return (
           <div
@@ -64,18 +68,44 @@ export function MessageList({ messages }: MessageListProps) {
                       <p className="text-base font-medium leading-relaxed" data-testid="message-translated-text">
                         {message.translatedText}
                       </p>
-                      <p
-                        className={cn(
-                          "text-xs mt-2 border-t pt-2 italic",
-                          message.isOwn
-                            ? "text-primary-foreground/70 border-primary-foreground/20"
-                            : "text-muted-foreground border-border/50"
-                        )}
-                        data-testid="message-original-text"
-                      >
-                        <span className="sr-only">{t('conversation.originalText', 'Original')}: </span>
-                        {message.text}
-                      </p>
+                      {canShowOriginal && (
+                        <Button
+                          type="button"
+                          variant="link"
+                          size="sm"
+                          className={cn(
+                            "px-0 h-auto mt-1 text-xs",
+                            message.isOwn ? "text-primary-foreground/80" : "text-muted-foreground"
+                          )}
+                          onClick={() =>
+                            setExpandedOriginalById((prev) => ({
+                              ...prev,
+                              [message.id]: !originalExpanded,
+                            }))
+                          }
+                          aria-expanded={originalExpanded}
+                          data-testid="toggle-original-text"
+                        >
+                          {originalExpanded
+                            ? t('conversation.hideOriginal', 'Hide original')
+                            : t('conversation.showOriginal', 'Show original')}
+                        </Button>
+                      )}
+
+                      {canShowOriginal && originalExpanded && (
+                        <p
+                          className={cn(
+                            "text-xs mt-2 border-t pt-2 italic",
+                            message.isOwn
+                              ? "text-primary-foreground/70 border-primary-foreground/20"
+                              : "text-muted-foreground border-border/50"
+                          )}
+                          data-testid="message-original-text"
+                        >
+                          <span className="sr-only">{t('conversation.originalText', 'Original')}: </span>
+                          {message.text}
+                        </p>
+                      )}
                     </>
                   )
                 ) : (

@@ -10,6 +10,8 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
+import { addRecentRoom, getRecentRooms } from "@/lib/recentRooms";
+import { DashboardQuickActionsFab } from "./dashboard/DashboardQuickActionsFab";
 import {
   Dialog,
   DialogContent,
@@ -32,6 +34,8 @@ const Dashboard = () => {
   const [permissionStatus, setPermissionStatus] = useState<'checking' | 'granted' | 'denied' | 'prompt'>('checking');
   const [isScanning, setIsScanning] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
+  const [recentRooms, setRecentRooms] = useState(() => getRecentRooms());
+  const manualCodeInputRef = useRef<HTMLInputElement>(null);
 
   // Guest mode state
   const [isGuestDialogOpen, setIsGuestDialogOpen] = useState(false);
@@ -53,6 +57,8 @@ const Dashboard = () => {
     createRoomMutation.mutate(undefined, {
       onSuccess: (data) => {
         setCreatedRoom({ code: data.roomCode, id: data.roomId });
+        addRecentRoom(data.roomCode);
+        setRecentRooms(getRecentRooms());
       },
       onError: (error) => {
         console.error('Room creation failed:', error);
@@ -101,6 +107,27 @@ const Dashboard = () => {
     }
     setIsJoining(true);
     joinRoomMutation.mutate(manualCode.toUpperCase(), {
+      onSettled: () => {
+        setIsJoining(false);
+      }
+    });
+  };
+
+  const handleRecentJoin = (code: string) => {
+    const normalized = code.trim().toUpperCase();
+    if (!normalized) return;
+
+    setManualCode(normalized);
+
+    if (!isAuthenticated) {
+      setPendingAction('join');
+      setIsGuestDialogOpen(true);
+      return;
+    }
+
+    if (isJoining) return;
+    setIsJoining(true);
+    joinRoomMutation.mutate(normalized, {
       onSettled: () => {
         setIsJoining(false);
       }
@@ -344,6 +371,28 @@ const Dashboard = () => {
 
         {!createdRoom ? (
           <div className="space-y-4">
+            {recentRooms.length > 0 && (
+              <Card>
+                <div className="p-4">
+                  <h3 className="font-semibold mb-3">{t('room.recentRooms', 'Recent rooms')}</h3>
+                  <div className="flex flex-col gap-2">
+                    {recentRooms.map((r) => (
+                      <Button
+                        key={r.code}
+                        type="button"
+                        variant="outline"
+                        className="w-full justify-between font-mono"
+                        onClick={() => handleRecentJoin(r.code)}
+                      >
+                        <span>{r.code}</span>
+                        <span className="font-sans text-xs text-muted-foreground">{t('room.join', 'Join')}</span>
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              </Card>
+            )}
+
             <Card>
               <div className="p-4">
                 <p className="text-sm text-muted-foreground mb-6 text-center">
@@ -389,6 +438,7 @@ const Dashboard = () => {
                     className="text-center font-mono tracking-wider"
                     maxLength={7}
                     data-testid="room-code-input"
+                    ref={manualCodeInputRef}
                   />
                   <Button
                     onClick={handleManualJoin}
@@ -579,6 +629,15 @@ const Dashboard = () => {
             </form>
           </DialogContent>
         </Dialog>
+
+        <DashboardQuickActionsFab
+          onCreate={handleStartConversation}
+          onScan={handleScanQR}
+          onEnterCode={() => {
+            manualCodeInputRef.current?.focus();
+          }}
+          disabled={createRoomMutation.isPending || isJoining}
+        />
       </div>
     </div>
   );

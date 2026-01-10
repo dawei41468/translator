@@ -36,20 +36,25 @@
 
 ## Translation Provider Decision (Locked)
 
-**MVP Provider**: Google Cloud Translation Advanced v3 (asia-east2 — Hong Kong region)  
+**MVP Provider**: Google Cloud Translation Advanced v3  
 **Reasoning**:
 - Lowest latency from our Tencent HK infrastructure (~50–200ms).
 - Dedicated translation engine — zero hallucinations, perfect consistency.
 - Predictable per-character pricing.
 - Proven reliability for short, real-time utterances.
 
+**Implementation Notes (Current Code)**:
+- The server uses a translation engine registry with:
+  - `google-translate` (default, requires `GOOGLE_CLOUD_PROJECT_ID`)
+  - `grok-translate` (optional, requires `GROK_API_KEY`, falls back to Google if Grok fails)
+- Google Translation location is configurable via `GOOGLE_CLOUD_TRANSLATE_LOCATION` (supported: `global`, `us-central1`). Invalid values fall back to `global`.
+
 ## TTS Strategy
 
-**MVP**: Browser-native Web Speech API (SpeechSynthesis)
-- Zero latency, seamless headset routing.
-- Excellent for English, Italian, German.
-- Acceptable for Dutch.
-- Functional but noticeably robotic for Mandarin Chinese.
+**MVP (Current Code)**: Server-side Google Cloud Text-to-Speech proxy
+- Client calls `POST /api/tts/synthesize` and plays returned `audio/mpeg`.
+- Server caches MP3s on disk (`cache/tts`) and cleans up old files.
+- Benefit: no client-side Google API keys; consistent voice quality across platforms.
 
 **Phase 2 — Premium Voices Experiment (February 2026)**:
 
@@ -82,7 +87,7 @@
 **Primary Method: QR Code (Mobile-Optimized)**
 - Creator clicks "Start New Conversation" → room auto-created → creator auto-joined → lands in waiting screen.
 - Waiting screen shows prominent "Show QR Code" button → reveals large scannable QR code + short room code (e.g., ABC-123).
-- Joiner (must be logged in) on Dashboard clicks "Scan QR Code to Join" → camera opens → scans QR → auto-joins room.
+- Joiner on Dashboard clicks "Scan QR Code to Join" → camera opens → scans QR → auto-joins room.
 
 **Fallback: Room Code Manual Entry**
 - Short room code (e.g., ABC-123) always displayed alongside QR.
@@ -90,8 +95,8 @@
 - No public join links in URL.
 
 **Login Handling**
-- "Scan QR Code" and "Enter Room Code" buttons disabled/redirect to login if not authenticated.
-- Post-login returns user to Dashboard for joining.
+- If not authenticated, the app offers **Guest Mode** (display name only) and then performs the pending action (create / join / scan).
+- Users can still choose full login/register.
 
 ## MVP Features & Priority
 
@@ -99,6 +104,7 @@
 |--------------------------------------------|----------|--------------|----------------|
 | Secure login (email/password)              | High     | Completed    | Kilo           |
 | Register (invite-only initially)           | High     | Completed    | Kilo           |
+| Guest Mode (display name only)             | High     | Completed    | You + Kilo     |
 | Create private room + auto-join creator    | High     | Completed    | You + Kilo     |
 | QR code generation + display               | High     | Completed    | You            |
 | Dashboard "Scan QR Code to Join" button    | High     | Completed    | You            |
@@ -147,12 +153,15 @@
 4. Joiner (logged in) on Dashboard clicks "Scan QR Code to Join" → scans QR (or manually enters code) → auto-joined.
 5. All participants see "Connected" status.
 6. When one speaks:
-    - Device captures via Web Speech API (continuous, interim results for live feel).
-    - On final utterance → send transcript + sourceLang to server via Socket.io `speech-transcript` event.
-    - Server translates to each other participant's language using Google Cloud Translation (asia-east2).
-    - Server emits `translated-message` to all other participants in the room.
+    - Client starts server STT via Socket.IO `start-speech`.
+    - Client streams mic audio via Socket.IO `speech-data`.
+      - WebM/Opus on platforms that support it.
+      - PCM (LINEAR16) fallback on platforms without WebM (e.g. iOS Safari).
+    - Server performs streaming STT and when an utterance is final:
+      - Emits `recognized-speech` back to the speaker.
+      - Translates per-target-language group and emits `translated-message` to each recipient.
+      - In solo mode, emits `solo-translated` (and does not emit `translated-message`).
     - Receiving clients display in chat bubbles + speak via TTS (if audio enabled).
-    - Audio routed to speaker or selected Bluetooth headset.
 
 ## Tech Stack (Locked — Identical to OneProject)
 
@@ -160,8 +169,9 @@
 - **Backend**: Node.js 20 + Express + Drizzle ORM + self-hosted PostgreSQL (local/prod servers)
 - **Real-Time**: Socket.io (authenticated via JWT cookie, room namespaces)
 - **Auth**: JWT in httpOnly cookie
-- **Translation (MVP)**: Google Cloud Translation Advanced v3 (asia-east2 region) + Engine Abstraction Framework
-- **TTS (MVP)**: Browser-native Web Speech API (SpeechSynthesis) + Engine Abstraction Framework
+- **Translation (MVP)**: Google Cloud Translation v3 + optional Grok translation engine
+- **Speech (MVP)**: Server STT (Google Cloud Speech-to-Text) + client-side VAD for cost control
+- **TTS (MVP)**: Server-side Google Cloud Text-to-Speech proxy (`/api/tts/synthesize`) + on-disk caching
 - **TTS (Phase 2 Experiment)**: iFlyTek Online TTS + Grok Voice TTS (via Engine Framework)
 - **QR Code**: qrcode.react (generation) + html5-qrcode (scanning)
 - **Deployment**: Tencent Lighthouse HK + EdgeOne CDN + NGINX reverse proxy

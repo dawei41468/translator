@@ -41,6 +41,11 @@ This document codifies the existing patterns in the Live Translator codebase so 
 - Protected endpoints must use `authenticate` middleware.
 - Session model: `GET /api/me` returns `{ user: null }` when not authenticated.
 
+### Guest mode
+
+- Guest auth endpoint: `POST /api/auth/guest-login`.
+- Guest users are persisted in the `users` table with `isGuest=true`.
+
 ### Validation (Zod)
 
 - All request validation is done with Zod.
@@ -65,6 +70,11 @@ This document codifies the existing patterns in the Live Translator codebase so 
 - `.env` is located at repo root.
 - `NODE_ENV=production` influences cookie behavior (`secure: true`).
 
+#### Google Cloud credentials normalization
+
+- The server calls `normalizeGoogleCredentials()` at startup.
+- If `GOOGLE_APPLICATION_CREDENTIALS` is a relative path, it is resolved relative to repo root (works when starting server from repo root or from `apps/server`).
+
 ## Frontend (apps/web) Patterns
 
 ### Routing
@@ -72,6 +82,26 @@ This document codifies the existing patterns in the Live Translator codebase so 
 - Routing uses React Router.
 - Private routes are gated via `ProtectedRoute` using `useAuth()`.
 - Room joining is QR-first with room code fallback (no public join links).
+
+### Real-time (Socket.IO)
+
+- Socket authentication: cookie-based JWT (`auth_token`).
+- Room join: client emits `join-room` with the 6-character room code.
+
+#### Speech pipeline (server STT)
+
+- Client emits `start-speech` with:
+  - `languageCode` (e.g. `en-US`)
+  - optional `soloMode`, `soloTargetLang`
+  - optional `encoding` (`WEBM_OPUS` or `LINEAR16`) and `sampleRateHertz`
+- Client streams mic audio via `speech-data`:
+  - WebM/Opus when supported (MediaRecorder)
+  - PCM (LINEAR16) fallback when WebM is not supported (e.g. iOS Safari)
+- Server emits:
+  - `recognized-speech` (back to speaker)
+  - `translated-message` (to other participants)
+  - `solo-translated` (solo mode)
+  - `speech-error` (user-friendly error)
 
 ### Auth state
 
@@ -86,6 +116,11 @@ This document codifies the existing patterns in the Live Translator codebase so 
 - `fetch` must use `credentials: "include"`.
 - Errors:
   - Non-2xx should throw an `Error` with additional metadata `{ status, data }`.
+
+### TTS
+
+- TTS is server-side via `POST /api/tts/synthesize` (returns `audio/mpeg`).
+- Server caches TTS results under `cache/tts` and cleans old entries via scheduled cleanup.
 
 ### Server state and caching
 
@@ -361,15 +396,18 @@ class TranslationEngineRegistry {
 **Status**: ✅ **COMPLETED** - Ready for production use
 
 **Files:**
-- `apps/web/src/lib/speech-engines/google-cloud-stt.ts` - Server-based STT wrapper
+- `apps/web/src/lib/speech-engines/google-cloud-stt.ts` - Server STT wrapper (mic access only)
+- `apps/web/src/pages/conversation/hooks/useSpeechEngine.ts` - Audio capture + VAD + streaming (`speech-data`)
 - `apps/server/src/services/stt.ts` - Google Cloud Speech-to-Text streaming
-- `apps/server/src/socket.ts` - Server STT result emission
+- `apps/server/src/socket.ts` - Server STT start/stop + transcript routing
 
 **Features:**
 - ✅ **Server-Based Recognition** - Uses Google Cloud Speech API for reliable STT
-- ✅ **Android PWA Compatible** - Works where Web Speech API fails
-- ✅ **Streaming Support** - Real-time transcription with interim results
-- ✅ **Automatic Fallback** - Android PWA uses server STT automatically for Web Speech API
+- ✅ **Streaming Support** - Real-time transcription with interim + final results
+- ✅ **Cross-platform audio encoding**
+  - WebM/Opus when supported
+  - PCM (LINEAR16) fallback when WebM is not supported (e.g. iOS Safari)
+- ✅ **Cost control** - Client-side VAD limits audio streaming when the user is not speaking
 - ✅ **User-Selectable** - Available in Profile engine preferences
 
 #### ✅ Google Cloud TTS Engine
@@ -377,13 +415,15 @@ class TranslationEngineRegistry {
 **Status**: ✅ **COMPLETED** - Ready for production use
 
 **Files:**
-- `apps/web/src/lib/speech-engines/google-cloud-tts.ts` - Dynamic voice fetching and selection
-- `apps/web/src/lib/speech-engines/index.ts` - Engine registration
-- `.env.example` - Environment variables
+- `apps/server/src/services/tts.ts` - Google Cloud TTS + filesystem cache
+- `apps/server/src/routes/tts.ts` - `/api/tts/synthesize` endpoint
+- `apps/web/src/lib/speech-engines/google-cloud-tts.ts` - Client playback via server endpoint
 
 **Features:**
-- ✅ **Dynamic Voice Fetching** - Fetches available voices from API, filters to supported languages (en-US, cmn-CN, it-IT, de-DE, nl-NL)
-- ✅ **Reactive Registry** - SpeechEngineRegistry updates instantly on preference changes
+- ✅ **Server-side synthesis** - Client requests audio from `/api/tts/synthesize` and plays returned MP3
+- ✅ **Filesystem cache** - Server caches MP3 results under `cache/tts` and cleans old entries
+- ✅ **Curated voices** - Client maintains a curated list of voices for supported locales
+- ✅ **Reactive Registry** - SpeechEngineRegistry updates on preference changes
 - ✅ **Automatic Fallbacks** - Picks valid voices, falls back to standards if needed
 - ✅ **Global Infrastructure** - Works from any location
 - ✅ **High-Quality Voices** - Standard and Wavenet options
@@ -391,8 +431,8 @@ class TranslationEngineRegistry {
 
 **Environment Variables:**
 ```bash
-VITE_GOOGLE_CLOUD_API_KEY=your-google-cloud-api-key
 GOOGLE_CLOUD_PROJECT_ID=your-google-cloud-project-id
+GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json
 ```
 
 ### Adding New Engines
@@ -525,8 +565,12 @@ GROK_API_KEY=your_api_key_here
 
 | Variable | Description | Engine Type | Required |
 |----------|-------------|-------------|----------|
-| `VITE_GOOGLE_CLOUD_API_KEY` | Google Cloud TTS API key | TTS | Optional |
 | `GOOGLE_CLOUD_PROJECT_ID` | Google Cloud project ID | STT/TTS/Translation | Required for Google services |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Google service account JSON path | STT/TTS/Translation | Required for Google services |
+| `GOOGLE_CLOUD_TRANSLATE_LOCATION` | Translation location (`global`, `us-central1`) | Translation | Optional |
+| `GROK_API_KEY` | Grok API key | Translation | Optional |
+| `GROK_API_BASE_URL` | Grok API base URL | Translation | Optional |
+| `GROK_TRANSLATE_MODEL` | Grok model | Translation | Optional |
 
 #### User Preferences
 

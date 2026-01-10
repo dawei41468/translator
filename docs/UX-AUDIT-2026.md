@@ -24,6 +24,10 @@ Translation often needs to happen *immediately*. Forcing a multi-step signup pro
 - **Implementation:** Create a temporary session/token for these users.
 - **Benefit:** Drastically lowers the barrier to entry for casual listeners or one-time participants.
 
+**Status (Current Code):** ✅ Implemented
+- Dashboard prompts for a display name when unauthenticated and then performs the pending action (create / scan / join).
+- Backend creates a persisted `users` row with `isGuest=true` and authenticates via the same `auth_token` cookie.
+
 ### ✅ Biometric Auth for PWA
 - **Action:** Implement WebAuthn (FaceID/TouchID) for returning users on supported devices.
 - **Benefit:** Typing passwords on mobile while trying to start a conversation is cumbersome. Biometrics make reentry seamless.
@@ -43,9 +47,15 @@ Translation often needs to happen *immediately*. Forcing a multi-step signup pro
 - **Behavior:** Tapping it expands to options like "Create Room" or "Scan QR".
 - **Benefit:** Aligns with standard mobile patterns for "creating content" and frees up screen space.
 
+**Status (Current Code):** ✅ Implemented
+- Mobile-only FAB with quick actions: Create room / Scan QR / Enter code.
+
 ### ✅ Recent History
 - **Action:** Add a "Recent Conversations" list on the dashboard.
 - **Benefit:** Users often rejoin the same room (e.g., a recurring meeting). Re-scanning or re-typing codes is repetitive friction.
+
+**Status (Current Code):** ✅ Implemented
+- Recent rooms are stored client-side and shown as quick-join buttons.
 
 ### ✅ Inline Scanner
 - **Action:** Make the QR scanner slide up in a "half-sheet" bottom drawer instead of a full-screen modal.
@@ -70,6 +80,11 @@ Screen real estate is consumed by "settings" and redundant text rather than the 
 - **Keep:** Only the "Status" indicator and "Leave" button should be visible at top-level.
 - **Benefit:** A cleaner, focused view that emphasizes the content.
 
+**Status (Current Code):** ✅ Implemented
+- Header shows connection status + primary controls.
+- Room code/QR is moved into a secondary menu.
+- Language + solo mode controls are in a settings dialog.
+
 ### ✅ Immersive Mic UI
 - **Action:** Update the Mic button interaction.
     - **Visuals:** When recording, dim the rest of the interface and show a dynamic "waveform" or "glow" animation behind the button.
@@ -79,6 +94,9 @@ Screen real estate is consumed by "settings" and redundant text rather than the 
 ### ✅ Relocate "Solo Mode"
 - **Action:** Move the "Solo" toggle and "Translate To" selector out of the primary footer. Place them in the "Settings" sheet or a specific "Practice Mode" tab.
 - **Benefit:** The footer becomes dedicated *only* to the primary action (Speaking), reducing cognitive load.
+
+**Status (Current Code):** ✅ Implemented
+- Solo mode and target language are controlled from the room settings dialog.
 
 ### ✅ Message Bubble Clarity
 - **Action:** Collapse the "Original Text" by default (e.g., show a small "Show Original" icon) or reduce its opacity significantly.
@@ -93,6 +111,9 @@ Screen real estate is consumed by "settings" and redundant text rather than the 
 ### ✅ Wake Lock
 - **Action:** Implement the **Screen Wake Lock API**.
 - **Reason:** Currently, if a user is listening to a long translation, their phone screen might turn off, cutting the connection or audio. The app must keep the screen awake while connected.
+
+**Status (Current Code):** ✅ Implemented
+- Wake lock is enabled while connected in the conversation view.
 
 ### ✅ Safe Area Insets
 - **Action:** Ensure bottom padding accounts for the iOS "Home Indicator" bar.

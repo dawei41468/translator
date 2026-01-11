@@ -232,13 +232,20 @@ export function ConversationControls({
                 e.preventDefault();
                 if (!isLocked) stopSession();
               } : undefined}
+              onContextMenu={(e) => {
+                e.preventDefault();
+              }}
               disabled={recordingDisabled}
               variant={isRecording ? "destructive" : "default"}
               size="lg"
               className={cn(
-                "relative z-10 h-20 w-20 rounded-full shadow-xl transition-all duration-300 focus:ring-4 focus:ring-primary/20 border-4 border-background",
+                "relative z-10 h-20 w-20 rounded-full shadow-xl transition-all duration-300 focus:ring-4 focus:ring-primary/20 border-4 border-background select-none touch-none",
                 isRecording ? "scale-110 bg-red-600 hover:bg-red-700 ring-4 ring-red-500/30" : "hover:scale-105"
               )}
+              style={{
+                WebkitTouchCallout: 'none',
+                touchAction: 'none',
+              }}
               aria-pressed={isRecording}
               aria-label={
                 pushToTalkEnabled

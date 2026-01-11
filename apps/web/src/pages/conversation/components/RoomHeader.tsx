@@ -9,11 +9,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -208,19 +203,26 @@ export function RoomHeader({
           </DialogContent>
         </Dialog>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
+        <Dialog>
+          <DialogTrigger asChild>
             <Button
               variant="ghost"
               size="icon"
               className="rounded-full text-muted-foreground hover:text-foreground"
-              aria-label={t('room.meta', 'Room info')}
+              aria-label={t('room.qrTitle')}
             >
               <QrCode className="h-5 w-5" />
             </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-72">
-            <div className="space-y-3 p-2">
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle>{t('room.qrTitle')}</DialogTitle>
+              <DialogDescription>
+                {t('room.qrDescription')}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-3 py-2">
               <div className="space-y-2">
                 <Label>{t('room.code', 'Room Code')}</Label>
                 <div className="flex items-center gap-2">
@@ -242,8 +244,8 @@ export function RoomHeader({
                 />
               </div>
             </div>
-          </DropdownMenuContent>
-        </DropdownMenu>
+          </DialogContent>
+        </Dialog>
 
         <Button
           variant="ghost"

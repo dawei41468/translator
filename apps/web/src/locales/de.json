@@ -59,6 +59,8 @@
   "room.enterTitle": "An Konversation teilnehmen",
   "room.enterPrompt": "Geben Sie den Raumcode ein, um der Konversation beizutreten",
   "room.startNew": "Neuen Raum starten",
+  "room.settings": "Raumeinstellungen",
+  "room.settingsDescription": "Sprache und Solo-Modus verwalten.",
   "conversation.startSpeaking": "Sprechen beginnen",
   "conversation.stopSpeaking": "Sprechen beenden",
   "conversation.audioOn": "Audio an",

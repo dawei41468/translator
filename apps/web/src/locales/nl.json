@@ -59,6 +59,8 @@
   "room.enterTitle": "Deelnemen aan gesprek",
   "room.enterPrompt": "Voer de kamercode in om deel te nemen aan het gesprek",
   "room.startNew": "Nieuwe kamer starten",
+  "room.settings": "Kamerinstellingen",
+  "room.settingsDescription": "Beheer taal en solomodus.",
   "conversation.startSpeaking": "Begin met spreken",
   "conversation.stopSpeaking": "Stop met spreken",
   "conversation.audioOn": "Audio aan",

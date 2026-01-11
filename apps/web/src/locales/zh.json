@@ -59,6 +59,8 @@
   "room.enterTitle": "加入对话",
   "room.enterPrompt": "输入房间代码以加入对话",
   "room.startNew": "开始新房间",
+  "room.settings": "房间设置",
+  "room.settingsDescription": "管理语言和单人模式。",
   "conversation.startSpeaking": "开始说话",
   "conversation.stopSpeaking": "停止说话",
   "conversation.audioOn": "音频开启",

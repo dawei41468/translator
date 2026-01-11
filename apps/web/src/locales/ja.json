@@ -59,6 +59,8 @@
   "room.enterTitle": "会話に参加",
   "room.enterPrompt": "ルームコードを入力して会話に参加します",
   "room.startNew": "新しいルームを開始",
+  "room.settings": "ルーム設定",
+  "room.settingsDescription": "言語とソロモードを管理します。",
   "conversation.startSpeaking": "話し始める",
   "conversation.stopSpeaking": "話すのを止める",
   "conversation.audioOn": "音声オン",

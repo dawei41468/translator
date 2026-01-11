@@ -59,6 +59,8 @@
   "room.enterTitle": "Partecipa alla conversazione",
   "room.enterPrompt": "Inserisci il codice della stanza per partecipare alla conversazione",
   "room.startNew": "Inizia nuova stanza",
+  "room.settings": "Impostazioni stanza",
+  "room.settingsDescription": "Gestisci lingua e modalità solo.",
   "conversation.startSpeaking": "Inizia a parlare",
   "conversation.stopSpeaking": "Smetti di parlare",
   "conversation.audioOn": "Audio attivo",

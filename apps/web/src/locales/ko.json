@@ -59,6 +59,8 @@
   "room.enterTitle": "대화 참여",
   "room.enterPrompt": "방 코드를 입력해 대화에 참여하세요",
   "room.startNew": "새 방 시작",
+  "room.settings": "방 설정",
+  "room.settingsDescription": "언어와 솔로 모드를 관리합니다.",
   "conversation.startSpeaking": "말하기 시작",
   "conversation.stopSpeaking": "말하기 중지",
   "conversation.audioOn": "오디오 켜짐",

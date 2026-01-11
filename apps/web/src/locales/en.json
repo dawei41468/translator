@@ -59,6 +59,8 @@
   "room.enterTitle": "Join Conversation",
   "room.enterPrompt": "Enter the room code to join the conversation",
   "room.startNew": "Start New Room",
+  "room.settings": "Room Settings",
+  "room.settingsDescription": "Manage language and solo mode.",
   "conversation.startSpeaking": "Start Speaking",
   "conversation.stopSpeaking": "Stop Speaking",
   "conversation.audioOn": "Audio On",

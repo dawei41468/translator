@@ -59,6 +59,8 @@
   "room.enterTitle": "Unirse a la conversación",
   "room.enterPrompt": "Ingresa el código de sala para unirte a la conversación",
   "room.startNew": "Iniciar nueva sala",
+  "room.settings": "Configuración de la sala",
+  "room.settingsDescription": "Gestiona el idioma y el modo solo.",
   "conversation.startSpeaking": "Empezar a hablar",
   "conversation.stopSpeaking": "Dejar de hablar",
   "conversation.audioOn": "Audio activado",

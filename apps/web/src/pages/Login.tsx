@@ -153,7 +153,7 @@ export default function Login() {
               <Label htmlFor="guest-name">{t('auth.displayName', 'Display Name')}</Label>
               <Input
                 id="guest-name"
-                placeholder="e.g. Alice"
+                placeholder={t('auth.displayNamePlaceholder', 'e.g. Alice')}
                 value={guestName}
                 onChange={(e) => setGuestName(e.target.value)}
                 autoFocus

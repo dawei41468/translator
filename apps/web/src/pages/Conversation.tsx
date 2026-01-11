@@ -459,6 +459,8 @@ const Conversation = () => {
             setSoloTargetLang(val);
             setHasUserSelectedSoloLang(true);
           }}
+          participants={roomData.participants ?? []}
+          currentUserId={user?.id}
         />
 
         <DebugPanel

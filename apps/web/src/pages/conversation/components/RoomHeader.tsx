@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Volume2, VolumeX, Settings, LogOut, Copy, Check, QrCode } from "lucide-react";
+import { Volume2, VolumeX, Settings, LogOut, Copy, Check, QrCode, Users } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -20,7 +20,7 @@ import { QRCodeCanvas } from "qrcode.react";
 import { formatLanguageLabel, LANGUAGES } from "@/lib/languages";
 import { useTranslation } from "react-i18next";
 import { ConnectionStatus } from "../types";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 interface RoomHeaderProps {
@@ -40,6 +40,8 @@ interface RoomHeaderProps {
   toggleSoloMode: () => void;
   soloTargetLang: string;
   onSoloLangChange: (lang: string) => void;
+  participants: Array<{ id: string; name: string | null; language: string | null }>;
+  currentUserId: string | undefined;
 }
 
 export function RoomHeader({
@@ -59,9 +61,25 @@ export function RoomHeader({
   toggleSoloMode,
   soloTargetLang,
   onSoloLangChange,
+  participants,
+  currentUserId,
 }: RoomHeaderProps) {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
+
+  const participantsCount = participants.length;
+  const sortedParticipants = useMemo(() => {
+    if (!currentUserId) return participants;
+
+    const list = [...participants];
+    list.sort((a, b) => {
+      const aIsYou = a.id === currentUserId;
+      const bIsYou = b.id === currentUserId;
+      if (aIsYou === bIsYou) return 0;
+      return aIsYou ? -1 : 1;
+    });
+    return list;
+  }, [currentUserId, participants]);
 
   const handleCopyCode = async () => {
     try {
@@ -113,6 +131,47 @@ export function RoomHeader({
         >
           {audioEnabled ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
         </Button>
+
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button
+              variant="ghost"
+              className="rounded-full text-muted-foreground hover:text-foreground px-2"
+              aria-label={t('participants.buttonLabel', { count: participantsCount, defaultValue: 'Participants ({{count}})' })}
+            >
+              <Users className="h-5 w-5" />
+              <span className="text-xs tabular-nums">({participantsCount})</span>
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle>{t('participants.title', 'Participants')}</DialogTitle>
+              <DialogDescription>
+                {t('participants.count', { count: participantsCount, defaultValue: '{{count}} participants' })}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-2 py-2">
+              {sortedParticipants.map((p) => {
+                const isYou = Boolean(currentUserId) && p.id === currentUserId;
+                const language = LANGUAGES.find((l) => l.code === p.language);
+                const name = p.name ?? t('participants.unknownName', 'Unknown');
+                const languageLabel = language ? formatLanguageLabel(language) : t('participants.unknownLanguage', 'Unknown language');
+
+                return (
+                  <div key={p.id} className="flex items-center justify-between gap-3" data-testid="participant-row">
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium truncate">
+                        {name}{isYou ? ` (${t('participants.you', 'You')})` : ''}
+                      </div>
+                      <div className="text-xs text-muted-foreground truncate">{languageLabel}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </DialogContent>
+        </Dialog>
 
         <Dialog open={isSettingsOpen} onOpenChange={onSettingsOpenChange}>
           <DialogTrigger asChild>

@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { QRCodeCanvas } from "qrcode.react";
-import { LANGUAGES } from "@/lib/languages";
+import { formatLanguageLabel, LANGUAGES } from "@/lib/languages";
 import { useTranslation } from "react-i18next";
 import { ConnectionStatus } from "../types";
 import { useState } from "react";
@@ -143,7 +143,7 @@ export function RoomHeader({
                   <SelectContent>
                     {LANGUAGES.map((lang) => (
                       <SelectItem key={lang.code} value={lang.code}>
-                        {lang.name}
+                        {formatLanguageLabel(lang)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -187,7 +187,7 @@ export function RoomHeader({
                         <SelectContent>
                           {LANGUAGES.filter((lang) => lang.code !== userLanguage).map((lang) => (
                             <SelectItem key={lang.code} value={lang.code}>
-                              {lang.name}
+                              {formatLanguageLabel(lang)}
                             </SelectItem>
                           ))}
                         </SelectContent>

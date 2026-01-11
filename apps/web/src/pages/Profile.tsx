@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ErrorState } from "@/components/ui/error-state";
-import { LANGUAGES } from "@/lib/languages";
+import { formatLanguageLabel, LANGUAGES } from "@/lib/languages";
 import {
   Select,
   SelectContent,
@@ -212,7 +212,7 @@ const Profile = () => {
                 <SelectContent>
                   {LANGUAGES.map((lang) => (
                     <SelectItem key={lang.code} value={lang.code}>
-                      {lang.name}
+                      {formatLanguageLabel(lang)}
                     </SelectItem>
                   ))}
                 </SelectContent>

@@ -1,22 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "react-i18next";
-
-type LanguageOption = {
-  code: string;
-  flag: string;
-  nativeName: string;
-};
-
-const LANGUAGE_OPTIONS: LanguageOption[] = [
-  { code: "en", flag: "🇺🇸", nativeName: "English" },
-  { code: "zh", flag: "🇨🇳", nativeName: "中文" },
-  { code: "de", flag: "🇩🇪", nativeName: "Deutsch" },
-  { code: "es", flag: "🇪🇸", nativeName: "Español" },
-  { code: "it", flag: "🇮🇹", nativeName: "Italiano" },
-  { code: "ja", flag: "🇯🇵", nativeName: "日本語" },
-  { code: "ko", flag: "🇰🇷", nativeName: "한국어" },
-  { code: "nl", flag: "🇳🇱", nativeName: "Nederlands" },
-];
+import { LANGUAGES } from "@/lib/languages";
 
 export function LanguageSelectorGrid({ className }: { className?: string }) {
   const { i18n } = useTranslation();
@@ -26,7 +10,7 @@ export function LanguageSelectorGrid({ className }: { className?: string }) {
   return (
     <div className={className}>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        {LANGUAGE_OPTIONS.map((opt) => {
+        {LANGUAGES.map((opt) => {
           const isActive = currentLang === opt.code;
 
           return (

@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Volume2, VolumeX, Settings, LogOut, Copy, Check, QrCode, Users } from "lucide-react";
+import { Volume2, VolumeX, Settings, LogOut, Copy, Check, Users } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -18,6 +18,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { QRCodeCanvas } from "qrcode.react";
 import { formatLanguageLabel, LANGUAGES } from "@/lib/languages";
+import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
 import { ConnectionStatus } from "../types";
 import { useMemo, useState } from "react";
@@ -101,36 +102,55 @@ export function RoomHeader({
     }
   };
 
-  const getConnectionText = (status: ConnectionStatus) => {
-    switch (status) {
-      case 'connected': return t('connection.connected', 'Live');
-      case 'connecting': return t('connection.connecting', 'Connecting...');
-      case 'reconnecting': return t('connection.reconnecting', 'Reconnecting...');
-      default: return t('connection.disconnected', 'Offline');
-    }
-  };
-
   return (
     <header className="p-4 flex items-center justify-between border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10">
       {/* Left: Status Indicator */}
-      <div className="flex items-center gap-2">
-        <div className={`h-2.5 w-2.5 rounded-full ${getConnectionColor(connectionStatus)} animate-pulse`} aria-hidden="true" />
-        <span className="text-sm font-medium text-foreground/80">
-          {getConnectionText(connectionStatus)}
-        </span>
-      </div>
+      <div className="flex items-center gap-1">
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button
+              variant="ghost"
+              className="flex items-center gap-2 px-2 -ml-2 rounded-full"
+              aria-label={t('room.qrTitle')}
+            >
+              <div className={`h-2.5 w-2.5 rounded-full ${getConnectionColor(connectionStatus)} animate-pulse`} aria-hidden="true" />
+              <span className="text-sm font-medium text-foreground/80 font-mono tracking-widest">
+                {roomCode}
+              </span>
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle>{t('room.qrTitle')}</DialogTitle>
+              <DialogDescription>
+                {t('room.qrDescription')}
+              </DialogDescription>
+            </DialogHeader>
 
-      {/* Right: Controls */}
-      <div className="flex items-center gap-2">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={toggleAudio}
-          className="rounded-full text-muted-foreground hover:text-foreground"
-          aria-label={audioEnabled ? t('conversation.audioOn') : t('conversation.audioOff')}
-        >
-          {audioEnabled ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
-        </Button>
+            <div className="space-y-3 py-2">
+              <div className="space-y-2">
+                <Label>{t('room.code', 'Room Code')}</Label>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 bg-muted/50 p-2 rounded-md font-mono text-center text-sm tracking-widest border">
+                    {roomCode}
+                  </div>
+                  <Button size="icon" variant="outline" onClick={handleCopyCode} aria-label={t('room.copyCode', 'Copy room code')}>
+                    {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="flex justify-center p-3 bg-white rounded-lg border">
+                <QRCodeCanvas
+                  value={`${window.location.origin}/room/${roomCode}`}
+                  size={180}
+                  bgColor="#ffffff"
+                  fgColor="#000000"
+                />
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         <Dialog>
           <DialogTrigger asChild>
@@ -172,7 +192,10 @@ export function RoomHeader({
             </div>
           </DialogContent>
         </Dialog>
+      </div>
 
+      {/* Right: Controls */}
+      <div className="flex items-center gap-2">
         <Dialog open={isSettingsOpen} onOpenChange={onSettingsOpenChange}>
           <DialogTrigger asChild>
             <Button variant="ghost" size="icon" className="rounded-full text-muted-foreground hover:text-foreground" aria-label={t('common.settings', 'Settings')}>
@@ -262,49 +285,21 @@ export function RoomHeader({
           </DialogContent>
         </Dialog>
 
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="rounded-full text-muted-foreground hover:text-foreground"
-              aria-label={t('room.qrTitle')}
-            >
-              <QrCode className="h-5 w-5" />
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-sm">
-            <DialogHeader>
-              <DialogTitle>{t('room.qrTitle')}</DialogTitle>
-              <DialogDescription>
-                {t('room.qrDescription')}
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="space-y-3 py-2">
-              <div className="space-y-2">
-                <Label>{t('room.code', 'Room Code')}</Label>
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 bg-muted/50 p-2 rounded-md font-mono text-center text-sm tracking-widest border">
-                    {roomCode}
-                  </div>
-                  <Button size="icon" variant="outline" onClick={handleCopyCode} aria-label={t('room.copyCode', 'Copy room code')}>
-                    {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                  </Button>
-                </div>
-              </div>
-
-              <div className="flex justify-center p-3 bg-white rounded-lg border">
-                <QRCodeCanvas
-                  value={`${window.location.origin}/room/${roomCode}`}
-                  size={180}
-                  bgColor="#ffffff"
-                  fgColor="#000000"
-                />
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={toggleAudio}
+          className={cn(
+            "rounded-full text-muted-foreground hover:text-foreground relative",
+            !audioEnabled ? "bg-muted/60" : "",
+            "hover:bg-transparent",
+            "active:bg-accent active:text-accent-foreground",
+            "[@media(hover:hover)]:hover:bg-accent [@media(hover:hover)]:hover:text-accent-foreground"
+          )}
+          aria-label={audioEnabled ? t('conversation.audioOn') : t('conversation.audioOff')}
+        >
+          {audioEnabled ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
+        </Button>
 
         <Button
           variant="ghost"

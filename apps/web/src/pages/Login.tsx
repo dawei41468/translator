@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { LanguageSelectorGrid } from "@/components/LanguageSelectorGrid";
 
 export default function Login() {
   const { t } = useTranslation();
@@ -136,6 +137,10 @@ export default function Login() {
             >
               {t("auth.noAccount")}
             </Button>
+          </div>
+
+          <div className="mt-8 pt-6 border-t">
+            <LanguageSelectorGrid />
           </div>
         </div>
       </div>

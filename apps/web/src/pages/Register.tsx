@@ -4,6 +4,7 @@ import { useAuth } from '@/lib/auth';
 import { useTranslation } from 'react-i18next';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { LanguageSelectorGrid } from "@/components/LanguageSelectorGrid";
 
 export default function Register() {
   const { t } = useTranslation();
@@ -108,6 +109,10 @@ export default function Register() {
             >
               {t("auth.haveAccount")}
             </Button>
+          </div>
+
+          <div className="mt-8 pt-6 border-t">
+            <LanguageSelectorGrid />
           </div>
         </div>
       </div>

@@ -361,6 +361,8 @@ const Dashboard = () => {
     initializeScanner();
   }, [showScanner, permissionStatus, isScanning]);
 
+  const displayedRecentRooms = recentRooms.slice(0, 2);
+
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="max-w-md mx-auto">
@@ -371,12 +373,12 @@ const Dashboard = () => {
 
         {!createdRoom ? (
           <div className="space-y-4">
-            {recentRooms.length > 0 && (
+            {displayedRecentRooms.length > 0 && (
               <Card>
                 <div className="p-4">
                   <h3 className="font-semibold mb-3">{t('room.recentRooms', 'Recent rooms')}</h3>
                   <div className="flex flex-col gap-2">
-                    {recentRooms.map((r) => (
+                    {displayedRecentRooms.map((r) => (
                       <Button
                         key={r.code}
                         type="button"

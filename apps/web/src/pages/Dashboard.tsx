@@ -12,6 +12,8 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { addRecentRoom, getRecentRooms } from "@/lib/recentRooms";
 import { DashboardQuickActionsFab } from "./dashboard/DashboardQuickActionsFab";
+import { getMobilePlatform, isStandalone, PWA_INSTALL_BANNER_DISMISSED_KEY } from "@/lib/pwa";
+import { usePwaInstallPrompt } from "@/lib/usePwaInstallPrompt";
 import {
   Dialog,
   DialogContent,
@@ -27,6 +29,15 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const { isAuthenticated, loginAsGuest } = useAuth();
   const isIOS = typeof navigator !== 'undefined' && /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const platform = getMobilePlatform();
+  const { canPrompt, promptToInstall } = usePwaInstallPrompt();
+  const [hidePwaBanner, setHidePwaBanner] = useState(() => {
+    try {
+      return window.localStorage.getItem(PWA_INSTALL_BANNER_DISMISSED_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
   const [createdRoom, setCreatedRoom] = useState<{ code: string; id: string } | null>(null);
   const [showScanner, setShowScanner] = useState(false);
   const [manualCode, setManualCode] = useState("");
@@ -363,6 +374,20 @@ const Dashboard = () => {
 
   const displayedRecentRooms = recentRooms.slice(0, 2);
 
+  const shouldShowPwaBanner =
+    !hidePwaBanner &&
+    platform !== "other" &&
+    !isStandalone();
+
+  const dismissPwaBannerForever = () => {
+    try {
+      window.localStorage.setItem(PWA_INSTALL_BANNER_DISMISSED_KEY, "1");
+    } catch {
+      // ignore storage errors
+    }
+    setHidePwaBanner(true);
+  };
+
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="max-w-md mx-auto">
@@ -370,6 +395,66 @@ const Dashboard = () => {
           <h1 className="mb-3 text-4xl font-bold tracking-tight">{t("app.name")}</h1>
           <p className="text-base text-muted-foreground mb-8">{t("app.description")}</p>
         </div>
+
+        {shouldShowPwaBanner && (
+          <Card>
+            <div className="p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="font-semibold">{t('pwa.installTitle', 'Install the app')}</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {t('pwa.installDescription', 'Get a faster, full-screen experience and quick access from your home screen.')}
+                  </p>
+                </div>
+                <Button type="button" variant="ghost" size="sm" onClick={dismissPwaBannerForever}>
+                  {t('common.close', 'Close')}
+                </Button>
+              </div>
+
+              {platform === "ios" ? (
+                <div className="mt-3 text-sm">
+                  <div className="text-muted-foreground">{t('pwa.iosStep1', '1. Tap Share')}</div>
+                  <div className="text-muted-foreground">{t('pwa.iosStep2', '2. Tap Add to Home Screen')}</div>
+                  <div className="mt-3">
+                    <Button type="button" variant="outline" size="sm" className="w-full" onClick={dismissPwaBannerForever}>
+                      {t('pwa.gotIt', 'Got it')}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-3">
+                  {canPrompt ? (
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="flex-1"
+                        onClick={async () => {
+                          await promptToInstall();
+                          dismissPwaBannerForever();
+                        }}
+                      >
+                        {t('pwa.install', 'Install')}
+                      </Button>
+                      <Button type="button" variant="outline" size="sm" className="flex-1" onClick={dismissPwaBannerForever}>
+                        {t('pwa.notNow', 'Not now')}
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="text-sm">
+                      <div className="text-muted-foreground">{t('pwa.androidHint', 'Open your browser menu and tap Install app or Add to Home screen.')}</div>
+                      <div className="mt-3">
+                        <Button type="button" variant="outline" size="sm" className="w-full" onClick={dismissPwaBannerForever}>
+                          {t('pwa.gotIt', 'Got it')}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </Card>
+        )}
 
         {!createdRoom ? (
           <div className="space-y-4">

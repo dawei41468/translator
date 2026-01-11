@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ErrorState } from "@/components/ui/error-state";
 import { formatLanguageLabel, LANGUAGES } from "@/lib/languages";
+import { getMobilePlatform, isStandalone } from "@/lib/pwa";
+import { usePwaInstallPrompt } from "@/lib/usePwaInstallPrompt";
 import {
   Select,
   SelectContent,
@@ -130,6 +132,10 @@ const Profile = () => {
 		availableTranslationEngines.some((e) => e.id === preferences.translationEngine)
 			? preferences.translationEngine
 			: DEFAULT_TRANSLATION_ENGINE_ID;
+
+  const platform = getMobilePlatform();
+  const standalone = isStandalone();
+  const { canPrompt, promptToInstall } = usePwaInstallPrompt();
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-2xl">
@@ -316,6 +322,53 @@ const Profile = () => {
                 {t('profile.translationEngineDescription', 'Engine used for language translation')}
               </p>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Install App */}
+        <Card>
+          <CardHeader>
+            <CardTitle>{t('profile.installApp', 'Install App')}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {standalone ? (
+              <p className="text-sm text-muted-foreground">
+                {t('profile.appAlreadyInstalled', 'This app is already installed and running in app mode.')}
+              </p>
+            ) : platform === 'ios' ? (
+              <div className="text-sm text-muted-foreground space-y-2">
+                <div>{t('profile.pwaIosStep1', '1. Tap Share in Safari')}</div>
+                <div>{t('profile.pwaIosStep2', '2. Tap Add to Home Screen')}</div>
+              </div>
+            ) : platform === 'android' ? (
+              <div className="space-y-3">
+                {canPrompt ? (
+                  <Button
+                    type="button"
+                    onClick={async () => {
+                      await promptToInstall();
+                    }}
+                    className="w-full"
+                  >
+                    {t('profile.installNow', 'Install now')}
+                  </Button>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    {t(
+                      'profile.pwaAndroidHint',
+                      'Open your browser menu and tap Install app or Add to Home screen.'
+                    )}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                {t(
+                  'profile.pwaGenericHint',
+                  'Open your browser menu and look for Install app or Add to Home screen.'
+                )}
+              </p>
+            )}
           </CardContent>
         </Card>
 

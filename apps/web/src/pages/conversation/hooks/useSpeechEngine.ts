@@ -42,7 +42,8 @@ export function useSpeechEngine({
   const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const requestDataIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastSpeechActivityAtRef = useRef<number>(0);
-  const bufferedAudioChunksRef = useRef<Blob[]>([]);
+  const bufferedAudioChunksRef = useRef<Array<Blob | ArrayBuffer>>([]);
+  const recordingStartedAtRef = useRef<number | null>(null);
   const recordingParamsRef = useRef<{
     languageCode: string;
     soloMode?: boolean;
@@ -51,6 +52,7 @@ export function useSpeechEngine({
     sampleRateHertz?: number;
   } | null>(null);
   const SILENCE_THRESHOLD_MS = 10000; // 10 seconds of silence before auto-stop
+  const PCM_WARMUP_SEND_MS = 1200;
 
   useEffect(() => {
     tRef.current = t;
@@ -150,6 +152,7 @@ export function useSpeechEngine({
       }
 
       bufferedAudioChunksRef.current = [];
+      recordingStartedAtRef.current = null;
 
       const sttEngine = speechEngineRegistry.getSttEngine();
       if (sttEngine) {
@@ -338,6 +341,7 @@ export function useSpeechEngine({
     if (isRecordingRef.current || isStartingRef.current) return;
     const token = (lifecycleTokenRef.current += 1);
     isStartingRef.current = true;
+    recordingStartedAtRef.current = Date.now();
 
     try {
       const socket = socketRef.current;
@@ -529,22 +533,37 @@ export function useSpeechEngine({
             return;
           }
 
-          // Flush buffer if reconnected
-          if (bufferedAudioChunksRef.current.length > 0) {
-             // For PCM, we need to be careful. The current flush logic in the interval assumes Blobs.
-             // We'll handle flushing there.
-          }
+          const now = Date.now();
+          const startedAt = recordingStartedAtRef.current;
+          const inWarmup = typeof startedAt === 'number' && now - startedAt < PCM_WARMUP_SEND_MS;
+
+          const recentlySpoke = now - lastSpeechActivityAtRef.current < 1200;
+          const shouldSend = soloModeRef.current || isUserSpeakingRef.current || recentlySpoke;
+
+          const flushBuffered = () => {
+            if (bufferedAudioChunksRef.current.length === 0) return;
+            for (const chunk of bufferedAudioChunksRef.current) {
+              socket.emit('speech-data', chunk);
+            }
+            bufferedAudioChunksRef.current = [];
+          };
 
           if (disableAutoStopOnSilenceRef.current) {
+            flushBuffered();
             socket.emit('speech-data', data);
             return;
           }
 
-          const now = Date.now();
-          const recentlySpoke = now - lastSpeechActivityAtRef.current < 1200;
-          const shouldSend = soloModeRef.current || isUserSpeakingRef.current || recentlySpoke;
-          if (shouldSend) {
+          if (inWarmup || shouldSend) {
+            flushBuffered();
             socket.emit('speech-data', data);
+            return;
+          }
+
+          // Buffer a short window of audio so the beginning of a short utterance isn't lost
+          bufferedAudioChunksRef.current.push(data);
+          if (bufferedAudioChunksRef.current.length > 12) {
+            bufferedAudioChunksRef.current.shift();
           }
         };
 

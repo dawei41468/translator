@@ -87,8 +87,8 @@ Screen real estate is consumed by "settings" and redundant text rather than the 
 - **Benefit:** A cleaner, focused view that emphasizes the content.
 
 **Status (Current Code):** ✅ Implemented
-- Header shows connection status + primary controls.
-- Room code/QR is moved into a secondary menu.
+- Header shows the room code in the top bar (tap opens the QR invite modal).
+- Participants count is displayed next to the room code.
 - Language + solo mode controls are in a settings dialog.
 
 ### ✅ Immersive Mic UI

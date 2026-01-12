@@ -32,7 +32,7 @@
 | Deployment            | 100%     | Complete (deploy.sh, ecosystem.config.cjs port 4003, PM2) |
 | Database Schema       | 100%     | Complete (users/sessions/rooms/room_participants w/ relations) |
 | Core Features         | 100% ✅   | Backend: room creation/join, real-time speech → translation → broadcast (multi-user); Frontend: QR joining, Web Speech API, TTS, chat UI, accessibility, error handling, security |
-| Internationalization  | 100%     | Complete: react-i18next + DB preference (en/zh) |
+| Internationalization  | 100%     | Complete: react-i18next + DB preference (en/zh/de/es/it/ja/ko/nl) |
 
 ## Translation Provider Decision (Locked)
 
@@ -86,7 +86,7 @@
 
 **Primary Method: QR Code (Mobile-Optimized)**
 - Creator clicks "Start New Conversation" → room auto-created → creator auto-joined → lands in waiting screen.
-- Waiting screen shows prominent "Show QR Code" button → reveals large scannable QR code + short room code (e.g., ABC-123).
+- Waiting screen immediately shows a large scannable QR code + short room code (e.g., ABC-123) with a copy button.
 - Joiner on Dashboard clicks "Scan QR Code to Join" → camera opens → scans QR → auto-joins room.
 
 **Fallback: Room Code Manual Entry**
@@ -105,7 +105,7 @@ The detailed UX audit and recommendations live in [`UX-AUDIT-2026.md`](UX-AUDIT-
 **Implemented (Current Code):**
 - Guest Mode (display name only)
 - Dashboard FAB quick actions + recent rooms
-- Conversation header cleanup (room code/QR and settings moved into secondary UI)
+- Conversation header shows room code (tap opens QR invite modal) + participants count next to it; language + solo mode controls are in a settings dialog
 - Wake lock enabled while connected
 - Message bubble original text collapsed by default with toggle
 
@@ -151,11 +151,11 @@ The detailed UX audit and recommendations live in [`UX-AUDIT-2026.md`](UX-AUDIT-
 | Database schema + Drizzle setup            | Completed    | High     | Kilo  | users, rooms, room_participants |
 | Room creation + auto-join creator          | Completed    | High     | You   | Creator immediately enters room |
 | Socket.io real-time infrastructure         | Completed    | High     | Kilo  | Auth via cookie, room namespaces |
-| QR code generation + "Show QR Code" UI     | Completed    | High     | You   | qrcode.react library |
+| QR code generation + waiting screen QR display | Completed    | High     | You   | qrcode.react library |
 | Dashboard "Scan QR Code to Join" + scanner | Completed    | High     | You   | html5-qrcode library |
 | Room code display + manual entry fallback  | Completed    | High     | You   | Short code (e.g., ABC-123) |
 | Core speech → translate → TTS loop         | Completed    | High     | Both  | End-to-end working with Google Cloud STT/TTS |
-| i18n setup (copy OneProject)               | Completed    | High     | You   | en/zh/it/de/nl, separate JSONs, user preference in DB |
+| i18n setup (copy OneProject)               | Completed    | High     | You   | en/zh/de/es/it/ja/ko/nl, separate JSONs, user preference in DB |
 | Loveable UI generation                     | Completed    | High     | Grok + You | Professional, clean, mobile-first design (waiting screen with QR focus) |
 | Audio toggle UI (OS-level routing)         | Completed    | Medium   | You   | Toggle implemented in Conversation.tsx |
 | Rate limiting on auth/room endpoints       | Completed    | Medium   | Kilo  | express-rate-limit |
@@ -167,8 +167,8 @@ The detailed UX audit and recommendations live in [`UX-AUDIT-2026.md`](UX-AUDIT-
 ## Core Flow (MVP)
 
 1. User logs in → Dashboard.
-2. Creator clicks "Start New Conversation" → room auto-created → creator auto-joined → enters waiting screen with "Show QR Code" button.
-3. Creator clicks "Show QR Code" → displays large QR + short room code.
+2. Creator clicks "Start New Conversation" → room auto-created → creator auto-joined → enters waiting screen with QR code + short room code.
+3. Creator shares the QR code or room code with the joiner.
 4. Joiner (logged in) on Dashboard clicks "Scan QR Code to Join" → scans QR (or manually enters code) → auto-joined.
 5. All participants see "Connected" status.
 6. When one speaks:

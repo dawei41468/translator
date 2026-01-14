@@ -10,6 +10,7 @@ dist/
 build/
 apps/*/dist/
 apps/*/build/
+apps/*/dev-dist/
 packages/*/dist/
 packages/*/build/
 

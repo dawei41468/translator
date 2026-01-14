@@ -31,6 +31,8 @@ export function createRecognizeStream(
     interimResults: true,
   };
 
+  logger.info("Creating STT stream", { config: request.config });
+
   try {
     const recognizeStream = getSpeechClient()
       .streamingRecognize(request as any)
@@ -43,6 +45,7 @@ export function createRecognizeStream(
           const result = data.results[0];
           const transcript = result.alternatives[0].transcript;
           const isFinal = result.isFinal;
+          logger.info("STT transcript received", { transcript: transcript.substring(0, 100), isFinal });
           onData(transcript, isFinal);
         }
       });

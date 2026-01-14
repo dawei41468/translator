@@ -365,6 +365,12 @@ export function setupSocketIO(io: Server) {
         return;
       }
 
+      logger.info("Speech data received", {
+        userId: socket.userId,
+        roomId: socket.roomId,
+        dataLength: data.length
+      });
+
       if (!socket.recognizeStream && socket.sttActive && socket.sttLanguageCode && socket.sttNeedsRestart) {
         if (!canRestartStt()) {
           socket.emit("speech-error", "Speech recognition is unstable right now. Please stop and try again.");
@@ -404,6 +410,13 @@ export function setupSocketIO(io: Server) {
         handleSocketError(socket, "handleTranscript", new Error("Missing room or user ID"));
         return;
       }
+
+      logger.info("Processing transcript", {
+        userId: socket.userId,
+        roomId: socket.roomId,
+        transcript: transcript.substring(0, 100),
+        sourceLang
+      });
 
       const messageId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -495,6 +508,7 @@ export function setupSocketIO(io: Server) {
               const { targetLang, translatedText, participants } = result as any;
               for (const participant of participants) {
                 io.to(`user:${participant.userId}`).emit("translated-message", {
+                  id: messageId,
                   originalText: transcript,
                   translatedText,
                   sourceLang: normalizedSourceLang,
@@ -526,6 +540,12 @@ export function setupSocketIO(io: Server) {
         });
 
         if (socket.soloMode && socket.soloTargetLang) {
+          logger.info("Starting solo translation", {
+            userId: socket.userId,
+            roomId: socket.roomId,
+            targetLang: socket.soloTargetLang
+          });
+
           try {
             const translationEngine = translationRegistry.getEngine(socket.userId);
             const translatedText = await withRetry(
@@ -538,6 +558,18 @@ export function setupSocketIO(io: Server) {
               2, 1000
             );
 
+            logger.info("Solo translation success", {
+              userId: socket.userId,
+              roomId: socket.roomId,
+              translatedText: translatedText.substring(0, 100)
+            });
+
+            logger.info("Emitting solo-translated", {
+              userId: socket.userId,
+              roomId: socket.roomId,
+              messageId
+            });
+
             socket.emit("solo-translated", {
               id: messageId,
               originalText: transcript,
@@ -547,6 +579,13 @@ export function setupSocketIO(io: Server) {
               speakerName,
             });
           } catch (error) {
+            logger.error("Solo translation failed", {
+              userId: socket.userId,
+              roomId: socket.roomId,
+              error: error instanceof Error ? error.message : String(error),
+              transcript: transcript.substring(0, 100)
+            });
+
             handleSocketError(socket, "solo-translation", error, "Translation failed in solo mode", {
               transcript: transcript.substring(0, 100)
             });

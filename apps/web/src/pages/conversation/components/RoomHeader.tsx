@@ -23,6 +23,7 @@ import { useTranslation } from "react-i18next";
 import { ConnectionStatus } from "../types";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { StatusIndicator, ParticipantStatus } from "@/components/StatusIndicator";
 
 interface RoomHeaderProps {
   roomCode: string;
@@ -41,7 +42,13 @@ interface RoomHeaderProps {
   toggleSoloMode: () => void;
   soloTargetLang: string;
   onSoloLangChange: (lang: string) => void;
-  participants: Array<{ id: string; name: string | null; language: string | null }>;
+  participants: Array<{
+    id: string;
+    name: string | null;
+    language: string | null;
+    status?: ParticipantStatus;
+    lastSeen?: Date;
+  }>;
   currentUserId: string | undefined;
 }
 
@@ -180,12 +187,16 @@ export function RoomHeader({
 
                 return (
                   <div key={p.id} className="flex items-center justify-between gap-3" data-testid="participant-row">
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <div className="text-sm font-medium truncate">
                         {name}{isYou ? ` (${t('participants.you', 'You')})` : ''}
                       </div>
                       <div className="text-xs text-muted-foreground truncate">{languageLabel}</div>
                     </div>
+                    <StatusIndicator
+                      status={p.status || 'active'}
+                      lastSeen={p.lastSeen ? new Date(p.lastSeen) : undefined}
+                    />
                   </div>
                 );
               })}

@@ -2,11 +2,39 @@ import { Server, Socket } from "socket.io";
 import jwt from "jsonwebtoken";
 import { db } from "../../../packages/db/src/index.js";
 import { users, rooms, roomParticipants } from "../../../packages/db/src/schema.js";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { translationRegistry } from "./services/translation/index.js";
 import { createRecognizeStream } from "./services/stt.js";
 import { logger } from "./logger.js";
 import { parseCookies } from "./middleware/auth.js";
+
+// Handle automatic disconnect after background timeout
+async function handleAutoDisconnect(socket: AuthenticatedSocket) {
+  if (!socket.userId || !socket.roomId) return;
+
+  socket.participantStatus = 'disconnected';
+
+  // Update database status
+  await db.update(roomParticipants)
+    .set({
+      status: 'disconnected',
+      lastSeen: new Date()
+    })
+    .where(and(
+      eq(roomParticipants.roomId, socket.roomId!),
+      eq(roomParticipants.userId, socket.userId!)
+    ));
+
+  // Broadcast status change
+  socket.to(socket.roomId).emit("participant-status-changed", {
+    userId: socket.userId,
+    status: 'disconnected',
+    lastSeen: new Date()
+  });
+
+  // Close socket connection
+  socket.disconnect();
+}
 
 // Centralized error handling
 function handleSocketError(socket: AuthenticatedSocket, event: string, error: any, userMessage?: string, logContext?: any) {
@@ -137,6 +165,8 @@ interface AuthenticatedSocket extends Socket {
   sttNeedsRestart?: boolean;
   sttRestartWindowStartedAt?: number;
   sttRestartCount?: number;
+  participantStatus?: 'active' | 'away' | 'disconnected';
+  backgroundTimeout?: NodeJS.Timeout;
 }
 
 export function setupSocketIO(io: Server) {
@@ -654,11 +684,14 @@ export function setupSocketIO(io: Server) {
             db.insert(roomParticipants).values({
               roomId: room.id,
               userId: socket.userId!,
+              status: 'active',
+              lastSeen: new Date()
             }), 2, 500
           );
         }
 
         socket.roomId = room.id;
+        socket.participantStatus = 'active';
         socket.join(room.id);
 
         // Notify others in the room
@@ -676,8 +709,25 @@ export function setupSocketIO(io: Server) {
     });
 
     socket.on("leave-room", async () => {
-      if (socket.roomId) {
+      if (socket.roomId && socket.userId) {
         socket.to(socket.roomId).emit("user-left", { userId: socket.userId });
+
+        // Remove from database
+        try {
+          await withRetry(() =>
+            db.delete(roomParticipants).where(and(
+              eq(roomParticipants.roomId, socket.roomId!),
+              eq(roomParticipants.userId, socket.userId!)
+            )), 2, 500
+          );
+        } catch (error) {
+          logger.warn("Failed to remove participant from database on leave", {
+            userId: socket.userId,
+            roomId: socket.roomId,
+            error: error instanceof Error ? error.message : String(error)
+          });
+        }
+
         socket.leave(socket.roomId);
         socket.roomId = undefined;
       }
@@ -712,15 +762,78 @@ export function setupSocketIO(io: Server) {
       });
     });
 
-    socket.on("disconnect", (reason) => {
+    // Handle participant status updates
+    socket.on("participant-status-update", async (data: { status: 'active' | 'away' | 'disconnected' }) => {
+      if (!socket.userId || !socket.roomId) return;
+
+      socket.participantStatus = data.status;
+
+      // Update database
+      await db.update(roomParticipants)
+        .set({
+          status: data.status,
+          lastSeen: new Date(),
+          backgroundedAt: data.status === 'away' ? new Date() : null
+        })
+        .where(and(
+          eq(roomParticipants.roomId, socket.roomId!),
+          eq(roomParticipants.userId, socket.userId!)
+        ));
+
+      // Broadcast status change to room
+      socket.to(socket.roomId).emit("participant-status-changed", {
+        userId: socket.userId,
+        status: data.status,
+        lastSeen: new Date()
+      });
+
+      // Handle auto-disconnect for away status
+      if (data.status === 'away') {
+        socket.backgroundTimeout = setTimeout(async () => {
+          await handleAutoDisconnect(socket);
+        }, 5 * 60 * 1000); // 5 minutes
+      } else if (data.status === 'active' && socket.backgroundTimeout) {
+        clearTimeout(socket.backgroundTimeout);
+        socket.backgroundTimeout = undefined;
+      }
+    });
+
+    socket.on("disconnect", async (reason) => {
       logger.info(`User disconnected from socket`, {
         userId: socket.userId,
         reason,
         roomId: socket.roomId
       });
       stopRecognition();
-      if (socket.roomId) {
-        socket.to(socket.roomId).emit("user-left", { userId: socket.userId });
+
+      if (socket.roomId && socket.userId) {
+        // Update status to disconnected instead of deleting
+        try {
+          await withRetry(() =>
+            db.update(roomParticipants)
+              .set({
+                status: 'disconnected',
+                lastSeen: new Date()
+              })
+              .where(and(
+                eq(roomParticipants.roomId, socket.roomId!),
+                eq(roomParticipants.userId, socket.userId!)
+              )), 2, 500
+          );
+
+          // Broadcast status change
+          socket.to(socket.roomId).emit("participant-status-changed", {
+            userId: socket.userId,
+            status: 'disconnected',
+            lastSeen: new Date()
+          });
+        } catch (error) {
+          logger.warn("Failed to update participant status on disconnect", {
+            userId: socket.userId,
+            roomId: socket.roomId,
+            error: error instanceof Error ? error.message : String(error)
+          });
+        }
       }
     });
 

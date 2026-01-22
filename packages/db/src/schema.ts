@@ -55,8 +55,13 @@ export const roomParticipants = pgTable("room_participants", {
     .references(() => users.id, { onDelete: "cascade" })
     .notNull(),
   joinedAt: timestamp("joined_at").defaultNow(),
+  status: varchar("status", { length: 20 }).default("active").notNull(),
+  lastSeen: timestamp("last_seen").defaultNow(),
+  backgroundedAt: timestamp("backgrounded_at"),
 }, (table) => ({
   roomUserIdx: index("room_participants_room_user_idx").on(table.roomId, table.userId),
+  statusIdx: index("room_participants_status_idx").on(table.status),
+  lastSeenIdx: index("room_participants_last_seen_idx").on(table.lastSeen),
 }));
 
 // Relations

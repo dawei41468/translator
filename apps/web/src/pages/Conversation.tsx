@@ -19,6 +19,7 @@ import { RoomHeader } from "./conversation/components/RoomHeader";
 import { MessageList } from "./conversation/components/MessageList";
 import { ConversationControls } from "./conversation/components/ConversationControls";
 import { DebugPanel } from "./conversation/components/DebugPanel";
+import { ParticipantStatus } from "@/components/StatusIndicator";
 
 const TTS_ENABLED_STORAGE_KEY = "translator_tts_enabled";
 
@@ -49,21 +50,17 @@ const Conversation = () => {
 
   const [messages, setMessages] = useState<Message[]>(() => {
     if (code) {
-      try {
-        const saved = sessionStorage.getItem(`translator_messages_${code}`);
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          return parsed.map((msg: any) => ({
-            ...msg,
-            timestamp: new Date(msg.timestamp)
-          }));
-        }
-      } catch {
-        // ignore storage errors
-      }
+      const stored = localStorage.getItem(`messages-${code}`);
+      return stored ? JSON.parse(stored) : [];
     }
     return [];
   });
+
+  const [participantStatuses, setParticipantStatuses] = useState<Map<string, {
+    status: ParticipantStatus;
+    lastSeen: Date;
+    backgroundedAt?: Date;
+  }>>(new Map());
 
   useEffect(() => {
     if (!ownSpeakerName) return;
@@ -211,6 +208,13 @@ const Conversation = () => {
     stopRecordingForUnmountRef.current = stopRecordingForUnmount;
   }, [stopRecordingForUnmount]);
 
+  // Initialize participant statuses from room data
+  useEffect(() => {
+    if (roomData?.participantStatuses) {
+      setParticipantStatuses(roomData.participantStatuses);
+    }
+  }, [roomData?.participantStatuses]);
+
   // Initialize Socket.io
   useEffect(() => {
     if (!code) return;
@@ -321,12 +325,39 @@ const Conversation = () => {
 
     socketInstance.on('error', (error: string) => toast.error(error));
 
+    // Handle participant status changes
+    socketInstance.on('participant-status-changed', (data: {
+      userId: string;
+      status: ParticipantStatus;
+      lastSeen: Date;
+    }) => {
+      setParticipantStatuses(prev => new Map(prev).set(data.userId, {
+        status: data.status,
+        lastSeen: new Date(data.lastSeen)
+      }));
+    });
+
     setSocket(socketInstance);
 
     return () => {
       socketInstance.disconnect();
     };
   }, [code]); // Only recreate socket if room code changes
+
+  // Handle visibility changes for participant status
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleVisibilityChange = () => {
+      const isVisible = document.visibilityState === 'visible';
+      const newStatus = isVisible ? 'active' : 'away';
+
+      socket.emit('participant-status-update', { status: newStatus });
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [socket]);
 
   // Initialize speech engines
   useEffect(() => {
@@ -459,7 +490,11 @@ const Conversation = () => {
             setSoloTargetLang(val);
             setHasUserSelectedSoloLang(true);
           }}
-          participants={roomData.participants ?? []}
+          participants={(roomData.participants ?? []).map(p => ({
+            ...p,
+            status: participantStatuses.get(p.id)?.status || 'active',
+            lastSeen: participantStatuses.get(p.id)?.lastSeen
+          }))}
           currentUserId={user?.id}
         />
 

@@ -9,7 +9,21 @@ import { addRecentRoom } from "./recentRooms";
 export const useRoom = (code: string | undefined) => {
   return useQuery({
     queryKey: ["room", code],
-    queryFn: () => apiClient.getRoom(code!),
+    queryFn: async () => {
+      const room = await apiClient.getRoom(code!);
+
+      // Initialize participant status map from API response
+      const statusMap = new Map();
+      room.participants.forEach((p: any) => {
+        statusMap.set(p.id, {
+          status: p.status || 'active',
+          lastSeen: p.lastSeen ? new Date(p.lastSeen) : new Date(),
+          backgroundedAt: p.backgroundedAt ? new Date(p.backgroundedAt) : undefined
+        });
+      });
+
+      return { ...room, participantStatuses: statusMap };
+    },
     enabled: !!code,
   });
 };

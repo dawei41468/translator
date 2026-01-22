@@ -128,6 +128,9 @@ router.get("/:code", async (req, res) => {
         id: p.user.id,
         name: p.user.name,
         language: p.user.language,
+        status: p.status,
+        lastSeen: p.lastSeen,
+        backgroundedAt: p.backgroundedAt,
       })),
     });
   } catch (error) {

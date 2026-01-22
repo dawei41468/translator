@@ -1,4 +1,4 @@
-type RecentRoom = {
+export type RecentRoom = {
   code: string;
   lastUsedAt: number;
 };

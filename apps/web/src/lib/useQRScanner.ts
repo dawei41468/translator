@@ -24,7 +24,7 @@ export interface UseQRScannerReturn {
 export const useQRScanner = (): UseQRScannerReturn => {
   const { t } = useTranslation();
   const [showScanner, setShowScanner] = useState(false);
-  const [permissionStatus, setPermissionStatus] = useState<'checking' | 'granted' | 'denied' | 'prompt'>('checking');
+  const [permissionStatus, setPermissionStatus] = useState<'checking' | 'granted' | 'denied' | 'prompt'>('prompt');
   const [isScanning, setIsScanning] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
   const scannerRef = useRef<Html5Qrcode | null>(null);
@@ -195,7 +195,7 @@ export const useQRScanner = (): UseQRScannerReturn => {
     void safeStopScanner();
     setShowScanner(false);
     setIsScanning(false);
-    setPermissionStatus('checking');
+    setPermissionStatus('prompt');
     setIsJoining(false);
   };
 
@@ -212,7 +212,7 @@ export const useQRScanner = (): UseQRScannerReturn => {
 
     void safeStopScanner();
     setIsScanning(false);
-    setPermissionStatus('checking');
+    setPermissionStatus('prompt');
     setIsJoining(false);
   }, [showScanner]);
 

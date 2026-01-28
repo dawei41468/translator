@@ -151,7 +151,8 @@
   "error.speechNetwork": "Spraakherkenningsservice niet beschikbaar. Controleer je verbinding/VPN en probeer het opnieuw.",
   "error.speechNotSupported": "Spraakherkenning niet ondersteund",
   "error.enterCode": "Voer een kamercode in",
-  "error.invalidQR": "Ongeldige QR-code",
+  "error.invalidQR": "0",
+  "error.scannerInitFailed": "Failed to initialize camera scanner",
   "error.roomNotFound": "Kamer niet gevonden",
   "profile": {
     "title": "Profiel",

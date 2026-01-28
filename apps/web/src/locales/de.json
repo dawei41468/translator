@@ -151,7 +151,8 @@
   "error.speechNetwork": "Spracherkennungsdienst nicht verfügbar. Prüfen Sie Verbindung/VPN und versuchen Sie es erneut.",
   "error.speechNotSupported": "Spracherkennung nicht unterstützt",
   "error.enterCode": "Bitte geben Sie einen Raumcode ein",
-  "error.invalidQR": "Ungültiger QR-Code",
+  "error.invalidQR": "0",
+  "error.scannerInitFailed": "Failed to initialize camera scanner",
   "error.roomNotFound": "Raum nicht gefunden",
   "profile": {
     "title": "Profil",

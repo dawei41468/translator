@@ -151,7 +151,8 @@
   "error.speechNetwork": "음성 인식 서비스를 사용할 수 없습니다. 연결/VPN을 확인한 후 다시 시도하세요.",
   "error.speechNotSupported": "음성 인식을 지원하지 않습니다",
   "error.enterCode": "방 코드를 입력해 주세요",
-  "error.invalidQR": "유효하지 않은 QR 코드",
+  "error.invalidQR": "0",
+  "error.scannerInitFailed": "Failed to initialize camera scanner",
   "error.roomNotFound": "방을 찾을 수 없습니다",
   "profile": {
     "title": "프로필",

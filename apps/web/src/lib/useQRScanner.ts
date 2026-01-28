@@ -27,10 +27,12 @@ export const useQRScanner = (): UseQRScannerReturn => {
   const [permissionStatus, setPermissionStatus] = useState<'checking' | 'granted' | 'denied' | 'prompt'>('prompt');
   const [isScanning, setIsScanning] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
+
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const scannerStatusRef = useRef<'idle' | 'starting' | 'running' | 'stopping'>('idle');
   const stopPromiseRef = useRef<Promise<void> | null>(null);
   const isJoiningRef = useRef(isJoining);
+  const isFirstRender = useRef(true);
 
   const joinRoomMutation = useJoinRoom();
 
@@ -208,6 +210,13 @@ export const useQRScanner = (): UseQRScannerReturn => {
   }, []);
 
   useEffect(() => {
+    // Skip the first render - only run when showScanner actually changes
+    // This prevents React StrictMode double-mount issues in dev
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    
     if (showScanner) return;
 
     void safeStopScanner();
@@ -221,7 +230,28 @@ export const useQRScanner = (): UseQRScannerReturn => {
     if (permissionStatus !== 'granted' || !isScanning) return;
     if (scannerRef.current) return;
 
-    initializeScanner();
+    // Wait for the DOM element to be rendered before initializing
+    // This prevents a race condition where the effect runs before React paints the DOM
+    const timeoutId = setTimeout(() => {
+      const qrReaderElement = document.getElementById('qr-reader');
+      if (qrReaderElement) {
+        initializeScanner();
+      } else {
+        console.warn('QR reader element not found in DOM');
+        // Retry once after a short delay
+        setTimeout(() => {
+          if (document.getElementById('qr-reader')) {
+            initializeScanner();
+          } else {
+            console.error('QR reader element still not found after retry');
+            toast.error(t('error.scannerInitFailed'));
+            closeScanner();
+          }
+        }, 100);
+      }
+    }, 50);
+
+    return () => clearTimeout(timeoutId);
   }, [showScanner, permissionStatus, isScanning]);
 
   return {

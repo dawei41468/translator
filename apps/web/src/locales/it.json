@@ -151,7 +151,8 @@
   "error.speechNetwork": "Servizio di riconoscimento vocale non disponibile. Controlla connessione/VPN e riprova.",
   "error.speechNotSupported": "Riconoscimento vocale non supportato",
   "error.enterCode": "Inserisci un codice stanza",
-  "error.invalidQR": "Codice QR non valido",
+  "error.invalidQR": "0",
+  "error.scannerInitFailed": "Failed to initialize camera scanner",
   "error.roomNotFound": "Stanza non trovata",
   "profile": {
     "title": "Profilo",

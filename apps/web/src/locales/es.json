@@ -151,7 +151,8 @@
   "error.speechNetwork": "Servicio de reconocimiento de voz no disponible. Revisa tu conexión/VPN e inténtalo de nuevo.",
   "error.speechNotSupported": "Reconocimiento de voz no compatible",
   "error.enterCode": "Ingresa un código de sala",
-  "error.invalidQR": "Código QR inválido",
+  "error.invalidQR": "0",
+  "error.scannerInitFailed": "Failed to initialize camera scanner",
   "error.roomNotFound": "Sala no encontrada",
   "profile": {
     "title": "Perfil",

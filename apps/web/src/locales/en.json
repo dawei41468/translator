@@ -152,6 +152,7 @@
   "error.speechNotSupported": "Speech recognition not supported",
   "error.enterCode": "Please enter a room code",
   "error.invalidQR": "Invalid QR code",
+  "error.scannerInitFailed": "Failed to initialize camera scanner",
   "error.roomNotFound": "Room not found",
   "profile": {
     "title": "Profile",

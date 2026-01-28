@@ -151,7 +151,8 @@
   "error.speechNetwork": "音声認識サービスが利用できません。接続/VPNを確認して再試行してください。",
   "error.speechNotSupported": "音声認識はサポートされていません",
   "error.enterCode": "ルームコードを入力してください",
-  "error.invalidQR": "無効なQRコードです",
+  "error.invalidQR": "0",
+  "error.scannerInitFailed": "Failed to initialize camera scanner",
   "error.roomNotFound": "ルームが見つかりません",
   "profile": {
     "title": "プロフィール",

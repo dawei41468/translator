@@ -6,7 +6,6 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { DashboardQuickActionsFab } from "./dashboard/DashboardQuickActionsFab";
 import { usePwaInstallPrompt } from "@/lib/usePwaInstallPrompt";
 import {
   Dialog,
@@ -447,14 +446,6 @@ const Dashboard = () => {
           </DialogContent>
         </Dialog>
 
-        <DashboardQuickActionsFab
-           onCreate={handleStartConversation}
-           onScan={handleScanQR}
-           onEnterCode={() => {
-             manualCodeInputRef.current?.focus();
-           }}
-           disabled={createRoomMutation.isPending || isJoining || isScanning}
-         />
       </div>
     </div>
   );

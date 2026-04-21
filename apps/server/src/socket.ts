@@ -9,6 +9,8 @@ import { ttsRegistry } from "./services/tts/index.js";
 import type { SttEngine } from "./services/stt/index.js";
 import { logger } from "./logger.js";
 import { parseCookies } from "./middleware/auth.js";
+import { withRetry, validateSocketData, isRecoverableSttError, canRestartStt, handleSocketError } from "./services/socket-utils.js";
+import { handleTranscript } from "./services/transcript-handler.js";
 
 // Handle automatic disconnect after background timeout
 async function handleAutoDisconnect(socket: AuthenticatedSocket) {
@@ -38,24 +40,6 @@ async function handleAutoDisconnect(socket: AuthenticatedSocket) {
   socket.disconnect();
 }
 
-// Centralized error handling
-function handleSocketError(socket: AuthenticatedSocket, event: string, error: any, userMessage?: string, logContext?: any) {
-  const errorId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-
-  logger.error(`Socket error in ${event}`, {
-    errorId,
-    userId: socket.userId,
-    roomId: socket.roomId,
-    event,
-    error: error instanceof Error ? error.message : String(error),
-    stack: error instanceof Error ? error.stack : undefined,
-    ...logContext
-  });
-
-  const message = userMessage || "An unexpected error occurred";
-  socket.emit("error", { message, errorId });
-}
-
 // Graceful degradation for speech recognition
 function handleSpeechError(socket: AuthenticatedSocket, error: any, context: string) {
   logger.warn(`Speech recognition error: ${context}`, {
@@ -73,46 +57,6 @@ function handleSpeechError(socket: AuthenticatedSocket, error: any, context: str
   socket.sttNeedsRestart = true;
 
   socket.emit("speech-error", "Speech recognition temporarily unavailable. Please try again.");
-}
-
-// Retry mechanism for transient errors
-async function withRetry<T>(
-  operation: () => Promise<T>,
-  maxRetries: number = 3,
-  delay: number = 1000
-): Promise<T> {
-  let lastError: any;
-
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      return await operation();
-    } catch (error) {
-      lastError = error;
-      if (attempt < maxRetries) {
-        await new Promise(resolve => setTimeout(resolve, delay * attempt));
-      }
-    }
-  }
-
-  throw lastError;
-}
-
-// Input validation for socket events
-function validateSocketData(data: any, schema: { [key: string]: (value: any) => boolean }) {
-  for (const [key, validator] of Object.entries(schema)) {
-    // Allow optional fields (those that accept undefined) to be missing
-    if (!(key in data)) {
-      // If the field is missing, check if the validator accepts undefined
-      if (!validator(undefined)) {
-        return false;
-      }
-      continue;
-    }
-    if (!validator(data[key])) {
-      return false;
-    }
-  }
-  return true;
 }
 
 const speechStartSchema = {
@@ -261,38 +205,7 @@ export function setupSocketIO(io: Server) {
       socket.sttLanguageCode = undefined;
     };
 
-    const isRecoverableSttError = (err: any) => {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (msg.toLowerCase().includes('incomplete envelope')) return true;
-      if (msg.toLowerCase().includes('connection reset by peer')) return true;
-      if (msg.toLowerCase().includes('econnreset')) return true;
-      if (msg.toLowerCase().includes('rst_stream')) return true;
-      if (msg.toLowerCase().includes('maximum allowed stream duration')) return true;
-      if (msg.toLowerCase().includes('audio timeout')) return true;
-      if (msg.toLowerCase().includes('deadline exceeded')) return true;
-      if (typeof err === 'object' && err !== null && 'code' in err) {
-        const code = (err as any).code;
-        if (code === 14 || code === 2) return true;
-      }
-      return false;
-    };
-
-    const canRestartStt = () => {
-      const now = Date.now();
-      const windowMs = 30_000;
-      const maxRestarts = 3;
-
-      if (!socket.sttRestartWindowStartedAt || now - socket.sttRestartWindowStartedAt > windowMs) {
-        socket.sttRestartWindowStartedAt = now;
-        socket.sttRestartCount = 0;
-      }
-
-      const count = socket.sttRestartCount ?? 0;
-      if (count >= maxRestarts) return false;
-
-      socket.sttRestartCount = count + 1;
-      return true;
-    };
+    const socketCanRestartStt = () => canRestartStt(socket);
 
     const startRecognitionStream = (data: { 
       languageCode: string;
@@ -316,7 +229,7 @@ export function setupSocketIO(io: Server) {
         engine.onTranscript(async (transcript, isFinal) => {
           if (isFinal) {
             const sourceLang = data.languageCode.split('-')[0];
-            await handleTranscript(transcript, sourceLang);
+            await handleTranscriptLocal(transcript, sourceLang);
           }
         });
 
@@ -341,7 +254,7 @@ export function setupSocketIO(io: Server) {
           socket.sttEngine = undefined;
           if (socket.sttActive) {
             socket.sttNeedsRestart = true;
-            if (socket.sttLanguageCode && canRestartStt()) {
+            if (socket.sttLanguageCode && socketCanRestartStt()) {
               startRecognitionStream({ languageCode: socket.sttLanguageCode });
             } else if (socket.sttLanguageCode) {
               socket.emit("speech-error", "Speech recognition session ended. Please stop and start again.");
@@ -353,7 +266,7 @@ export function setupSocketIO(io: Server) {
           socket.sttEngine = undefined;
           if (socket.sttActive) {
             socket.sttNeedsRestart = true;
-            if (socket.sttLanguageCode && canRestartStt()) {
+            if (socket.sttLanguageCode && socketCanRestartStt()) {
               startRecognitionStream({ languageCode: socket.sttLanguageCode });
             } else if (socket.sttLanguageCode) {
               socket.emit("speech-error", "Speech recognition session ended. Please stop and start again.");
@@ -416,7 +329,7 @@ export function setupSocketIO(io: Server) {
       });
 
       if (!socket.sttEngine && socket.sttActive && socket.sttLanguageCode && socket.sttNeedsRestart) {
-        if (!canRestartStt()) {
+        if (!socketCanRestartStt()) {
           socket.emit("speech-error", "Speech recognition is unstable right now. Please stop and try again.");
           return;
         }
@@ -449,7 +362,7 @@ export function setupSocketIO(io: Server) {
       stopRecognition();
     });
 
-    const handleTranscript = async (transcript: string, sourceLang: string) => {
+    const handleTranscriptLocal = async (transcript: string, sourceLang: string) => {
       if (!socket.roomId || !socket.userId) {
         handleSocketError(socket, "handleTranscript", new Error("Missing room or user ID"));
         return;
@@ -462,179 +375,33 @@ export function setupSocketIO(io: Server) {
         sourceLang
       });
 
-      const messageId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-
-      const normalizeLang = (lang: string | null | undefined) => {
-        const raw = (lang ?? "").trim();
-        if (!raw) return "en";
-        return raw.replace(/_/g, "-").split("-")[0]!.toLowerCase();
-      };
-
-      const normalizedSourceLang = normalizeLang(sourceLang);
-
       try {
-        const participants = await withRetry(() =>
-          db.query.roomParticipants.findMany({
-            where: eq(roomParticipants.roomId, socket.roomId!),
-            with: {
-              user: true,
-            },
-          }), 2, 500
-        );
-
-        // Get the speaker's name for this message
-        const speaker = participants.find((p) => p.userId === socket.userId);
-        const speakerName = speaker?.user?.displayName || speaker?.user?.name || "Unknown User";
-
-        const otherParticipants = participants.filter((p) => p.userId !== socket.userId);
-        if (otherParticipants.length === 0 && !socket.soloMode) return;
-
-        // In solo mode, don't emit translated-message events (only solo-translated)
-        if (socket.soloMode) {
-          otherParticipants.length = 0; // Prevent translated-message emission
-        }
-
-        const participantsByLanguage = new Map<string, typeof otherParticipants>();
-        const sameLanguageParticipants: typeof otherParticipants = [];
-
-        for (const participant of otherParticipants) {
-          const lang = normalizeLang(participant.user.language || "en");
-
-          if (lang === normalizedSourceLang) {
-            sameLanguageParticipants.push(participant);
-            continue;
-          }
-
-          if (!participantsByLanguage.has(lang)) {
-            participantsByLanguage.set(lang, []);
-          }
-          participantsByLanguage.get(lang)!.push(participant);
-        }
-
-        // Deliver transcript directly (no translation) to participants already using the speaker's language.
-        for (const participant of sameLanguageParticipants) {
-          io.to(`user:${participant.userId}`).emit("translated-message", {
-            originalText: transcript,
-            translatedText: transcript,
-            sourceLang: normalizedSourceLang,
-            targetLang: normalizedSourceLang,
-            fromUserId: socket.userId,
-            toUserId: participant.userId,
-            speakerName,
-          });
-        }
-
-        if (participantsByLanguage.size > 0) {
-          const translationPromises = Array.from(participantsByLanguage.entries()).map(
-            async ([targetLang, participants]) => {
-              try {
-                const translationEngine = translationRegistry.getEngine(socket.userId);
-                const translatedText = await withRetry(
-                  () => translationEngine.translate({
-                    text: transcript,
-                    sourceLang: normalizedSourceLang,
-                    targetLang,
-                    context: `Room: ${socket.roomId}`
-                  }),
-                  2, 1000
-                );
-                return { targetLang, translatedText, participants, success: true };
-              } catch (error) {
-                return { targetLang, participants, error, success: false };
-              }
-            }
-          );
-
-          const translations = await Promise.all(translationPromises);
-
-          for (const result of translations) {
-            if (result.success) {
-              const { targetLang, translatedText, participants } = result as any;
-              for (const participant of participants) {
-                io.to(`user:${participant.userId}`).emit("translated-message", {
-                  id: messageId,
-                  originalText: transcript,
-                  translatedText,
-                  sourceLang: normalizedSourceLang,
-                  targetLang,
-                  fromUserId: socket.userId,
-                  toUserId: participant.userId,
-                  speakerName,
-                });
-              }
-            } else {
-              const { targetLang, error } = result as any;
-              logger.warn("Translation failed for language group", {
-                userId: socket.userId,
-                roomId: socket.roomId,
-                error,
-                targetLang
-              });
-              // Continue with other translations even if one fails
-            }
-          }
-        }
-
-        // Also emit back to the sender so they see their own recognized text
-        socket.emit("recognized-speech", {
-          id: messageId,
-          text: transcript,
-          sourceLang: normalizedSourceLang,
-          speakerName,
-        });
-
-        if (socket.soloMode && socket.soloTargetLang) {
-          logger.info("Starting solo translation", {
-            userId: socket.userId,
-            roomId: socket.roomId,
-            targetLang: socket.soloTargetLang
-          });
-
-          try {
-            const translationEngine = translationRegistry.getEngine(socket.userId);
-            const translatedText = await withRetry(
-              () => translationEngine.translate({
-                text: transcript,
-                sourceLang: normalizedSourceLang,
-                targetLang: socket.soloTargetLang!,
-                context: `Solo mode - Room: ${socket.roomId}`
-              }),
-              2, 1000
+        await handleTranscript({
+          transcript,
+          sourceLang,
+          roomId: socket.roomId,
+          userId: socket.userId,
+          soloMode: !!socket.soloMode,
+          soloTargetLang: socket.soloTargetLang,
+          translationEngine: translationRegistry.getEngine(socket.userId),
+          getParticipants: async (roomId: string) => {
+            return withRetry(() =>
+              db.query.roomParticipants.findMany({
+                where: eq(roomParticipants.roomId, roomId),
+                with: { user: true },
+              }), 2, 500
             );
-
-            logger.info("Solo translation success", {
-              userId: socket.userId,
-              roomId: socket.roomId,
-              translatedText: translatedText.substring(0, 100)
-            });
-
-            logger.info("Emitting solo-translated", {
-              userId: socket.userId,
-              roomId: socket.roomId,
-              messageId
-            });
-
-            socket.emit("solo-translated", {
-              id: messageId,
-              originalText: transcript,
-              translatedText,
-              sourceLang,
-              targetLang: socket.soloTargetLang,
-              speakerName,
-            });
-          } catch (error) {
-            logger.error("Solo translation failed", {
-              userId: socket.userId,
-              roomId: socket.roomId,
-              error: error instanceof Error ? error.message : String(error),
-              transcript: transcript.substring(0, 100)
-            });
-
-            handleSocketError(socket, "solo-translation", error, "Translation failed in solo mode", {
-              transcript: transcript.substring(0, 100)
-            });
-          }
-        }
+          },
+          emitToRoom: (participantId: string, event: string, data: any) => {
+            io.to(`user:${participantId}`).emit(event, data);
+          },
+          emitToSelf: (event: string, data: any) => {
+            socket.emit(event, data);
+          },
+          logInfo: logger.info,
+          logWarn: logger.warn,
+          logError: logger.error,
+        });
       } catch (error) {
         handleSocketError(socket, "handleTranscript", error, "Failed to process your speech", {
           transcript: transcript.substring(0, 100)
@@ -757,7 +524,7 @@ export function setupSocketIO(io: Server) {
         // Don't emit error for transcript rate limiting to avoid spam
         return;
       }
-      handleTranscript(data.transcript, data.sourceLang);
+      handleTranscriptLocal(data.transcript, data.sourceLang);
     });
 
     socket.on("client-error", (data: { code: string; message: string; details?: any }) => {

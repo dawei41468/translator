@@ -48,7 +48,7 @@ graph TD
 ## Pillar 1: Speech-to-Text (STT)
 
 ### How It Works
-STT converts spoken language to text by recording audio with `MediaRecorder` (WebM/Opus) or `PcmRecorder` (Linear16 PCM for iOS fallback), streaming via Socket.io to backend STT service (Google Cloud Speech-to-Text), and receiving real-time transcripts. The implementation includes Voice Activity Detection (VAD) for automatic speech detection and silence handling.
+STT converts spoken language to text by recording audio with `MediaRecorder` (WebM/Opus) or `PcmRecorder` (Linear16 PCM for iOS fallback), streaming via Socket.io to the backend STT engine registry, and receiving real-time transcripts. The backend routes audio to the user's preferred engine (Google Cloud Speech-to-Text or Grok STT via WebSocket). The implementation includes Voice Activity Detection (VAD) for automatic speech detection and silence handling.
 
 ### Key Implementation Details
 
@@ -240,6 +240,20 @@ export class TranslationEngineRegistry {
 | Google Translate | 500K chars/month | Excellent | Low | Primary engine |
 | Grok (xAI) | Limited | Good | Medium | Alternative engine |
 
+### Supported STT Engines
+
+| Engine | Pricing | Quality | Latency | Use Case |
+|--------|---------|---------|---------|----------|
+| Google Cloud STT | Per-minute | Excellent | Low | Primary engine, proven reliability |
+| Grok STT | $0.10/hr batch, $0.20/hr streaming | Excellent (5% WER) | Low | Alternative engine, 25+ languages |
+
+### Supported TTS Engines
+
+| Engine | Pricing | Voices | Languages | Use Case |
+|--------|---------|--------|-----------|----------|
+| Google Cloud TTS | Per-character | Neural2, Wavenet, Standard | 40+ | Primary engine, consistent quality |
+| Grok TTS | $4.20/M chars | 5 expressive (Ara, Eve, Leo, Rex, Sal) | 20+ | Alternative engine, expressive speech tags |
+
 **Engine Configuration:**
 ```typescript
 // Located in: apps/server/src/services/translation/index.ts
@@ -258,7 +272,7 @@ translationRegistry.registerEngine('grok-translate', new GrokTranslateEngine());
 ## Pillar 3: Text-to-Speech (TTS)
 
 ### How It Works
-TTS synthesizes text to speech using Google Cloud Text-to-Speech API, with audio playback via Web Audio API for precise control. The implementation includes voice management, caching, and queue handling.
+TTS synthesizes text to speech using the user's preferred backend engine (Google Cloud Text-to-Speech or Grok TTS), with audio playback via Web Audio API for precise control. The implementation includes voice management, caching, and queue handling.
 
 ### TTS Engine Interface
 
@@ -380,7 +394,31 @@ private getVoiceConfig(language: string): {
 }
 ```
 
-### Backend TTS Service with Caching
+### Backend TTS Service with Registry
+
+The backend now routes TTS requests through `TtsEngineRegistry`, which selects the user's preferred engine (Google or Grok) with automatic fallback:
+
+```typescript
+// Located in: apps/server/src/routes/tts.ts
+
+router.post('/synthesize', authenticate, async (req, res) => {
+  const { text, languageCode, voiceName, ssmlGender } = req.body;
+
+  const userId = req.user!.id;
+  const preferredTts = req.user!.preferences?.ttsEngine;
+  if (preferredTts) {
+    ttsRegistry.setUserPreference(userId, preferredTts);
+  }
+
+  const engine = ttsRegistry.getEngine(userId);
+  const audioContent = await engine.synthesize({ text, languageCode, voiceName, ssmlGender });
+
+  res.set({ 'Content-Type': 'audio/mpeg', 'Content-Length': audioContent.length });
+  res.send(audioContent);
+});
+```
+
+Google Cloud TTS includes filesystem caching:
 
 ```typescript
 // Located in: apps/server/src/services/tts.ts
@@ -875,9 +913,9 @@ sequenceDiagram
     participant VAD as Voice Activity Detection
     participant MR as MediaRecorder/PCM
     participant SIO as Socket.io
-    participant STT as Google Cloud STT
-    participant MT as Translation Engine
-    participant TTS as Google Cloud TTS
+    participant STT as STT Engine Registry
+    participant MT as Translation Engine Registry
+    participant TTS as TTS Engine Registry
     participant AC as Web Audio API
     
     User->>FE: Click record button
@@ -886,13 +924,12 @@ sequenceDiagram
     FE->>MR: Start recording (WebM or PCM)
     FE->>SIO: emit('start-speech', config)
     MR-->>SIO: Stream audio chunks (250ms)
-    SIO->>STT: StreamingRecognize request
-    STT-->>SIO: Interim results
-    STT-->>SIO: Final transcript
+    SIO->>STT: start() + write() audio chunks
+    STT-->>SIO: onTranscript() interim + final
     SIO->>MT: translate() for each target language
     MT-->>SIO: Translated text
     SIO-->>FE: emit('translated-message')
-    FE->>TTS: synthesizeSpeech() if audio enabled
+    FE->>TTS: POST /api/tts/synthesize
     TTS-->>FE: MP3 audio buffer
     FE->>AC: decodeAudioData() & play
     AC-->>User: Audio playback

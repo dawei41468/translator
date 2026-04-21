@@ -4,6 +4,8 @@
 **Status**: Reviewed Implementation Plan (Jan 18, 2026)
 **Priority**: High (Premium Voice Features)
 
+> **Note (April 2026)**: xAI has since launched **standalone Grok STT and TTS APIs** (separate from the Grok Voice Agent API). These standalone APIs have been integrated into the codebase as modular engine options alongside Google Cloud. See `apps/server/src/services/stt/grok-stt-engine.ts` and `apps/server/src/services/tts/grok-tts-engine.ts`. This document remains relevant for the **full-duplex conversational Voice Agent** use case, which is a different product from the standalone transcription/synthesis APIs.
+
 ## Codebase Compatibility Review
 
 **Confirmed:**

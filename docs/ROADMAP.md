@@ -131,16 +131,18 @@
 
 ## 📋 Medium Priority (Post-MVP)
 
-### 5. **Premium TTS Integration**
-**Status**: Planned for Phase 2  
+### 5. **Premium TTS & STT Integration**
+**Status**: ✅ Completed (April 2026)  
 **Priority**: High for user experience  
-**Timeline**: February 2026
+**Timeline**: April 2026
 
-- [ ] Create TTS provider abstraction layer
-- [ ] Implement iFlyTek Online TTS integration
-- [ ] Add Grok Voice TTS fallback
-- [ ] User settings for TTS provider selection
-- [ ] Performance metrics collection
+- [x] Create TTS provider abstraction layer (`TtsEngineRegistry`)
+- [x] Create STT provider abstraction layer (`SttEngineRegistry`)
+- [x] Implement Grok TTS integration (REST API, 5 voices, speech tags)
+- [x] Implement Grok STT integration (WebSocket streaming, 25+ languages)
+- [x] User settings for TTS/STT provider selection via `users.preferences`
+- [ ] Implement iFlyTek Online TTS integration (Future)
+- [ ] Performance metrics collection (Future)
 
 ### 6. **Performance Optimization**
 **Status**: Not Started  
@@ -214,6 +216,12 @@
 2. **Phase 2**: Refactor `Conversation.tsx` for logical cohesion and maintainability
 3. **Phase 3**: Optimize costs with VAD and audio compression
 4. **Phase 4**: Expand E2E testing for the full user journey
+
+**April 2026 Updates:**
+- ✅ Backend engine registries now cover all three pillars: STT, TTS, and Translation
+- ✅ Grok STT added as streaming alternative to Google Cloud STT
+- ✅ Grok TTS added with 5 expressive voices (Ara, Eve, Leo, Rex, Sal)
+- ✅ All engines support per-user preferences with automatic fallback
 
 **MVP Success Metrics Achieved:**
 - Accessibility: WCAG 2.1 AA compliance achieved

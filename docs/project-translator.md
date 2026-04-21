@@ -44,43 +44,32 @@
 - Proven reliability for short, real-time utterances.
 
 **Implementation Notes (Current Code)**:
-- The server uses a translation engine registry with:
-  - `google-translate` (default, requires `GOOGLE_CLOUD_PROJECT_ID`)
-  - `grok-translate` (optional, requires `GROK_API_KEY`, falls back to Google if Grok fails)
+- The server uses engine registries for all three pillars:
+  - **Translation**: `google-translate` (default) + `grok-translate` (optional, falls back to Google)
+  - **STT**: `google-cloud-stt` (default) + `grok-stt` (optional, falls back to Google)
+  - **TTS**: `google-cloud` (default) + `grok-tts` (optional, falls back to Google)
+- All Grok engines require `GROK_API_KEY` and automatically fall back to Google if unavailable.
 - Google Translation location is configurable via `GOOGLE_CLOUD_TRANSLATE_LOCATION` (supported: `global`, `us-central1`). Invalid values fall back to `global`.
 
 ## TTS Strategy
 
-**MVP (Current Code)**: Server-side Google Cloud Text-to-Speech proxy
+**Current Implementation**: Server-side TTS via `TtsEngineRegistry`
 - Client calls `POST /api/tts/synthesize` and plays returned `audio/mpeg`.
-- Server caches MP3s on disk (`cache/tts`) and cleans up old files.
-- Benefit: no client-side Google API keys; consistent voice quality across platforms.
+- Backend routes to user's preferred engine:
+  - **Google Cloud TTS** (default) — cached on disk (`cache/tts`), curated voices
+  - **Grok TTS** (optional) — 5 expressive voices with speech tags (`[laugh]`, `<whisper>`, etc.)
+- Benefit: no client-side API keys; swappable engines with automatic fallback.
 
-**Phase 2 — Premium Voices Experiment (February 2026)**:
+**Phase 2 — Premium Voices (Completed April 2026)**:
+- ✅ Grok TTS integrated as an additional option (not replacement)
+- ✅ Grok STT integrated as an additional option (WebSocket streaming, 25+ languages)
+- Users select engines per-pillar in Profile settings.
+- All Grok engines auto-fallback to Google if unavailable.
 
-**Goal**: Significantly improve TTS quality, with primary focus on Mandarin Chinese naturalness.
-
-**Providers to Test**:
-1. **iFlyTek Online TTS** (Mandarin priority)
-   - Best-in-class Mandarin voices available.
-   - Low latency from HK/China servers.
-   - Integration starts immediately after MVP.
-2. **Grok Voice TTS** (or Voice Agent fallback)
-   - Highly expressive multilingual voices.
-   - Integrate as soon as standalone TTS endpoint launches (expected early-mid January 2026).
-
-**User Controls** (Settings page):
-- Toggle: "Use Premium Voices" (default off)
-  - Mandarin Chinese: iFlyTek (default) / Grok / Browser
-  - Other languages: Grok (default) / Browser
-
-**Metrics to Track**:
-- Perceived naturalness (in-app feedback thumbs up/down per utterance)
-- End-to-end latency
-- Cost per minute of generated speech
-- Reliability / fallback frequency
-
-**Outcome**: Data-driven decision on default premium provider per language.
+**Future Experiments**:
+- **iFlyTek Online TTS** (Mandarin priority) — best-in-class Mandarin voices, low latency from HK/China servers.
+- Perceived naturalness feedback (thumbs up/down per utterance).
+- Cost-per-minute tracking across engines.
 
 ## User Flow (QR-First with Room Code Fallback)
 
@@ -188,10 +177,10 @@ The detailed UX audit and recommendations live in [`UX-AUDIT-2026.md`](UX-AUDIT-
 - **Backend**: Node.js 20 + Express + Drizzle ORM + self-hosted PostgreSQL (local/prod servers)
 - **Real-Time**: Socket.io (authenticated via JWT cookie, room namespaces)
 - **Auth**: JWT in httpOnly cookie
-- **Translation (MVP)**: Google Cloud Translation v3 + optional Grok translation engine
-- **Speech (MVP)**: Server STT (Google Cloud Speech-to-Text) + client-side VAD for cost control
-- **TTS (MVP)**: Server-side Google Cloud Text-to-Speech proxy (`/api/tts/synthesize`) + on-disk caching
-- **TTS (Phase 2 Experiment)**: iFlyTek Online TTS + Grok Voice TTS (via Engine Framework)
+- **Translation**: Google Cloud Translation v3 + Grok translation engine (via `TranslationEngineRegistry`)
+- **STT**: Google Cloud Speech-to-Text + Grok STT (via `SttEngineRegistry`)
+- **TTS**: Google Cloud Text-to-Speech + Grok TTS (via `TtsEngineRegistry`)
+- **Client-side VAD**: `@ricky0123/vad-react` for cost control across all STT engines
 - **QR Code**: qrcode.react (generation) + html5-qrcode (scanning)
 - **Deployment**: Tencent Lighthouse HK + EdgeOne CDN + NGINX reverse proxy
 - **Monorepo**: Turborepo + pnpm
@@ -212,4 +201,4 @@ The detailed UX audit and recommendations live in [`UX-AUDIT-2026.md`](UX-AUDIT-
 - Grok: Loveable prompts, architecture alignment, deployment config, roadmap
 - You: final merge, deploy, test, UI integration, prioritize
 
-Last updated: January 6, 2026 (MVP 100% COMPLETE ✅ - All high priority blockers resolved, end-to-end testing successful, production-ready)
+Last updated: April 22, 2026 (MVP 100% COMPLETE ✅ — Grok STT/TTS engines added as additional options with backend registries and automatic fallback)

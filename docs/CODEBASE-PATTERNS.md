@@ -295,24 +295,36 @@ graph TB
 
     subgraph Backend
         I[Socket.ts] --> J[TranslationEngineRegistry]
+        I --> S[SttEngineRegistry]
+        I --> T[TtsEngineRegistry]
         J --> K[TranslationEngine Interface]
         K --> L[GoogleTranslateEngine]
         K --> M[GrokTranslationEngine]
-        K --> N[OpenAiTranslationEngine]
+        S --> SttI[SttEngine Interface]
+        SttI --> GStt[GoogleSttEngine]
+        SttI --> GrStt[GrokSttEngine]
+        T --> TtsI[TtsEngine Interface]
+        TtsI --> GTts[GoogleTtsEngine]
+        TtsI --> GrTts[GrokTtsEngine]
     end
 
     style A fill:#f9f
     style I fill:#f9f
     style B fill:#bbf
     style J fill:#bbf
+    style S fill:#bbf
+    style T fill:#bbf
     style E fill:#bfb
     style F fill:#bfb
     style L fill:#bfb
-```
+    style GrStt fill:#bfb
+    style GrTts fill:#bfb```
 
 ### Core Interfaces
 
 #### Speech Engines (Frontend)
+
+Frontend engines handle microphone access and audio playback. The actual STT/TTS processing happens on the backend via the user's selected engine.
 
 ##### SttEngine Interface
 ```typescript
@@ -340,6 +352,33 @@ interface TtsEngine {
 }
 ```
 
+#### Backend STT Engine
+
+```typescript
+interface SttEngine {
+  start(config: { languageCode: string; encoding?: string; sampleRateHertz?: number }): void;
+  write(chunk: Buffer): void;
+  end(): void;
+  onTranscript(callback: (text: string, isFinal: boolean) => void): void;
+  onError(callback: (error: Error) => void): void;
+  onEnd(callback: () => void): void;
+  onClose(callback: () => void): void;
+  destroy(): void;
+  isAvailable(): boolean;
+  getName(): string;
+}
+```
+
+#### Backend TTS Engine
+
+```typescript
+interface TtsEngine {
+  synthesize(options: { text: string; languageCode: string; voiceName?: string; ssmlGender?: string }): Promise<Buffer>;
+  isAvailable(): boolean;
+  getName(): string;
+}
+```
+
 #### Translation Engine (Backend)
 
 ```typescript
@@ -360,7 +399,7 @@ interface TranslationEngine {
 
 ### Engine Registries
 
-#### SpeechEngineRegistry
+#### SpeechEngineRegistry (Frontend)
 
 Manages STT and TTS engines with user preferences and automatic fallbacks.
 
@@ -376,7 +415,33 @@ class SpeechEngineRegistry {
 }
 ```
 
-#### TranslationEngineRegistry
+#### SttEngineRegistry (Backend)
+
+Manages STT engines with per-user preferences and automatic fallback to first available engine.
+
+```typescript
+class SttEngineRegistry {
+  registerEngine(id: string, engine: SttEngine): void;
+  getEngine(userId?: string): SttEngine;
+  setUserPreference(userId: string, engineId: string): void;
+  getAvailableEngines(): Array<{id: string, name: string}>;
+}
+```
+
+#### TtsEngineRegistry (Backend)
+
+Manages TTS engines with per-user preferences and automatic fallback to first available engine.
+
+```typescript
+class TtsEngineRegistry {
+  registerEngine(id: string, engine: TtsEngine): void;
+  getEngine(userId?: string): TtsEngine;
+  setUserPreference(userId: string, engineId: string): void;
+  getAvailableEngines(): Array<{id: string, name: string}>;
+}
+```
+
+#### TranslationEngineRegistry (Backend)
 
 Manages translation engines with per-user preferences.
 
@@ -398,8 +463,9 @@ class TranslationEngineRegistry {
 **Files:**
 - `apps/web/src/lib/speech-engines/google-cloud-stt.ts` - Server STT wrapper (mic access only)
 - `apps/web/src/pages/conversation/hooks/useSpeechEngine.ts` - Audio capture + VAD + streaming (`speech-data`)
-- `apps/server/src/services/stt.ts` - Google Cloud Speech-to-Text streaming
-- `apps/server/src/socket.ts` - Server STT start/stop + transcript routing
+- `apps/server/src/services/stt/google-stt-engine.ts` - Wrapper around Google Cloud Speech-to-Text streaming
+- `apps/server/src/services/stt.ts` - Google Cloud Speech-to-Text streaming (legacy, wrapped by engine)
+- `apps/server/src/socket.ts` - Server STT start/stop + transcript routing via SttEngineRegistry
 
 **Features:**
 - ✅ **Server-Based Recognition** - Uses Google Cloud Speech API for reliable STT
@@ -410,13 +476,36 @@ class TranslationEngineRegistry {
 - ✅ **Cost control** - Client-side VAD limits audio streaming when the user is not speaking
 - ✅ **User-Selectable** - Available in Profile engine preferences
 
+#### ✅ Grok STT Engine
+
+**Status**: ✅ **COMPLETED** - Added April 2026
+
+**Files:**
+- `apps/server/src/services/stt/grok-stt-engine.ts` - WebSocket streaming to `wss://api.x.ai/v1/stt`
+- `apps/web/src/lib/speech-engines/grok-stt.ts` - Frontend registration
+
+**Features:**
+- ✅ **Streaming via WebSocket** - Real-time transcription with `grok-stt` model
+- ✅ **25+ languages** with seamless language switching
+- ✅ **Speaker diarization** and word-level timestamps
+- ✅ **Multiple audio formats** - accepts WebM/Opus, PCM, and more
+- ✅ **Auto-fallback** - Falls back to Google Cloud STT if Grok is unavailable
+- ✅ **User-Selectable** - Available in Profile engine preferences
+
+**Environment Variables:**
+```bash
+GROK_API_KEY=your_grok_api_key
+GROK_API_BASE_URL=https://api.x.ai/v1  # optional
+```
+
 #### ✅ Google Cloud TTS Engine
 
 **Status**: ✅ **COMPLETED** - Ready for production use
 
 **Files:**
-- `apps/server/src/services/tts.ts` - Google Cloud TTS + filesystem cache
-- `apps/server/src/routes/tts.ts` - `/api/tts/synthesize` endpoint
+- `apps/server/src/services/tts/google-tts-engine.ts` - Wrapper around Google Cloud TTS
+- `apps/server/src/services/tts.ts` - Google Cloud TTS + filesystem cache (legacy, wrapped by engine)
+- `apps/server/src/routes/tts.ts` - `/api/tts/synthesize` endpoint via TtsEngineRegistry
 - `apps/web/src/lib/speech-engines/google-cloud-tts.ts` - Client playback via server endpoint
 
 **Features:**
@@ -435,9 +524,95 @@ GOOGLE_CLOUD_PROJECT_ID=your-google-cloud-project-id
 GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json
 ```
 
+#### ✅ Grok TTS Engine
+
+**Status**: ✅ **COMPLETED** - Added April 2026
+
+**Files:**
+- `apps/server/src/services/tts/grok-tts-engine.ts` - REST client to `POST /v1/tts`
+- `apps/web/src/lib/speech-engines/grok-tts.ts` - Client playback with Grok voice list
+
+**Features:**
+- ✅ **5 expressive voices** - Ara (warm), Eve (default, energetic), Leo (authoritative), Rex (confident), Sal (neutral)
+- ✅ **20+ languages** with auto-detection
+- ✅ **Speech tags** - `[laugh]`, `[sigh]`, `[breath]`, `<whisper>`, `<emphasis>` for expressive delivery
+- ✅ **MP3 output** at 24kHz, compatible with existing Web Audio API playback
+- ✅ **Auto-fallback** - Falls back to Google Cloud TTS if Grok is unavailable
+- ✅ **User-Selectable** - Available in Profile engine preferences
+
+**Environment Variables:**
+```bash
+GROK_API_KEY=your_grok_api_key
+GROK_API_BASE_URL=https://api.x.ai/v1  # optional
+```
+
 ### Adding New Engines
 
-#### Example: ElevenLabs TTS Engine
+#### Example: Grok STT Engine
+
+The Grok STT engine connects to xAI's WebSocket streaming endpoint:
+
+```typescript
+// apps/server/src/services/stt/grok-stt-engine.ts
+import WebSocket from 'ws';
+import { SttEngine, SttConfig } from './stt-engine.js';
+
+export class GrokSttEngine implements SttEngine {
+  private ws: WebSocket | null = null;
+
+  start(config: SttConfig): void {
+    this.ws = new WebSocket('wss://api.x.ai/v1/stt', {
+      headers: { Authorization: `Bearer ${process.env.GROK_API_KEY}` },
+    });
+    this.ws.on('open', () => {
+      this.ws!.send(JSON.stringify({
+        model: 'grok-stt',
+        language: config.languageCode.split('-')[0],
+        encoding: config.encoding === 'WEBM_OPUS' ? 'opus' : 'pcm',
+        sample_rate: config.sampleRateHertz || 48000,
+      }));
+    });
+    this.ws.on('message', (data) => {
+      const msg = JSON.parse(data.toString());
+      this.transcriptCallback?.(msg.text, msg.is_final);
+    });
+  }
+
+  write(chunk: Buffer): void { this.ws?.send(chunk); }
+  end(): void { this.ws?.close(); }
+  // ... callbacks
+}
+```
+
+#### Example: Grok TTS Engine
+
+The Grok TTS engine calls xAI's REST endpoint:
+
+```typescript
+// apps/server/src/services/tts/grok-tts-engine.ts
+import { TtsEngine, TtsSynthesizeOptions } from './tts-engine.js';
+
+export class GrokTtsEngine implements TtsEngine {
+  async synthesize(options: TtsSynthesizeOptions): Promise<Buffer> {
+    const res = await fetch('https://api.x.ai/v1/tts', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.GROK_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'grok-tts',
+        text: options.text,
+        voice: options.voiceName || 'eve',
+        format: 'mp3',
+        sample_rate: 24000,
+      }),
+    });
+    const arrayBuffer = await res.arrayBuffer();
+    return Buffer.from(arrayBuffer);
+  }
+}
+```
 
 #### Example: Grok Translation Engine
 
@@ -568,8 +743,8 @@ GROK_API_KEY=your_api_key_here
 | `GOOGLE_CLOUD_PROJECT_ID` | Google Cloud project ID | STT/TTS/Translation | Required for Google services |
 | `GOOGLE_APPLICATION_CREDENTIALS` | Google service account JSON path | STT/TTS/Translation | Required for Google services |
 | `GOOGLE_CLOUD_TRANSLATE_LOCATION` | Translation location (`global`, `us-central1`) | Translation | Optional |
-| `GROK_API_KEY` | Grok API key | Translation | Optional |
-| `GROK_API_BASE_URL` | Grok API base URL | Translation | Optional |
+| `GROK_API_KEY` | Grok API key | Translation / STT / TTS | Optional |
+| `GROK_API_BASE_URL` | Grok API base URL | Translation / STT / TTS | Optional |
 | `GROK_TRANSLATE_MODEL` | Grok model | Translation | Optional |
 
 #### User Preferences
@@ -659,8 +834,37 @@ try {
 ### Key Benefits
 - **Swappable Engines**: Add new STT/TTS/Translation providers with ~50 lines of code
 - **Automatic Fallbacks**: Graceful degradation when preferred engines are unavailable
-- **User Preferences**: Per-user engine selection (future feature)
+- **User Preferences**: Per-user engine selection via `users.preferences` JSONB
 - **Cost Management**: Built-in cost estimation for LLM-based engines
+
+### Backend Speech Engine Lifecycle
+
+```typescript
+// In apps/server/src/index.ts — register all engines at startup
+import { ttsRegistry, GoogleTtsEngine, GrokTtsEngine } from './services/tts/index.js';
+import { sttRegistry, GoogleSttEngine, GrokSttEngine } from './services/stt/index.js';
+
+ttsRegistry.registerEngine('google-cloud', new GoogleTtsEngine());
+ttsRegistry.registerEngine('grok-tts', new GrokTtsEngine());
+
+sttRegistry.registerEngine('google-cloud-stt', new GoogleSttEngine());
+sttRegistry.registerEngine('grok-stt', new GrokSttEngine());
+
+// In apps/server/src/socket.ts — load preference on auth
+const preferredStt = (user as any)?.preferences?.sttEngine;
+if (typeof preferredStt === 'string') {
+  sttRegistry.setUserPreference(userId, preferredStt);
+}
+
+const preferredTts = (user as any)?.preferences?.ttsEngine;
+if (typeof preferredTts === 'string') {
+  ttsRegistry.setUserPreference(userId, preferredTts);
+}
+
+// In apps/server/src/routes/tts.ts — route through registry
+const engine = ttsRegistry.getEngine(req.user!.id);
+const audioContent = await engine.synthesize({ text, languageCode, voiceName, ssmlGender });
+```
 
 ## Pattern decisions (authoritative)
 
@@ -668,8 +872,9 @@ try {
 - Frontend: React Router + TanStack Query + shadcn/ui + Tailwind.
 - Auth: httpOnly cookie JWT.
 - Real-time: Socket.io (authenticated via JWT cookie).
-- Translation: Google Cloud Translation (asia-east2) + Engine Abstraction Framework.
-- Speech: Web Speech API (Browser) + Google Cloud Speech-to-Text (server-fallback) + Engine Abstraction Framework.
+- Translation: Google Cloud Translation (asia-east2) + Grok (xAI) + Engine Abstraction Framework.
+- STT: Google Cloud Speech-to-Text + Grok STT (WebSocket streaming) + Engine Abstraction Framework.
+- TTS: Google Cloud Text-to-Speech + Grok TTS (REST) + Engine Abstraction Framework.
 - Audio Routing: Handled by device OS; app provides toggle for TTS on/off.
 - Deployment: PM2 + NGINX on Tencent Lighthouse HK.
 

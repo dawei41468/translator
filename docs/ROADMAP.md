@@ -2,7 +2,7 @@
 
 **MVP Status**: ✅ **COMPLETED** - End-to-end speech translation working across devices (MacBook ↔ Android)
 **Current Progress**: 100% MVP ready for production deployment
-**Last Updated**: January 6, 2026
+**Last Updated**: April 22, 2026
 
 ## 🚀 Post-MVP Evolution (Jan 2026)
 
@@ -62,12 +62,27 @@
 - [x] Implement `MockSttEngine` and `MockTtsEngine` for stable E2E testing without cloud dependencies
 - [x] Add `data-testid` attributes for reliable component selection in tests
 - [x] Fixed browser permission issues in Playwright for microphone access
+- [x] Add comprehensive server-side unit tests (142 tests across 15 files)
+  - Auth middleware + routes (login, register, guest, logout, change-password)
+  - Rooms routes (create, join, capacity, collisions)
+  - Translation engines (Google + Grok) with cache, retry, error paths
+  - STT/TTS engines + registries (Google + Grok) with fallback logic
+  - Socket utilities (`withRetry`, validation, error handling, rate limits)
+  - Transcript handler (language grouping, translation, solo mode)
+  - Cleanup service (expired rooms, TTS cache)
 
 **Code pointers:**
 - Playwright E2E tests:
   - `apps/web/tests/e2e/auth.spec.ts`
   - `apps/web/tests/e2e/conversation.spec.ts`
   - `apps/web/tests/e2e/multi-user.spec.ts`
+- Server unit tests:
+  - `apps/server/src/middleware/__tests__/`
+  - `apps/server/src/routes/__tests__/`
+  - `apps/server/src/services/__tests__/`
+  - `apps/server/src/services/translation/__tests__/`
+  - `apps/server/src/services/stt/__tests__/`
+  - `apps/server/src/services/tts/__tests__/`
 - Mock engines (test mode): `apps/web/src/lib/speech-engines/mock-engines.ts`
 
 ## 🎯 High Priority (MVP Blockers) - ✅ COMPLETED
@@ -205,7 +220,7 @@
 - **Accessibility**: WCAG 2.1 AA compliance achieved
 - **Error Handling**: <5% user-facing error rate
 - **Security**: Zero security vulnerabilities in production
-- **Testing**: >80% code coverage, all critical paths tested
+- **Testing**: 142 server-side unit tests across auth, rooms, translation, STT/TTS, socket utilities, and transcript handling; E2E Playwright tests for critical user journeys
 - **Performance**: <200ms end-to-end latency for translations
 
 ## Next Steps
@@ -222,6 +237,10 @@
 - ✅ Grok STT added as streaming alternative to Google Cloud STT
 - ✅ Grok TTS added with 5 expressive voices (Ara, Eve, Leo, Rex, Sal)
 - ✅ All engines support per-user preferences with automatic fallback
+- ✅ Socket logic refactored: `socket-utils.ts` and `transcript-handler.ts` extracted for testability
+- ✅ 142 server-side unit tests added covering auth, rooms, engines, socket utilities, and transcript handling
+- ✅ Grok engines now read `process.env` at runtime for better testability
+- ✅ Google Translate `isAvailable()` now checks `GOOGLE_APPLICATION_CREDENTIALS` in addition to project ID
 
 **MVP Success Metrics Achieved:**
 - Accessibility: WCAG 2.1 AA compliance achieved

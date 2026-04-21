@@ -11,6 +11,8 @@ This document codifies the existing patterns in the Live Translator codebase so 
 - `apps/server`
   - Express API (TypeScript, ESM)
   - Entry: `apps/server/src/index.ts`
+  - Socket utilities: `apps/server/src/services/socket-utils.ts` — `withRetry`, `validateSocketData`, error handling
+  - Transcript handler: `apps/server/src/services/transcript-handler.ts` — speech → translation → broadcast logic
 - `apps/web`
   - React + Vite + Tailwind + shadcn/ui
   - Entry: `apps/web/src/main.tsx`, app router: `apps/web/src/App.tsx`
@@ -252,12 +254,29 @@ onSuccess: () => {
 ## Testing Patterns
 
 - **Framework**: Use **Vitest** for both server and web applications.
+- **HTTP Testing**: Use **Supertest** for Express route tests.
 - **Mocks**: Use `vi.mock()` for external dependencies.
-- **Server Tests**: Focus on middleware, utilities, and core business logic (translation flow, room management).
+  - When partially mocking a default-export module (e.g., `jsonwebtoken`, `bcryptjs`) with `importOriginal`, return a `default` key.
+  - Mock class constructors (not arrow functions) for modules like `@google-cloud/translate`.
+- **Server Tests**: Focus on middleware, utilities, routes, and core business logic.
+  - Auth middleware: `apps/server/src/middleware/__tests__/auth.test.ts`
+  - Auth routes: `apps/server/src/routes/__tests__/auth.test.ts`
+  - Rooms routes: `apps/server/src/routes/__tests__/rooms.test.ts`
+  - Socket utilities: `apps/server/src/services/__tests__/socket-utils.test.ts`
+  - Transcript handler: `apps/server/src/services/__tests__/transcript-handler.test.ts`
+  - Translation engines: `apps/server/src/services/translation/__tests__/*.test.ts`
+  - STT/TTS engines + registries: `apps/server/src/services/stt/__tests__/*.test.ts`, `apps/server/src/services/tts/__tests__/*.test.ts`
+  - Cleanup service: `apps/server/src/services/__tests__/cleanup.test.ts`
 - **Web Tests**: Use `@testing-library/react` for component behavior. Always mock `useAuth` when testing components that depend on authentication.
 - **E2E**: Use Playwright for critical user journeys (Login, Room Creation/Join, Speech-to-Text flow).
   - Import utility functions and test their logic (e.g., Web Speech API mocks).
   - Mock database calls when testing business logic in isolation.
+
+### Server Testing Tips
+
+- **Environment variables**: Engines that read `process.env` at module load cannot be reconfigured in tests. Read env vars inside methods instead.
+- **Timers**: `withRetry` uses real `setTimeout`; call `vi.useFakeTimers()` in tests that exercise retry logic.
+- **Cleanup**: Call `vi.clearAllMocks()` in `beforeEach` when using shared module-level mocks to prevent bleed between tests.
 
 ### Web (Vitest)
 
@@ -369,6 +388,9 @@ interface SttEngine {
 }
 ```
 
+**Testability note**: Engines that depend on `process.env` should read environment variables inside methods (not cache them at module load). This allows tests to set env vars after module import.
+```
+
 #### Backend TTS Engine
 
 ```typescript
@@ -466,6 +488,8 @@ class TranslationEngineRegistry {
 - `apps/server/src/services/stt/google-stt-engine.ts` - Wrapper around Google Cloud Speech-to-Text streaming
 - `apps/server/src/services/stt.ts` - Google Cloud Speech-to-Text streaming (legacy, wrapped by engine)
 - `apps/server/src/socket.ts` - Server STT start/stop + transcript routing via SttEngineRegistry
+- `apps/server/src/services/socket-utils.ts` - Retry, validation, error handling, STT restart rate limiting
+- `apps/server/src/services/transcript-handler.ts` - Transcript processing, language grouping, translation emission
 
 **Features:**
 - ✅ **Server-Based Recognition** - Uses Google Cloud Speech API for reliable STT
@@ -865,6 +889,14 @@ if (typeof preferredTts === 'string') {
 const engine = ttsRegistry.getEngine(req.user!.id);
 const audioContent = await engine.synthesize({ text, languageCode, voiceName, ssmlGender });
 ```
+
+### Socket.IO Architecture
+
+Socket logic is split across three files for testability:
+
+1. **`apps/server/src/socket.ts`** — Connection setup, auth middleware, room join/leave, STT lifecycle, delegates transcript handling and utilities.
+2. **`apps/server/src/services/socket-utils.ts`** — Pure utilities: `withRetry`, `validateSocketData`, `isRecoverableSttError`, `canRestartStt`, `handleSocketError`.
+3. **`apps/server/src/services/transcript-handler.ts`** — Transcript processing with dependency injection for DB queries, Socket.IO emissions, and logging. Groups participants by target language, translates per group, and handles solo mode.
 
 ## Pattern decisions (authoritative)
 

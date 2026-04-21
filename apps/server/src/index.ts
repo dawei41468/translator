@@ -61,7 +61,7 @@ server.listen(PORT, "0.0.0.0", async () => {
   }
 
   // Service status
-  const translationConfigured = !!process.env.GOOGLE_CLOUD_PROJECT_ID;
+  const translationConfigured = !!process.env.GOOGLE_CLOUD_PROJECT_ID || !!process.env.GROK_API_KEY;
 
   // Startup time
   const startupTime = Date.now() - startupStart;

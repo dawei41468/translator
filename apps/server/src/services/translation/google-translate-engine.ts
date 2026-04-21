@@ -24,7 +24,7 @@ export class GoogleTranslateEngine implements TranslationEngine {
   }
 
   isAvailable(): boolean {
-    return Boolean(this.projectId);
+    return Boolean(this.projectId && process.env.GOOGLE_APPLICATION_CREDENTIALS);
   }
 
   getName(): string {
@@ -95,7 +95,7 @@ export class GoogleTranslateEngine implements TranslationEngine {
     ];
   }
 
-  estimateCost(text: string): number {
+  estimateCost(text: string, _sourceLang: string, _targetLang: string): number {
     return text.length * 0.00002;
   }
 

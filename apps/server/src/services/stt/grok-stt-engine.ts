@@ -2,12 +2,9 @@ import WebSocket from 'ws';
 import { SttEngine, type SttConfig } from './stt-engine.js';
 import { logger } from '../../logger.js';
 
-const GROK_API_KEY = process.env.GROK_API_KEY;
-const GROK_API_BASE_URL = process.env.GROK_API_BASE_URL || 'https://api.x.ai/v1';
-
 function getWsUrl(): string {
-  const httpUrl = GROK_API_BASE_URL;
-  return httpUrl.replace(/^https/, 'wss') + '/stt';
+  const baseUrl = process.env.GROK_API_BASE_URL || 'https://api.x.ai/v1';
+  return baseUrl.replace(/^https/, 'wss') + '/stt';
 }
 
 function mapEncoding(encoding?: string): string {
@@ -32,7 +29,7 @@ export class GrokSttEngine implements SttEngine {
   private pendingChunks: Buffer[] = [];
 
   isAvailable(): boolean {
-    return !!GROK_API_KEY;
+    return !!process.env.GROK_API_KEY;
   }
 
   getName(): string {
@@ -44,7 +41,8 @@ export class GrokSttEngine implements SttEngine {
     this.isOpen = false;
     this.pendingChunks = [];
 
-    if (!GROK_API_KEY) {
+    const apiKey = process.env.GROK_API_KEY;
+    if (!apiKey) {
       this.errorCallback?.(new Error('GROK_API_KEY is not configured'));
       return;
     }
@@ -53,7 +51,7 @@ export class GrokSttEngine implements SttEngine {
       const url = getWsUrl();
       this.ws = new WebSocket(url, {
         headers: {
-          Authorization: `Bearer ${GROK_API_KEY}`,
+          Authorization: `Bearer ${apiKey}`,
         },
       });
 

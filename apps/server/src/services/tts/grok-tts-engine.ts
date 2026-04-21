@@ -1,12 +1,11 @@
 import { TtsEngine, type TtsSynthesizeOptions } from './tts-engine.js';
 import { logger } from '../../logger.js';
 
-const GROK_API_KEY = process.env.GROK_API_KEY;
-const GROK_API_BASE_URL = process.env.GROK_API_BASE_URL || 'https://api.x.ai/v1';
+
 
 export class GrokTtsEngine implements TtsEngine {
   isAvailable(): boolean {
-    return !!GROK_API_KEY;
+    return !!process.env.GROK_API_KEY;
   }
 
   getName(): string {
@@ -14,17 +13,20 @@ export class GrokTtsEngine implements TtsEngine {
   }
 
   async synthesize(options: TtsSynthesizeOptions): Promise<Buffer> {
-    if (!GROK_API_KEY) {
+    const apiKey = process.env.GROK_API_KEY;
+    const baseUrl = process.env.GROK_API_BASE_URL || 'https://api.x.ai/v1';
+
+    if (!apiKey) {
       throw new Error('GROK_API_KEY is not configured');
     }
 
     const voice = this.mapVoiceName(options.voiceName) || 'eve';
     const sampleRate = 24000;
 
-    const res = await fetch(`${GROK_API_BASE_URL}/tts`, {
+    const res = await fetch(`${baseUrl}/tts`, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${GROK_API_KEY}`,
+        Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({

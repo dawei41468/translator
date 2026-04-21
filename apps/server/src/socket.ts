@@ -4,7 +4,9 @@ import { db } from "../../../packages/db/src/index.js";
 import { users, rooms, roomParticipants } from "../../../packages/db/src/schema.js";
 import { eq, and } from "drizzle-orm";
 import { translationRegistry } from "./services/translation/index.js";
-import { createRecognizeStream } from "./services/stt.js";
+import { sttRegistry } from "./services/stt/index.js";
+import { ttsRegistry } from "./services/tts/index.js";
+import type { SttEngine } from "./services/stt/index.js";
 import { logger } from "./logger.js";
 import { parseCookies } from "./middleware/auth.js";
 
@@ -63,9 +65,9 @@ function handleSpeechError(socket: AuthenticatedSocket, error: any, context: str
   });
 
   // Stop recognition to prevent further errors
-  if (socket.recognizeStream) {
-    socket.recognizeStream.end();
-    socket.recognizeStream = undefined;
+  if (socket.sttEngine) {
+    socket.sttEngine.destroy();
+    socket.sttEngine = undefined;
   }
 
   socket.sttNeedsRestart = true;
@@ -130,7 +132,7 @@ const speechTranscriptSchema = {
   sourceLang: (v: any) => typeof v === 'string' && v.length >= 2 && v.length <= 10,
 };
 
-const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
+const JWT_SECRET = process.env.JWT_SECRET!;
 const AUTH_COOKIE_NAME = "auth_token";
 
 // Rate limiting for socket events
@@ -157,7 +159,7 @@ function checkRateLimit(userId: string, event: string, maxRequests: number, wind
 interface AuthenticatedSocket extends Socket {
   userId?: string;
   roomId?: string;
-  recognizeStream?: any;
+  sttEngine?: SttEngine;
   soloMode?: boolean;
   soloTargetLang?: string;
   sttLanguageCode?: string;
@@ -198,6 +200,16 @@ export function setupSocketIO(io: Server) {
         translationRegistry.setUserPreference(userId, preferredTranslationEngine);
       }
 
+      const preferredSttEngine = (user as any)?.preferences?.sttEngine;
+      if (typeof preferredSttEngine === 'string' && preferredSttEngine.length > 0) {
+        sttRegistry.setUserPreference(userId, preferredSttEngine);
+      }
+
+      const preferredTtsEngine = (user as any)?.preferences?.ttsEngine;
+      if (typeof preferredTtsEngine === 'string' && preferredTtsEngine.length > 0) {
+        ttsRegistry.setUserPreference(userId, preferredTtsEngine);
+      }
+
       next();
     } catch (err) {
       logger.warn("Socket authentication failed", {
@@ -233,9 +245,9 @@ export function setupSocketIO(io: Server) {
 
     const stopRecognition = () => {
       try {
-        if (socket.recognizeStream) {
-          socket.recognizeStream.end();
-          socket.recognizeStream = undefined;
+        if (socket.sttEngine) {
+          socket.sttEngine.destroy();
+          socket.sttEngine = undefined;
         }
       } catch (error) {
         logger.warn("Error stopping recognition", {
@@ -294,60 +306,62 @@ export function setupSocketIO(io: Server) {
       socket.sttNeedsRestart = false;
 
       try {
-        socket.recognizeStream = createRecognizeStream(
-          { 
-            languageCode: data.languageCode,
-            encoding: data.encoding,
-            sampleRateHertz: data.sampleRateHertz
-          },
-          async (transcript, isFinal) => {
-            if (isFinal) {
-              const sourceLang = data.languageCode.split('-')[0];
-              await handleTranscript(transcript, sourceLang);
-            }
-          },
-          (error) => {
-            if (isRecoverableSttError(error)) {
-              if (socket.recognizeStream) {
-                try {
-                  socket.recognizeStream.end();
-                } catch {
-                  // ignore
-                }
-                socket.recognizeStream = undefined;
-              }
-              socket.sttNeedsRestart = true;
-              return;
-            }
+        const engine = sttRegistry.getEngine(socket.userId);
+        engine.start({ 
+          languageCode: data.languageCode,
+          encoding: data.encoding,
+          sampleRateHertz: data.sampleRateHertz
+        });
 
-            handleSpeechError(socket, error, "stream error");
+        engine.onTranscript(async (transcript, isFinal) => {
+          if (isFinal) {
+            const sourceLang = data.languageCode.split('-')[0];
+            await handleTranscript(transcript, sourceLang);
           }
-        );
+        });
 
-        if (socket.recognizeStream) {
-          socket.recognizeStream.on('end', () => {
-            socket.recognizeStream = undefined;
-            if (socket.sttActive) {
-              socket.sttNeedsRestart = true;
-              if (socket.sttLanguageCode && canRestartStt()) {
-                startRecognitionStream({ languageCode: socket.sttLanguageCode });
-              } else if (socket.sttLanguageCode) {
-                socket.emit("speech-error", "Speech recognition session ended. Please stop and start again.");
+        engine.onError((error) => {
+          if (isRecoverableSttError(error)) {
+            if (socket.sttEngine) {
+              try {
+                socket.sttEngine.destroy();
+              } catch {
+                // ignore
               }
+              socket.sttEngine = undefined;
             }
-          });
-          socket.recognizeStream.on('close', () => {
-            socket.recognizeStream = undefined;
-            if (socket.sttActive) {
-              socket.sttNeedsRestart = true;
-              if (socket.sttLanguageCode && canRestartStt()) {
-                startRecognitionStream({ languageCode: socket.sttLanguageCode });
-              } else if (socket.sttLanguageCode) {
-                socket.emit("speech-error", "Speech recognition session ended. Please stop and start again.");
-              }
+            socket.sttNeedsRestart = true;
+            return;
+          }
+
+          handleSpeechError(socket, error, "stream error");
+        });
+
+        engine.onEnd(() => {
+          socket.sttEngine = undefined;
+          if (socket.sttActive) {
+            socket.sttNeedsRestart = true;
+            if (socket.sttLanguageCode && canRestartStt()) {
+              startRecognitionStream({ languageCode: socket.sttLanguageCode });
+            } else if (socket.sttLanguageCode) {
+              socket.emit("speech-error", "Speech recognition session ended. Please stop and start again.");
             }
-          });
-        }
+          }
+        });
+
+        engine.onClose(() => {
+          socket.sttEngine = undefined;
+          if (socket.sttActive) {
+            socket.sttNeedsRestart = true;
+            if (socket.sttLanguageCode && canRestartStt()) {
+              startRecognitionStream({ languageCode: socket.sttLanguageCode });
+            } else if (socket.sttLanguageCode) {
+              socket.emit("speech-error", "Speech recognition session ended. Please stop and start again.");
+            }
+          }
+        });
+
+        socket.sttEngine = engine;
       } catch (error) {
         handleSpeechError(socket, error, "failed to start recognition");
       }
@@ -401,7 +415,7 @@ export function setupSocketIO(io: Server) {
         dataLength: data.length
       });
 
-      if (!socket.recognizeStream && socket.sttActive && socket.sttLanguageCode && socket.sttNeedsRestart) {
+      if (!socket.sttEngine && socket.sttActive && socket.sttLanguageCode && socket.sttNeedsRestart) {
         if (!canRestartStt()) {
           socket.emit("speech-error", "Speech recognition is unstable right now. Please stop and try again.");
           return;
@@ -410,18 +424,18 @@ export function setupSocketIO(io: Server) {
         startRecognitionStream({ languageCode: socket.sttLanguageCode });
       }
 
-      if (socket.recognizeStream) {
+      if (socket.sttEngine) {
         try {
-          socket.recognizeStream.write(data);
+          socket.sttEngine.write(data);
         } catch (error) {
           if (isRecoverableSttError(error)) {
-            if (socket.recognizeStream) {
+            if (socket.sttEngine) {
               try {
-                socket.recognizeStream.end();
+                socket.sttEngine.destroy();
               } catch {
                 // ignore
               }
-              socket.recognizeStream = undefined;
+              socket.sttEngine = undefined;
             }
             socket.sttNeedsRestart = true;
             return;

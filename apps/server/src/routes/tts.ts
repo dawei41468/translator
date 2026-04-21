@@ -1,5 +1,5 @@
 import express from 'express';
-import { synthesizeSpeech } from '../services/tts.js';
+import { ttsRegistry } from '../services/tts/index.js';
 import { authenticate } from '../middleware/auth.js';
 import { logger } from '../logger.js';
 
@@ -7,7 +7,7 @@ const router = express.Router();
 
 /**
  * POST /api/tts/synthesize
- * Synthesizes text to speech using Google Cloud TTS.
+ * Synthesizes text to speech using the user's preferred TTS engine.
  */
 router.post('/synthesize', authenticate, async (req, res) => {
   const { text, languageCode, voiceName, ssmlGender } = req.body;
@@ -21,7 +21,14 @@ router.post('/synthesize', authenticate, async (req, res) => {
   }
 
   try {
-    const audioContent = await synthesizeSpeech({
+    const userId = req.user!.id;
+    const preferredTts = req.user!.preferences?.ttsEngine;
+    if (preferredTts) {
+      ttsRegistry.setUserPreference(userId, preferredTts);
+    }
+
+    const engine = ttsRegistry.getEngine(userId);
+    const audioContent = await engine.synthesize({
       text,
       languageCode,
       voiceName,

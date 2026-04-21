@@ -10,7 +10,7 @@ import { authenticate, parseCookies } from "../middleware/auth.js";
 const router = express.Router();
 
 const AUTH_COOKIE_NAME = "auth_token";
-const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
+const JWT_SECRET = process.env.JWT_SECRET!;
 
 function normalizeEnginePreferences(preferences: any): any {
   if (!preferences || typeof preferences !== "object") return preferences;
@@ -118,8 +118,8 @@ router.patch("/", authenticate, async (req, res) => {
       const normalizedPreferences = normalizeEnginePreferences(preferences);
 
       // Validate specific preference fields
-      const validSttEngines = ["google-cloud-stt"];
-      const validTtsEngines = ["google-cloud"];
+      const validSttEngines = ["google-cloud-stt", "grok-stt"];
+      const validTtsEngines = ["google-cloud", "grok-tts"];
       const validTranslationEngines = ["google-translate", "grok-translate"];
 
       if (normalizedPreferences.sttEngine && !validSttEngines.includes(normalizedPreferences.sttEngine)) {

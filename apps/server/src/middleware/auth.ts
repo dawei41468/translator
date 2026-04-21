@@ -4,7 +4,7 @@ import type { JwtPayload } from "jsonwebtoken";
 import { db } from "../../../../packages/db/src/index.js";
 import { users } from "../../../../packages/db/src/schema.js";
 
-const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
+const JWT_SECRET = process.env.JWT_SECRET!;
 const AUTH_COOKIE_NAME = "auth_token";
 
 export function parseCookies(cookieHeader: string | undefined): Record<string, string> {

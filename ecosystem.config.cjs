@@ -4,6 +4,9 @@ module.exports = {
     {
       name: "translator",
       cwd: __dirname,
+      // N.B. The nested path is correct: tsc preserves directory structure from the monorepo
+      // root when compiling cross-package includes (packages/db/src is included via relative
+      // path in tsconfig.json), so output lands at dist/apps/server/src/index.js.
       script: "./apps/server/dist/apps/server/src/index.js",
       interpreter: "node",
       instances: 1,

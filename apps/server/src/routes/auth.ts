@@ -13,7 +13,7 @@ import { authenticate } from "../middleware/auth.js";
 const router = express.Router();
 
 const AUTH_COOKIE_NAME = "auth_token";
-const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
+const JWT_SECRET = process.env.JWT_SECRET!;
 
 const changePasswordSchema = z.object({
   currentPassword: z.string().min(1),

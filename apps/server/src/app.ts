@@ -19,6 +19,7 @@ declare global {
         email: string;
         name: string | null;
         language: string | null;
+        preferences: any;
         createdAt: Date | null;
         updatedAt: Date | null;
         deletedAt: Date | null;
@@ -58,7 +59,11 @@ if (process.env.NODE_ENV === "production") {
 }
 
 app.use(requestLogger);
-app.use(cors({ origin: true, credentials: true }));
+const corsOrigin =
+  process.env.NODE_ENV === "production"
+    ? (process.env.FRONTEND_URL || false)
+    : true;
+app.use(cors({ origin: corsOrigin, credentials: true }));
 app.use(json({ limit: "10kb" }));
 app.use(express.urlencoded({ extended: true, limit: "10kb" }));
 

@@ -12,6 +12,15 @@ import { setupSocketIO } from "./socket.js";
 import cron from "node-cron";
 
 import { CleanupService } from "./services/cleanup.js";
+import { ttsRegistry, GoogleTtsEngine, GrokTtsEngine } from "./services/tts/index.js";
+import { sttRegistry, GoogleSttEngine, GrokSttEngine } from "./services/stt/index.js";
+
+// Initialize speech engine registries
+ttsRegistry.registerEngine('google-cloud', new GoogleTtsEngine());
+ttsRegistry.registerEngine('grok-tts', new GrokTtsEngine());
+
+sttRegistry.registerEngine('google-cloud-stt', new GoogleSttEngine());
+sttRegistry.registerEngine('grok-stt', new GrokSttEngine());
 
 const startupStart = Date.now();
 const PORT = Number(process.env.PORT) || 3003;
@@ -19,7 +28,10 @@ const PORT = Number(process.env.PORT) || 3003;
 const server = createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: true,
+    origin:
+      process.env.NODE_ENV === "production"
+        ? (process.env.FRONTEND_URL || false)
+        : true,
     credentials: true,
   },
   transports: ['websocket', 'polling'],
@@ -73,16 +85,17 @@ server.listen(PORT, "0.0.0.0", async () => {
       translationService: translationConfigured ? 'configured' : 'not configured'
     },
     configuration: {
-      corsPolicy: 'Allow all origins',
+      corsPolicy: process.env.NODE_ENV === 'production' ? (process.env.FRONTEND_URL || 'restricted') : 'Allow all origins',
       jwtExpiration: '30 days',
       missingEnvVars: missingVars
     },
     startupTime: `${startupTime}ms`
   });
 
-  // Log warnings for missing config
+  // Fail hard on missing required configuration
   if (missingVars.length > 0) {
-    logger.warn('Server started with missing configuration', { missingVars });
+    logger.error('Server failed to start: missing required configuration', { missingVars });
+    process.exit(1);
   }
   if (dbStatus === 'failed') {
     logger.error('Server started but database connection failed');

@@ -26,7 +26,6 @@ export class SpeechEngineRegistry {
     if (!engine || !engine.isAvailable()) {
       for (const [id, fallback] of this.sttEngines) {
         if (fallback.isAvailable()) {
-          console.warn(`STT engine ${this.userPreferences.stt} not available, falling back to ${id}`);
           return fallback;
         }
       }
@@ -40,7 +39,6 @@ export class SpeechEngineRegistry {
     if (!engine || !engine.isAvailable()) {
       for (const [id, fallback] of this.ttsEngines) {
         if (fallback.isAvailable()) {
-          console.warn(`TTS engine ${this.userPreferences.tts} not available, falling back to ${id}`);
           return fallback;
         }
       }

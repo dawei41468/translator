@@ -33,7 +33,7 @@ export const useDashboardRoomCreation = (isAuthenticated: boolean): UseDashboard
         // Note: getRecentRooms() is not called here as it's handled by useRecentRooms
       },
       onError: (error) => {
-        console.error('Room creation failed:', error);
+        // Room creation failed
       }
     });
   };

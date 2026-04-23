@@ -24,7 +24,6 @@ export const useWakeLock = (enabled: boolean = true) => {
       });
     } catch (err) {
       // Allowed to fail (e.g. low battery, system policy)
-      console.warn('Failed to request wake lock:', err);
     }
   }, [enabled]);
 
@@ -35,7 +34,7 @@ export const useWakeLock = (enabled: boolean = true) => {
         wakeLockRef.current = null;
         setIsLocked(false);
       } catch (err) {
-        console.warn('Failed to release wake lock:', err);
+        // Wake lock release failed
       }
     }
   }, []);

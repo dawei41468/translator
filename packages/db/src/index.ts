@@ -27,10 +27,7 @@ for (const envPathCandidate of possibleEnvPaths) {
 if (envPath) {
   config({ path: envPath });
 } else {
-  console.error('❌ CRITICAL ERROR: .env file not found in any of these locations:');
-  possibleEnvPaths.forEach(p => console.error(`  - ${p}`));
-  console.error('Please ensure the .env file exists in the root directory of your project.');
-  process.exit(1);
+  throw new Error(`CRITICAL: .env file not found. Attempted locations: ${possibleEnvPaths.join(', ')}. Please ensure the .env file exists in the root directory.`);
 }
 
 import postgres from "postgres";

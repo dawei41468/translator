@@ -22,7 +22,7 @@ export class GoogleCloudTtsEngine implements TtsEngine {
       
       // Handle state changes
       this.audioContext.onstatechange = () => {
-        console.log('Google Cloud TTS: AudioContext state changed:', this.audioContext?.state);
+        // AudioContext state changed
       };
     }
 
@@ -65,7 +65,6 @@ export class GoogleCloudTtsEngine implements TtsEngine {
       const audioBuffer = await this.audioContext.decodeAudioData(audioArrayBuffer);
       await this.playAudioBuffer(audioBuffer);
     } catch (error) {
-      console.error('Google Cloud TTS synthesis failed:', error);
       throw error;
     }
   }

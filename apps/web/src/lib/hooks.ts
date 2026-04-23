@@ -71,7 +71,6 @@ export const useJoinRoom = () => {
       window.location.href = targetUrl;
     },
     onError: (error: any) => {
-      console.error('❌ useJoinRoom onError:', error);
       toast.error(error?.message || t("toast.joinRoomFailed"));
     }
   });
@@ -84,18 +83,13 @@ export const useUpdateLanguage = () => {
   const { i18n, t } = useTranslation();
 
   return useMutation({
-    mutationFn: (language: string) => {
-      console.log('useUpdateLanguage mutationFn called with:', language);
-      return apiClient.updateLanguage(language);
-    },
+    mutationFn: (language: string) => apiClient.updateLanguage(language),
     onSuccess: async (_, language) => {
-      console.log('useUpdateLanguage onSuccess called, invalidating queries and changing i18n to:', language);
       // Await the invalidation to ensure user data is updated before changing language
       await queryClient.invalidateQueries({ queryKey: ["me"] });
       i18n.changeLanguage(language);
     },
     onError: (error: any) => {
-      console.error('useUpdateLanguage onError:', error);
       toast.error(error?.message || t("toast.updateLanguageFailed"));
     },
   });

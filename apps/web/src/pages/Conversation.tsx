@@ -256,7 +256,6 @@ const Conversation = () => {
     });
 
     socketInstance.on('connect_error', (error: any) => {
-      console.error('Socket connection error:', error);
       setConnectionStatus('disconnected');
       toast.error('Unable to connect to conversation server.');
     });
@@ -379,7 +378,7 @@ const Conversation = () => {
           // Local initialization if needed
         }
       } catch (error) {
-        console.error('Failed to initialize speech engines:', error);
+        // Speech engine initialization failed
       }
     };
 
@@ -404,7 +403,7 @@ const Conversation = () => {
             voicesLoaded: voices.length > 0
           }));
         } catch (error) {
-          console.error('Failed to enable audio:', error);
+          // Audio enable failed
         }
       }
     } else {

@@ -39,7 +39,6 @@ export class GrokTtsEngine implements TtsEngine {
       const audioBuffer = await this.audioContext.decodeAudioData(audioArrayBuffer);
       await this.playAudioBuffer(audioBuffer);
     } catch (error) {
-      console.error('Grok TTS synthesis failed:', error);
       throw error;
     }
   }

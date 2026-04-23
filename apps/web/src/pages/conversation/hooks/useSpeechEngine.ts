@@ -160,8 +160,8 @@ export function useSpeechEngine({
       }
 
       if (!opts?.skipVadPause) {
-        void vadRef.current?.pause().catch((e) => {
-          console.warn("VAD pause failed during cleanup:", e);
+        void vadRef.current?.pause().catch(() => {
+          // Ignore VAD pause errors during cleanup
         });
       }
 
@@ -203,7 +203,6 @@ export function useSpeechEngine({
 
       flushPendingTts();
     } catch (error) {
-      console.error('Error during audio cleanup:', error);
       setIsRecording(false);
       setSttStatus(prev => ({
         ...prev,
@@ -229,7 +228,6 @@ export function useSpeechEngine({
   const onVADSpeechStart = useCallback(() => {
     lastSpeechActivityAtRef.current = Date.now();
     isUserSpeakingRef.current = true;
-    console.log("VAD: User started speaking");
 
     const socket = socketRef.current;
     if (socket?.connected && bufferedAudioChunksRef.current.length > 0) {
@@ -248,7 +246,6 @@ export function useSpeechEngine({
   const onVADSpeechEnd = useCallback(() => {
     lastSpeechActivityAtRef.current = Date.now();
     isUserSpeakingRef.current = false;
-    console.log("VAD: User stopped speaking");
 
     if (disableAutoStopOnSilenceRef.current) {
       if (silenceTimeoutRef.current) {
@@ -268,14 +265,12 @@ export function useSpeechEngine({
 
     if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
     silenceTimeoutRef.current = setTimeout(() => {
-      console.log("VAD: Auto-stopping due to silence");
       stopRecordingInternal();
     }, SILENCE_THRESHOLD_MS);
   }, [stopRecordingInternal]);
 
   const onVADMisfire = useCallback(() => {
     isUserSpeakingRef.current = false;
-    console.log("VAD: Misfire detected");
   }, []);
 
   const vad = useMicVAD({
@@ -306,8 +301,8 @@ export function useSpeechEngine({
     if (isRecordingRef.current) return;
     if (!vad.listening) return;
 
-    void vad.pause().catch((e) => {
-      console.warn("VAD pause failed after startOnLoad:", e);
+    void vad.pause().catch(() => {
+      // Ignore VAD pause errors
     });
   }, [vad.loading, vad.errored, vad.listening, vad.pause]);
 
@@ -350,7 +345,9 @@ export function useSpeechEngine({
       // Resume AudioContext if it exists (user gesture)
       const ttsEngine = speechEngineRegistry.getTtsEngine();
       if (ttsEngine && (ttsEngine as any).audioContext?.state === 'suspended') {
-        (ttsEngine as any).audioContext.resume().catch((e: any) => console.warn('Failed to resume AudioContext:', e));
+        (ttsEngine as any).audioContext.resume().catch(() => {
+          // Ignore AudioContext resume errors
+        });
       }
 
       const languageCode = getSpeechRecognitionLocale(userLanguage ?? "en");
@@ -514,7 +511,6 @@ export function useSpeechEngine({
 
       } else {
         // Fallback: iOS Safari / Non-WebM -> PCM (LINEAR16)
-        console.log("WebM not supported, falling back to PCM recorder");
         const pcmRecorder = new PcmRecorder();
         pcmRecorderRef.current = pcmRecorder;
 

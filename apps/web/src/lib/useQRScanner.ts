@@ -63,7 +63,7 @@ export const useQRScanner = (): UseQRScannerReturn => {
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         if (!msg.includes('not running') && !msg.includes('already under transition')) {
-          console.warn('Failed to stop QR scanner:', error);
+          // QR scanner stop failed
         }
       }
 
@@ -140,7 +140,6 @@ export const useQRScanner = (): UseQRScannerReturn => {
             setIsJoining(false);
           },
           onError: (error) => {
-            console.error('Failed to join room:', error);
             setShowScanner(false);
             setIsScanning(false);
             setIsJoining(false);
@@ -148,9 +147,9 @@ export const useQRScanner = (): UseQRScannerReturn => {
         });
       },
       (error: any) => {
-        // Ignore scan errors, only log serious issues
+        // Ignore scan errors, only handle serious issues
         if (!error?.includes && typeof error !== 'string') {
-          console.log("QR scan error:", error);
+          // Scan error occurred
         }
       }
     ).then(() => {
@@ -160,7 +159,6 @@ export const useQRScanner = (): UseQRScannerReturn => {
     }).catch((error: any) => {
       // If the scanner was stopped/unmounted while start() was in-flight, ignore.
       if (!scannerRef.current) return;
-      console.error('Failed to start QR scanner:', error);
       setPermissionStatus('denied');
       setIsScanning(false);
       scannerStatusRef.current = 'idle';
@@ -183,7 +181,6 @@ export const useQRScanner = (): UseQRScannerReturn => {
       setIsScanning(true);
 
     } catch (error) {
-      console.error('Camera permission error:', error);
       setPermissionStatus('denied');
     }
   };
@@ -237,13 +234,11 @@ export const useQRScanner = (): UseQRScannerReturn => {
       if (qrReaderElement) {
         initializeScanner();
       } else {
-        console.warn('QR reader element not found in DOM');
         // Retry once after a short delay
         setTimeout(() => {
           if (document.getElementById('qr-reader')) {
             initializeScanner();
           } else {
-            console.error('QR reader element still not found after retry');
             toast.error(t('error.scannerInitFailed'));
             closeScanner();
           }

@@ -80,8 +80,6 @@ const Profile = () => {
     const engineName = speechEngineRegistry.getAvailableSttEngines()
       .concat(speechEngineRegistry.getAvailableTtsEngines())
       .find(engine => engine.id === engineId)?.name || engineId;
-
-    console.log(`Profile: ${type.toUpperCase()} engine changed to: ${engineName} (${engineId})`);
   };
 
   const handleLogout = () => {

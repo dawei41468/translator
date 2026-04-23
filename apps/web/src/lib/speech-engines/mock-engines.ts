@@ -5,7 +5,7 @@ export class MockSttEngine implements SttEngine {
   private onResult: ((text: string, isFinal: boolean) => void) | null = null;
 
   async initialize(config: { language: string }): Promise<void> {
-    console.log('Mock STT initialized', config);
+    // Mock STT initialized
   }
 
   async startRecognition(options: {
@@ -21,9 +21,7 @@ export class MockSttEngine implements SttEngine {
     const streamDestination = audioContext.createMediaStreamDestination();
     oscillator.connect(streamDestination);
     oscillator.start();
-    
-    console.log('Mock STT recognition started');
-    
+
     // Simulate a result after a delay
     setTimeout(() => {
       if (this.isRecognizing && this.onResult) {
@@ -37,7 +35,6 @@ export class MockSttEngine implements SttEngine {
   async stopRecognition(): Promise<void> {
     this.isRecognizing = false;
     this.onResult = null;
-    console.log('Mock STT recognition stopped');
   }
 
   isAvailable(): boolean {
@@ -51,17 +48,16 @@ export class MockSttEngine implements SttEngine {
 
 export class MockTtsEngine implements TtsEngine {
   async initialize(): Promise<void> {
-    console.log('Mock TTS initialized');
+    // Mock TTS initialized
   }
 
   async speak(text: string, language: string): Promise<void> {
-    console.log(`Mock TTS speaking: "${text}" in ${language}`);
     // Simulate playback time
     return new Promise((resolve) => setTimeout(resolve, 1000));
   }
 
   stop(): void {
-    console.log('Mock TTS stopped');
+    // Mock TTS stopped
   }
 
   isAvailable(): boolean {

@@ -24,7 +24,7 @@ export class SpeechEngineRegistry {
   getSttEngine(): SttEngine {
     const engine = this.sttEngines.get(this.userPreferences.stt);
     if (!engine || !engine.isAvailable()) {
-      for (const [id, fallback] of this.sttEngines) {
+      for (const [_id, fallback] of this.sttEngines) {
         if (fallback.isAvailable()) {
           return fallback;
         }
@@ -37,7 +37,7 @@ export class SpeechEngineRegistry {
   getTtsEngine(): TtsEngine {
     const engine = this.ttsEngines.get(this.userPreferences.tts);
     if (!engine || !engine.isAvailable()) {
-      for (const [id, fallback] of this.ttsEngines) {
+      for (const [_id, fallback] of this.ttsEngines) {
         if (fallback.isAvailable()) {
           return fallback;
         }

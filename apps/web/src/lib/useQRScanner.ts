@@ -139,7 +139,7 @@ export const useQRScanner = (): UseQRScannerReturn => {
             setIsScanning(false);
             setIsJoining(false);
           },
-          onError: (error) => {
+          onError: (_error) => {
             setShowScanner(false);
             setIsScanning(false);
             setIsJoining(false);
@@ -156,7 +156,7 @@ export const useQRScanner = (): UseQRScannerReturn => {
       // If the scanner was stopped/unmounted while start() was in-flight, ignore.
       if (!scannerRef.current) return;
       scannerStatusRef.current = 'running';
-    }).catch((error: any) => {
+    }).catch((_error: any) => {
       // If the scanner was stopped/unmounted while start() was in-flight, ignore.
       if (!scannerRef.current) return;
       setPermissionStatus('denied');

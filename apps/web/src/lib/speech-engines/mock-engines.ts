@@ -4,7 +4,7 @@ export class MockSttEngine implements SttEngine {
   private isRecognizing = false;
   private onResult: ((text: string, isFinal: boolean) => void) | null = null;
 
-  async initialize(config: { language: string }): Promise<void> {
+  async initialize(_config: { language: string }): Promise<void> {
     // Mock STT initialized
   }
 
@@ -51,7 +51,7 @@ export class MockTtsEngine implements TtsEngine {
     // Mock TTS initialized
   }
 
-  async speak(text: string, language: string): Promise<void> {
+  async speak(_text: string, _language: string): Promise<void> {
     // Simulate playback time
     return new Promise((resolve) => setTimeout(resolve, 1000));
   }

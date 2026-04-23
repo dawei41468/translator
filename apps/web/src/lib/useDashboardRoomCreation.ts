@@ -32,7 +32,7 @@ export const useDashboardRoomCreation = (isAuthenticated: boolean): UseDashboard
         addRecentRoom(data.roomCode);
         // Note: getRecentRooms() is not called here as it's handled by useRecentRooms
       },
-      onError: (error) => {
+      onError: (_error) => {
         // Room creation failed
       }
     });

@@ -255,7 +255,7 @@ const Conversation = () => {
       }
     });
 
-    socketInstance.on('connect_error', (error: any) => {
+    socketInstance.on('connect_error', (_error: any) => {
       setConnectionStatus('disconnected');
       toast.error('Unable to connect to conversation server.');
     });

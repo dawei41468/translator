@@ -75,11 +75,6 @@ const Profile = () => {
 
     // Update database - registry will be recreated automatically
     updateProfileMutation.mutate({ preferences: newPreferences });
-
-    // Log the engine change
-    const engineName = speechEngineRegistry.getAvailableSttEngines()
-      .concat(speechEngineRegistry.getAvailableTtsEngines())
-      .find(engine => engine.id === engineId)?.name || engineId;
   };
 
   const handleLogout = () => {

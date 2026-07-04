@@ -37,6 +37,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       stt: user?.preferences?.sttEngine,
       tts: user?.preferences?.ttsEngine,
       translation: user?.preferences?.translationEngine,
+      ttsVoice: user?.preferences?.ttsVoice,
     }),
     [user?.preferences]
   );

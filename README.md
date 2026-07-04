@@ -11,7 +11,7 @@ A Progressive Web App (PWA) for real-time cross-device conversation translation.
 - **PWA Ready**: Installable on mobile devices, works offline-ready
 - **User Authentication**: Secure login with JWT cookies
 - **Guest Mode**: Join/create with only a display name (creates a temporary guest account)
-- **Engine Abstraction Framework**: Swappable STT/TTS/Translation engines (currently: Google Cloud STT + Google Cloud TTS + Google Translate / Grok Translate)
+- **Engine Abstraction Framework**: Swappable STT/TTS/Translation engines (Grok by default; extensible for additional providers)
 - **Profile Management**: User preferences, display names, language settings
 - **Accessibility Compliant**: WCAG 2.1 AA with screen reader support
 - **Cross-Device Sync**: Preferences follow users across browsers/devices
@@ -26,9 +26,9 @@ A Progressive Web App (PWA) for real-time cross-device conversation translation.
 - **Frontend**: React 18 + TypeScript + Vite + Tailwind CSS + shadcn/ui + TanStack Query + React Router
 - **Backend**: Node.js 20 + Express + Drizzle ORM + PostgreSQL
 - **Real-Time**: Socket.io (authenticated)
-- **Translation**: Engine registry (Google Cloud Translation v3 + optional Grok)
-- **Speech-to-Text (STT)**: Google Cloud Speech streaming via Socket.IO (`start-speech` + `speech-data`)
-- **Text-to-Speech (TTS)**: Server-side Google Cloud Text-to-Speech via `/api/tts/synthesize` with filesystem caching
+- **Translation**: Grok (xAI) by default via engine registry (extensible)
+- **Speech-to-Text (STT)**: Grok STT (WebSocket streaming) via Socket.IO
+- **Text-to-Speech (TTS)**: Grok TTS via server `/api/tts/synthesize` with caching
 - **Deployment**: PM2 + NGINX + Tencent Lighthouse HK
 - **Monorepo**: Turborepo + pnpm
 
@@ -61,9 +61,7 @@ A Progressive Web App (PWA) for real-time cross-device conversation translation.
    - `DATABASE_URL`: PostgreSQL connection string
    - `JWT_SECRET`: Secure JWT secret
    - `PORT`: Server port (dev/prod typically `4003`)
-   - `GOOGLE_CLOUD_PROJECT_ID`: Google Cloud project ID (required for server-side translation)
-   - `GOOGLE_APPLICATION_CREDENTIALS`: Path to Google service account JSON (relative paths are supported; resolved from repo root)
-   - `GOOGLE_CLOUD_TRANSLATE_LOCATION` (optional): Google Translation location (`global` or `us-central1`)
+   - `GROK_API_KEY`: xAI Grok API key (required for STT / TTS / Translation)
 
 4. **Database Setup**
    ```bash

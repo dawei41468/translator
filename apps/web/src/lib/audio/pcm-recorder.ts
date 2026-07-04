@@ -1,8 +1,7 @@
 /**
  * PCM Audio Recorder for iOS Fallback
  * Captures raw audio, downsamples to 16kHz (optional), and converts to 16-bit PCM (LINEAR16).
- * This allows iOS Safari to stream audio to Google Cloud STT which doesn't natively support
- * Safari's MediaRecorder formats (like audio/mp4) in its streaming API.
+ * Useful for server-side STT engines that expect raw PCM rather than browser container formats.
  */
 
 export class PcmRecorder {

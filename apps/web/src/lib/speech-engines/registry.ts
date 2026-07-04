@@ -7,9 +7,9 @@ export class SpeechEngineRegistry {
 
   constructor(preferences: { stt?: string; tts?: string; translation?: string } = {}) {
     this.userPreferences = {
-      stt: preferences.stt || 'google-cloud-stt',
-      tts: preferences.tts || 'google-cloud',
-      translation: preferences.translation || 'google-translate'
+      stt: preferences.stt || 'grok-stt',
+      tts: preferences.tts || 'grok-tts',
+      translation: preferences.translation || 'grok-translate'
     };
   }
 

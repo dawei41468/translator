@@ -36,29 +36,23 @@
 
 ## Translation Provider Decision (Locked)
 
-**MVP Provider**: Google Cloud Translation Advanced v3  
-**Reasoning**:
-- Lowest latency from our Tencent HK infrastructure (~50–200ms).
-- Dedicated translation engine — zero hallucinations, perfect consistency.
-- Predictable per-character pricing.
-- Proven reliability for short, real-time utterances.
+**Current Default Provider**: Grok (xAI)
 
 **Implementation Notes (Current Code)**:
-- The server uses engine registries for all three pillars:
-  - **Translation**: `google-translate` (default) + `grok-translate` (optional, falls back to Google)
-  - **STT**: `google-cloud-stt` (default) + `grok-stt` (optional, falls back to Google)
-  - **TTS**: `google-cloud` (default) + `grok-tts` (optional, falls back to Google)
-- All Grok engines require `GROK_API_KEY` and automatically fall back to Google if unavailable.
-- Google Translation location is configurable via `GOOGLE_CLOUD_TRANSLATE_LOCATION` (supported: `global`, `us-central1`). Invalid values fall back to `global`.
+- The server uses engine registries for all three pillars (Grok is default):
+  - **Translation**: `grok-translate`
+  - **STT**: `grok-stt`
+  - **TTS**: `grok-tts`
+- All engines require `GROK_API_KEY`.
+- Architecture supports adding new providers (e.g. mimo).
 
 ## TTS Strategy
 
 **Current Implementation**: Server-side TTS via `TtsEngineRegistry`
 - Client calls `POST /api/tts/synthesize` and plays returned `audio/mpeg`.
-- Backend routes to user's preferred engine:
-  - **Google Cloud TTS** (default) — cached on disk (`cache/tts`), curated voices
-  - **Grok TTS** (optional) — 5 expressive voices with speech tags (`[laugh]`, `<whisper>`, etc.)
-- Benefit: no client-side API keys; swappable engines with automatic fallback.
+- Backend routes to user's preferred engine (Grok TTS default):
+  - 5 expressive voices with speech tags (`[laugh]`, `<whisper>`, etc.)
+- Benefit: no client-side API keys; swappable engines.
 
 **Phase 2 — Premium Voices (Completed April 2026)**:
 - ✅ Grok TTS integrated as an additional option (not replacement)
@@ -177,9 +171,9 @@ The detailed UX audit and recommendations live in [`UX-AUDIT-2026.md`](UX-AUDIT-
 - **Backend**: Node.js 20 + Express + Drizzle ORM + self-hosted PostgreSQL (local/prod servers)
 - **Real-Time**: Socket.io (authenticated via JWT cookie, room namespaces)
 - **Auth**: JWT in httpOnly cookie
-- **Translation**: Google Cloud Translation v3 + Grok translation engine (via `TranslationEngineRegistry`)
-- **STT**: Google Cloud Speech-to-Text + Grok STT (via `SttEngineRegistry`)
-- **TTS**: Google Cloud Text-to-Speech + Grok TTS (via `TtsEngineRegistry`)
+- **Translation**: Grok (via `TranslationEngineRegistry`)
+- **STT**: Grok STT (via `SttEngineRegistry`)
+- **TTS**: Grok TTS (via `TtsEngineRegistry`)
 - **Client-side VAD**: `@ricky0123/vad-react` for cost control across all STT engines
 - **QR Code**: qrcode.react (generation) + html5-qrcode (scanning)
 - **Deployment**: Tencent Lighthouse HK + EdgeOne CDN + NGINX reverse proxy

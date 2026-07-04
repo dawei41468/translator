@@ -4,23 +4,6 @@ import { beforeAll, vi } from 'vitest';
 process.env.JWT_SECRET = 'test-secret';
 process.env.NODE_ENV = 'test';
 
-// Mock Google Cloud services
-vi.mock('@google-cloud/speech', () => ({
-  SpeechClient: vi.fn().mockImplementation(() => ({
-    streamingRecognize: vi.fn().mockReturnValue({
-      on: vi.fn().mockReturnThis(),
-    }),
-  })),
-}));
-
-vi.mock('@google-cloud/translate', () => ({
-  v3: {
-    TranslationServiceClient: vi.fn().mockImplementation(() => ({
-      translateText: vi.fn(),
-    })),
-  },
-}));
-
 // Mock database
 vi.mock('../../../packages/db/src/index.js', () => ({
   db: {

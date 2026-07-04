@@ -1,3 +1,17 @@
 packages:
   - "apps/*"
   - "packages/*"
+
+allowBuilds:
+  esbuild: false
+  protobufjs: false
+  unrs-resolver: false
+
+# Allow postinstall/build scripts for these packages (pnpm 10+ security feature)
+onlyBuiltDependencies:
+  - esbuild
+  - protobufjs
+  - unrs-resolver
+  # Add more here if you run into other [ERR_PNPM_IGNORED_BUILDS] warnings
+  # You can also run: pnpm approve-builds
+

@@ -15,7 +15,7 @@ export class SttEngineRegistry {
 
   getEngine(userId?: string): SttEngine {
     const preferredId = userId ? this.userPreferences.get(userId) : undefined;
-    const defaultId = 'google-cloud-stt';
+    const defaultId = 'grok-stt';
     const id = preferredId || defaultId;
 
     const engine = this.engines.get(id);

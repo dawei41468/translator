@@ -72,11 +72,6 @@ This document codifies the existing patterns in the Live Translator codebase so 
 - `.env` is located at repo root.
 - `NODE_ENV=production` influences cookie behavior (`secure: true`).
 
-#### Google Cloud credentials normalization
-
-- The server calls `normalizeGoogleCredentials()` at startup.
-- If `GOOGLE_APPLICATION_CREDENTIALS` is a relative path, it is resolved relative to repo root (works when starting server from repo root or from `apps/server`).
-
 ## Frontend (apps/web) Patterns
 
 ### Routing
@@ -257,7 +252,7 @@ onSuccess: () => {
 - **HTTP Testing**: Use **Supertest** for Express route tests.
 - **Mocks**: Use `vi.mock()` for external dependencies.
   - When partially mocking a default-export module (e.g., `jsonwebtoken`, `bcryptjs`) with `importOriginal`, return a `default` key.
-  - Mock class constructors (not arrow functions) for modules like `@google-cloud/translate`.
+  - (Legacy) Mock class constructors for external modules when needed.
 - **Server Tests**: Focus on middleware, utilities, routes, and core business logic.
   - Auth middleware: `apps/server/src/middleware/__tests__/auth.test.ts`
   - Auth routes: `apps/server/src/routes/__tests__/auth.test.ts`
@@ -306,10 +301,8 @@ graph TB
         A[Conversation.tsx] --> B[SpeechEngineRegistry]
         B --> C[SttEngine Interface]
         B --> D[TtsEngine Interface]
-        C --> E[WebSpeechSttEngine]
-        C --> F[GoogleCloudSttEngine]
-        D --> G[WebSpeechTtsEngine]
-        D --> H[GoogleCloudTtsEngine]
+        C --> E[GrokSttEngine]
+        D --> H[GrokTtsEngine]
     end
 
     subgraph Backend
@@ -317,13 +310,10 @@ graph TB
         I --> S[SttEngineRegistry]
         I --> T[TtsEngineRegistry]
         J --> K[TranslationEngine Interface]
-        K --> L[GoogleTranslateEngine]
         K --> M[GrokTranslationEngine]
         S --> SttI[SttEngine Interface]
-        SttI --> GStt[GoogleSttEngine]
         SttI --> GrStt[GrokSttEngine]
         T --> TtsI[TtsEngine Interface]
-        TtsI --> GTts[GoogleTtsEngine]
         TtsI --> GrTts[GrokTtsEngine]
     end
 
@@ -333,9 +323,6 @@ graph TB
     style J fill:#bbf
     style S fill:#bbf
     style T fill:#bbf
-    style E fill:#bfb
-    style F fill:#bfb
-    style L fill:#bfb
     style GrStt fill:#bfb
     style GrTts fill:#bfb```
 
@@ -478,31 +465,9 @@ class TranslationEngineRegistry {
 
 ### Implemented Engines
 
-#### ✅ Google Cloud STT Engine
-
-**Status**: ✅ **COMPLETED** - Ready for production use
-
-**Files:**
-- `apps/web/src/lib/speech-engines/google-cloud-stt.ts` - Server STT wrapper (mic access only)
-- `apps/web/src/pages/conversation/hooks/useSpeechEngine.ts` - Audio capture + VAD + streaming (`speech-data`)
-- `apps/server/src/services/stt/google-stt-engine.ts` - Wrapper around Google Cloud Speech-to-Text streaming
-- `apps/server/src/services/stt.ts` - Google Cloud Speech-to-Text streaming (legacy, wrapped by engine)
-- `apps/server/src/socket.ts` - Server STT start/stop + transcript routing via SttEngineRegistry
-- `apps/server/src/services/socket-utils.ts` - Retry, validation, error handling, STT restart rate limiting
-- `apps/server/src/services/transcript-handler.ts` - Transcript processing, language grouping, translation emission
-
-**Features:**
-- ✅ **Server-Based Recognition** - Uses Google Cloud Speech API for reliable STT
-- ✅ **Streaming Support** - Real-time transcription with interim + final results
-- ✅ **Cross-platform audio encoding**
-  - WebM/Opus when supported
-  - PCM (LINEAR16) fallback when WebM is not supported (e.g. iOS Safari)
-- ✅ **Cost control** - Client-side VAD limits audio streaming when the user is not speaking
-- ✅ **User-Selectable** - Available in Profile engine preferences
-
 #### ✅ Grok STT Engine
 
-**Status**: ✅ **COMPLETED** - Added April 2026
+**Status**: ✅ **COMPLETED** (default)
 
 **Files:**
 - `apps/server/src/services/stt/grok-stt-engine.ts` - WebSocket streaming to `wss://api.x.ai/v1/stt`
@@ -511,10 +476,8 @@ class TranslationEngineRegistry {
 **Features:**
 - ✅ **Streaming via WebSocket** - Real-time transcription with `grok-stt` model
 - ✅ **25+ languages** with seamless language switching
-- ✅ **Speaker diarization** and word-level timestamps
 - ✅ **Multiple audio formats** - accepts WebM/Opus, PCM, and more
-- ✅ **Auto-fallback** - Falls back to Google Cloud STT if Grok is unavailable
-- ✅ **User-Selectable** - Available in Profile engine preferences
+- ✅ **User-Selectable** - Available in Profile engine preferences (Grok is default)
 
 **Environment Variables:**
 ```bash
@@ -522,35 +485,9 @@ GROK_API_KEY=your_grok_api_key
 GROK_API_BASE_URL=https://api.x.ai/v1  # optional
 ```
 
-#### ✅ Google Cloud TTS Engine
-
-**Status**: ✅ **COMPLETED** - Ready for production use
-
-**Files:**
-- `apps/server/src/services/tts/google-tts-engine.ts` - Wrapper around Google Cloud TTS
-- `apps/server/src/services/tts.ts` - Google Cloud TTS + filesystem cache (legacy, wrapped by engine)
-- `apps/server/src/routes/tts.ts` - `/api/tts/synthesize` endpoint via TtsEngineRegistry
-- `apps/web/src/lib/speech-engines/google-cloud-tts.ts` - Client playback via server endpoint
-
-**Features:**
-- ✅ **Server-side synthesis** - Client requests audio from `/api/tts/synthesize` and plays returned MP3
-- ✅ **Filesystem cache** - Server caches MP3 results under `cache/tts` and cleans old entries
-- ✅ **Curated voices** - Client maintains a curated list of voices for supported locales
-- ✅ **Reactive Registry** - SpeechEngineRegistry updates on preference changes
-- ✅ **Automatic Fallbacks** - Picks valid voices, falls back to standards if needed
-- ✅ **Global Infrastructure** - Works from any location
-- ✅ **High-Quality Voices** - Standard and Wavenet options
-- ✅ **User-Selectable** - Available in Profile engine preferences
-
-**Environment Variables:**
-```bash
-GOOGLE_CLOUD_PROJECT_ID=your-google-cloud-project-id
-GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json
-```
-
 #### ✅ Grok TTS Engine
 
-**Status**: ✅ **COMPLETED** - Added April 2026
+**Status**: ✅ **COMPLETED** (default)
 
 **Files:**
 - `apps/server/src/services/tts/grok-tts-engine.ts` - REST client to `POST /v1/tts`
@@ -559,10 +496,8 @@ GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json
 **Features:**
 - ✅ **5 expressive voices** - Ara (warm), Eve (default, energetic), Leo (authoritative), Rex (confident), Sal (neutral)
 - ✅ **20+ languages** with auto-detection
-- ✅ **Speech tags** - `[laugh]`, `[sigh]`, `[breath]`, `<whisper>`, `<emphasis>` for expressive delivery
-- ✅ **MP3 output** at 24kHz, compatible with existing Web Audio API playback
-- ✅ **Auto-fallback** - Falls back to Google Cloud TTS if Grok is unavailable
-- ✅ **User-Selectable** - Available in Profile engine preferences
+- ✅ **MP3 output** at 24kHz
+- ✅ **User-Selectable** - Available in Profile engine preferences (Grok is default)
 
 **Environment Variables:**
 ```bash
@@ -764,10 +699,7 @@ GROK_API_KEY=your_api_key_here
 
 | Variable | Description | Engine Type | Required |
 |----------|-------------|-------------|----------|
-| `GOOGLE_CLOUD_PROJECT_ID` | Google Cloud project ID | STT/TTS/Translation | Required for Google services |
-| `GOOGLE_APPLICATION_CREDENTIALS` | Google service account JSON path | STT/TTS/Translation | Required for Google services |
-| `GOOGLE_CLOUD_TRANSLATE_LOCATION` | Translation location (`global`, `us-central1`) | Translation | Optional |
-| `GROK_API_KEY` | Grok API key | Translation / STT / TTS | Optional |
+| `GROK_API_KEY` | Grok API key | Translation / STT / TTS | Required |
 | `GROK_API_BASE_URL` | Grok API base URL | Translation / STT / TTS | Optional |
 | `GROK_TRANSLATE_MODEL` | Grok model | Translation | Optional |
 
@@ -865,13 +797,10 @@ try {
 
 ```typescript
 // In apps/server/src/index.ts — register all engines at startup
-import { ttsRegistry, GoogleTtsEngine, GrokTtsEngine } from './services/tts/index.js';
-import { sttRegistry, GoogleSttEngine, GrokSttEngine } from './services/stt/index.js';
+import { ttsRegistry, GrokTtsEngine } from './services/tts/index.js';
+import { sttRegistry, GrokSttEngine } from './services/stt/index.js';
 
-ttsRegistry.registerEngine('google-cloud', new GoogleTtsEngine());
 ttsRegistry.registerEngine('grok-tts', new GrokTtsEngine());
-
-sttRegistry.registerEngine('google-cloud-stt', new GoogleSttEngine());
 sttRegistry.registerEngine('grok-stt', new GrokSttEngine());
 
 // In apps/server/src/socket.ts — load preference on auth
@@ -904,9 +833,9 @@ Socket logic is split across three files for testability:
 - Frontend: React Router + TanStack Query + shadcn/ui + Tailwind.
 - Auth: httpOnly cookie JWT.
 - Real-time: Socket.io (authenticated via JWT cookie).
-- Translation: Google Cloud Translation (asia-east2) + Grok (xAI) + Engine Abstraction Framework.
-- STT: Google Cloud Speech-to-Text + Grok STT (WebSocket streaming) + Engine Abstraction Framework.
-- TTS: Google Cloud Text-to-Speech + Grok TTS (REST) + Engine Abstraction Framework.
+- Translation: Grok (xAI) + Engine Abstraction Framework.
+- STT: Grok STT (WebSocket streaming) + Engine Abstraction Framework.
+- TTS: Grok TTS (REST) + Engine Abstraction Framework.
 - Audio Routing: Handled by device OS; app provides toggle for TTS on/off.
 - Deployment: PM2 + NGINX on Tencent Lighthouse HK.
 

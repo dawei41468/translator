@@ -227,7 +227,7 @@ export function setupSocketIO(io: Server) {
         });
 
         engine.onTranscript(async (transcript, isFinal) => {
-          if (isFinal) {
+          if (isFinal && transcript && transcript.trim().length > 0) {
             const sourceLang = data.languageCode.split('-')[0];
             await handleTranscriptLocal(transcript, sourceLang);
           }
@@ -365,6 +365,10 @@ export function setupSocketIO(io: Server) {
     const handleTranscriptLocal = async (transcript: string, sourceLang: string) => {
       if (!socket.roomId || !socket.userId) {
         handleSocketError(socket, "handleTranscript", new Error("Missing room or user ID"));
+        return;
+      }
+
+      if (!transcript || transcript.trim().length === 0) {
         return;
       }
 
@@ -524,6 +528,11 @@ export function setupSocketIO(io: Server) {
         // Don't emit error for transcript rate limiting to avoid spam
         return;
       }
+
+      if (!data.transcript || data.transcript.trim().length === 0) {
+        return; // Ignore empty transcripts (common from STT on silence/noise)
+      }
+
       handleTranscriptLocal(data.transcript, data.sourceLang);
     });
 

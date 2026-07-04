@@ -15,6 +15,7 @@ export const users = pgTable("users", {
     sttEngine?: string;
     ttsEngine?: string;
     translationEngine?: string;
+    ttsVoice?: string;
   }>(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => sql`now()`),

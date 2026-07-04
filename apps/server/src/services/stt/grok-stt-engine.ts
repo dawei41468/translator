@@ -77,9 +77,12 @@ export class GrokSttEngine implements SttEngine {
         try {
           const message = JSON.parse(data.toString());
           if (message.type === 'transcript' || message.text !== undefined) {
-            const text = message.text || message.transcript || '';
+            const text = (message.text || message.transcript || '').trim();
             const isFinal = message.is_final === true;
-            this.transcriptCallback?.(text, isFinal);
+            // Only forward non-empty transcripts; empty finals can happen on silence/noise
+            if (text.length > 0 || !isFinal) {
+              this.transcriptCallback?.(text, isFinal);
+            }
           }
         } catch {
           // Ignore non-JSON messages

@@ -28,11 +28,25 @@ router.post('/synthesize', authenticate, async (req, res) => {
     }
 
     const engine = ttsRegistry.getEngine(userId);
+    logger.info('TTS synthesis request', {
+      userId,
+      text: text.substring(0, 50),
+      languageCode,
+      engine: engine.getName(),
+      voiceName,
+      ssmlGender
+    });
+
     const audioContent = await engine.synthesize({
       text,
       languageCode,
       voiceName,
       ssmlGender,
+    });
+
+    logger.info('TTS synthesis success', {
+      userId,
+      audioLength: audioContent.length
     });
 
     res.set({
@@ -42,7 +56,12 @@ router.post('/synthesize', authenticate, async (req, res) => {
 
     res.send(audioContent);
   } catch (error) {
-    logger.error('TTS route error', { error, userId: req.user?.id });
+    logger.error('TTS route error', {
+      error: error instanceof Error ? error.message : String(error),
+      userId: req.user?.id,
+      text: text?.substring(0, 50),
+      languageCode
+    });
     res.status(500).json({ error: 'Failed to synthesize speech' });
   }
 });

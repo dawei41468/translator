@@ -41,6 +41,11 @@ export async function handleTranscript(params: {
     logError,
   } = params;
 
+  // Ignore empty or whitespace-only transcripts (can come from STT on silence, noise, or very short audio)
+  if (!transcript || transcript.trim().length === 0) {
+    return;
+  }
+
   const messageId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const normalizedSourceLang = normalizeLang(sourceLang);
 

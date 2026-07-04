@@ -1,7 +1,5 @@
 import { sql } from "drizzle-orm";
 import { db } from "../../../packages/db/src/index.js";
-import { normalizeGoogleCredentials } from "./config.js";
-normalizeGoogleCredentials();
 
 import { rooms } from "../../../packages/db/src/schema.js";
 import { logger } from "./logger.js";
@@ -12,14 +10,11 @@ import { setupSocketIO } from "./socket.js";
 import cron from "node-cron";
 
 import { CleanupService } from "./services/cleanup.js";
-import { ttsRegistry, GoogleTtsEngine, GrokTtsEngine } from "./services/tts/index.js";
-import { sttRegistry, GoogleSttEngine, GrokSttEngine } from "./services/stt/index.js";
+import { ttsRegistry, GrokTtsEngine } from "./services/tts/index.js";
+import { sttRegistry, GrokSttEngine } from "./services/stt/index.js";
 
-// Initialize speech engine registries
-ttsRegistry.registerEngine('google-cloud', new GoogleTtsEngine());
+// Initialize speech engine registries (Grok is default)
 ttsRegistry.registerEngine('grok-tts', new GrokTtsEngine());
-
-sttRegistry.registerEngine('google-cloud-stt', new GoogleSttEngine());
 sttRegistry.registerEngine('grok-stt', new GrokSttEngine());
 
 const startupStart = Date.now();
@@ -61,7 +56,7 @@ server.listen(PORT, "127.0.0.1", async () => {
   }
 
   // Service status
-  const translationConfigured = !!process.env.GOOGLE_CLOUD_PROJECT_ID || !!process.env.GROK_API_KEY;
+  const translationConfigured = !!process.env.GROK_API_KEY;
 
   // Startup time
   const startupTime = Date.now() - startupStart;

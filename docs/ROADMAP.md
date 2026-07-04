@@ -10,8 +10,8 @@
 **Status**: ✅ Completed  
 **Priority**: High (Critical Security)
 
-- [x] Move Google TTS synthesis to server-side proxy
-- [x] Remove client-side Google Cloud API key usage (server uses service account credentials)
+- [x] Server-side TTS (Grok)
+- [x] Removed client-side cloud provider keys (server-side only)
 - [x] Implement server-side synthesis caching (Local store with MD5)
 - [x] Implement audio playback from server-synthesized buffers
 
@@ -65,8 +65,8 @@
 - [x] Add comprehensive server-side unit tests (142 tests across 15 files)
   - Auth middleware + routes (login, register, guest, logout, change-password)
   - Rooms routes (create, join, capacity, collisions)
-  - Translation engines (Google + Grok) with cache, retry, error paths
-  - STT/TTS engines + registries (Google + Grok) with fallback logic
+  - Translation engines (Grok + extensible) with cache, retry, error paths
+  - STT/TTS engines + registries (Grok default + extensible) with fallback logic
   - Socket utilities (`withRetry`, validation, error handling, rate limits)
   - Transcript handler (language grouping, translation, solo mode)
   - Cleanup service (expired rooms, TTS cache)
@@ -234,13 +234,13 @@
 
 **April 2026 Updates:**
 - ✅ Backend engine registries now cover all three pillars: STT, TTS, and Translation
-- ✅ Grok STT added as streaming alternative to Google Cloud STT
+- ✅ Grok STT (default) added as streaming STT
 - ✅ Grok TTS added with 5 expressive voices (Ara, Eve, Leo, Rex, Sal)
 - ✅ All engines support per-user preferences with automatic fallback
 - ✅ Socket logic refactored: `socket-utils.ts` and `transcript-handler.ts` extracted for testability
 - ✅ 142 server-side unit tests added covering auth, rooms, engines, socket utilities, and transcript handling
 - ✅ Grok engines now read `process.env` at runtime for better testability
-- ✅ Google Translate `isAvailable()` now checks `GOOGLE_APPLICATION_CREDENTIALS` in addition to project ID
+- ✅ Grok is default translation provider
 
 **MVP Success Metrics Achieved:**
 - Accessibility: WCAG 2.1 AA compliance achieved

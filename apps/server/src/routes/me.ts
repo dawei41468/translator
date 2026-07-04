@@ -17,11 +17,12 @@ function normalizeEnginePreferences(preferences: any): any {
 
   const next = { ...preferences };
 
+  // Legacy mapping (web-speech-api was previous default)
   if (next.sttEngine === "web-speech-api") {
-    next.sttEngine = "google-cloud-stt";
+    next.sttEngine = "grok-stt";
   }
   if (next.ttsEngine === "web-speech-api") {
-    next.ttsEngine = "google-cloud";
+    next.ttsEngine = "grok-tts";
   }
 
   return next;
@@ -118,9 +119,9 @@ router.patch("/", authenticate, async (req, res) => {
       const normalizedPreferences = normalizeEnginePreferences(preferences);
 
       // Validate specific preference fields
-      const validSttEngines = ["google-cloud-stt", "grok-stt"];
-      const validTtsEngines = ["google-cloud", "grok-tts"];
-      const validTranslationEngines = ["google-translate", "grok-translate"];
+      const validSttEngines = ["grok-stt"];
+      const validTtsEngines = ["grok-tts"];
+      const validTranslationEngines = ["grok-translate"];
 
       if (normalizedPreferences.sttEngine && !validSttEngines.includes(normalizedPreferences.sttEngine)) {
         return res.status(400).json({ error: "Invalid STT engine" });

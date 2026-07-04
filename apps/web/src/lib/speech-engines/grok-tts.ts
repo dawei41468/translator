@@ -3,6 +3,11 @@ import { apiClient } from '../api';
 
 export class GrokTtsEngine implements TtsEngine {
   private audioContext: AudioContext | null = null;
+  private voicePreference?: string;
+
+  constructor(voicePreference?: string) {
+    this.voicePreference = voicePreference;
+  }
 
   isAvailable(): boolean {
     return true; // Server-side, always available as long as server is up
@@ -61,17 +66,40 @@ export class GrokTtsEngine implements TtsEngine {
   }
 
   private getVoiceConfig(language: string): { languageCode: string; voiceName: string; ssmlGender: string } {
-    const configs: Record<string, { languageCode: string; voiceName: string; ssmlGender: string }> = {
-      'en': { languageCode: 'en-US', voiceName: 'eve', ssmlGender: 'FEMALE' },
-      'zh': { languageCode: 'cmn-CN', voiceName: 'eve', ssmlGender: 'FEMALE' },
-      'ko': { languageCode: 'ko-KR', voiceName: 'eve', ssmlGender: 'FEMALE' },
-      'es': { languageCode: 'es-ES', voiceName: 'eve', ssmlGender: 'FEMALE' },
-      'ja': { languageCode: 'ja-JP', voiceName: 'eve', ssmlGender: 'FEMALE' },
-      'it': { languageCode: 'it-IT', voiceName: 'eve', ssmlGender: 'FEMALE' },
-      'de': { languageCode: 'de-DE', voiceName: 'eve', ssmlGender: 'FEMALE' },
-      'nl': { languageCode: 'nl-NL', voiceName: 'eve', ssmlGender: 'FEMALE' },
+    // Use user's voice preference if set, otherwise use language-specific default
+    const voiceName = this.voicePreference || this.getDefaultVoiceForLanguage(language);
+
+    const langCodes: Record<string, string> = {
+      'en': 'en-US',
+      'zh': 'cmn-CN',
+      'ko': 'ko-KR',
+      'es': 'es-ES',
+      'ja': 'ja-JP',
+      'it': 'it-IT',
+      'de': 'de-DE',
+      'nl': 'nl-NL',
     };
-    return configs[language] || configs['en'];
+
+    return {
+      languageCode: langCodes[language] || 'en-US',
+      voiceName,
+      ssmlGender: 'FEMALE',
+    };
+  }
+
+  private getDefaultVoiceForLanguage(language: string): string {
+    // Language-specific voice defaults
+    const langVoices: Record<string, string> = {
+      'en': 'eve',
+      'zh': 'eve',  // Eve handles tones well
+      'ko': 'eve',
+      'ja': 'eve',
+      'es': 'ara',  // Ara sounds warm for Romance languages
+      'it': 'ara',
+      'de': 'leo',  // Leo sounds authoritative for German
+      'nl': 'sal',  // Sal is balanced for Dutch
+    };
+    return langVoices[language] || 'eve';
   }
 
   private async playAudioBuffer(audioBuffer: AudioBuffer): Promise<void> {

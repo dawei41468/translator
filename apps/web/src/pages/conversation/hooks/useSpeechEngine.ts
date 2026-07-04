@@ -108,17 +108,39 @@ export function useSpeechEngine({
       return;
     }
 
+    if (import.meta.env.DEV) {
+      console.log(`Using TTS engine: ${ttsEngine.getName()}`);
+    }
+
     const locale = getTtsLocale(language);
     try {
+      // Validate text before sending
+      if (!text || text.trim().length === 0) {
+        throw new Error('No text to synthesize');
+      }
+      if (text.length > 5000) {
+        throw new Error('Text too long for speech synthesis');
+      }
+
       setTtsStatus(prev => ({ ...prev, isSpeaking: true, lastError: undefined, lastAttempt: `Speaking (${locale})` }));
       await ttsEngine.speak(text, language || 'en');
       setTtsStatus(prev => ({ ...prev, isSpeaking: false, lastError: undefined, lastAttempt: `Finished (${locale})` }));
     } catch (error) {
-      setTtsStatus(prev => ({ ...prev, lastError: `Error: ${error}`, isSpeaking: false, lastAttempt: `Failed (${locale})` }));
-      toast.error(tRef.current('conversation.ttsError'));
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      setTtsStatus(prev => ({ ...prev, lastError: `Error: ${errorMessage}`, isSpeaking: false, lastAttempt: `Failed (${locale})` }));
+
+      // Show more specific error messages
+      if (errorMessage.includes('AudioContext') || errorMessage.includes('resume')) {
+        toast.error(tRef.current('conversation.ttsError', 'Speech synthesis failed - try interacting with the page first'));
+      } else if (errorMessage.includes('permission') || errorMessage.includes('denied')) {
+        toast.error(tRef.current('conversation.ttsError', 'Speech synthesis permission denied'));
+      } else {
+        toast.error(tRef.current('conversation.ttsError', 'Speech synthesis failed'));
+      }
+
       socketRef.current?.emit('client-error', {
         code: 'TTS_FAILED',
-        message: error instanceof Error ? error.message : String(error),
+        message: errorMessage,
         details: { text: text.substring(0, 50), language }
       });
     }

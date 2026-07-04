@@ -312,7 +312,7 @@ const Conversation = () => {
         ];
       });
 
-      if (audioEnabledRef.current) {
+      if (audioEnabledRef.current && data.translatedText && data.translatedText.trim().length > 0) {
         speakTextRef.current(data.translatedText, data.targetLang);
       }
     });

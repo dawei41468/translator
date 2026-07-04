@@ -15,7 +15,7 @@ export class TtsEngineRegistry {
 
   getEngine(userId?: string): TtsEngine {
     const preferredId = userId ? this.userPreferences.get(userId) : undefined;
-    const defaultId = 'google-cloud';
+    const defaultId = 'grok-tts';
     const id = preferredId || defaultId;
 
     const engine = this.engines.get(id);

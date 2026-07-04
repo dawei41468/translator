@@ -91,9 +91,9 @@ const Profile = () => {
 
   const preferences = user.preferences || {};
 
-	const DEFAULT_STT_ENGINE_ID = "google-cloud-stt";
-	const DEFAULT_TTS_ENGINE_ID = "google-cloud";
-	const DEFAULT_TRANSLATION_ENGINE_ID = "google-translate";
+	const DEFAULT_STT_ENGINE_ID = "grok-stt";
+	const DEFAULT_TTS_ENGINE_ID = "grok-tts";
+	const DEFAULT_TRANSLATION_ENGINE_ID = "grok-translate";
 
 	const allSttEngines = speechEngineRegistry.getAvailableSttEngines();
 	const sttEnginesNoMocks = allSttEngines.filter((e) => !e.id.startsWith("mock-"));
@@ -116,7 +116,6 @@ const Profile = () => {
 					: availableTtsEngines[0]?.id || DEFAULT_TTS_ENGINE_ID;
 
 	const availableTranslationEngines = [
-		{ id: "google-translate", name: "Google Cloud Translation" },
 		{ id: "grok-translate", name: "Grok (xAI) Translation" },
 	];
 
@@ -292,6 +291,37 @@ const Profile = () => {
                 {t('profile.ttsEngineDescription', 'Engine used for text-to-speech playback')}
               </p>
             </div>
+
+            {resolvedTtsEngineId === 'grok-tts' && (
+              <div>
+                <Label htmlFor="ttsVoice">{t('profile.ttsVoice', 'TTS Voice')}</Label>
+                <Select
+                  value={preferences.ttsVoice || 'eve'}
+                  onValueChange={(value) => {
+                    const newPreferences = {
+                      ...preferences,
+                      ttsVoice: value,
+                    };
+                    updateProfileMutation.mutate({ preferences: newPreferences });
+                  }}
+                  disabled={updateProfileMutation.isPending || user.isGuest}
+                >
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="eve">Eve (energetic)</SelectItem>
+                    <SelectItem value="ara">Ara (warm)</SelectItem>
+                    <SelectItem value="leo">Leo (authoritative)</SelectItem>
+                    <SelectItem value="rex">Rex (confident)</SelectItem>
+                    <SelectItem value="sal">Sal (balanced)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {t('profile.ttsVoiceDescription', 'Voice used for Grok TTS playback')}
+                </p>
+              </div>
+            )}
 
             <div>
               <Label htmlFor="translationEngine">{t('profile.defaultTranslationEngine', 'Default Translation Engine')}</Label>

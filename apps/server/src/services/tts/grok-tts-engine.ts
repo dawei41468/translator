@@ -1,7 +1,8 @@
 import { TtsEngine, type TtsSynthesizeOptions } from './tts-engine.js';
 import { logger } from '../../logger.js';
 
-
+const VALID_VOICES = ['ara', 'eve', 'leo', 'rex', 'sal'] as const;
+type VoiceId = typeof VALID_VOICES[number];
 
 export class GrokTtsEngine implements TtsEngine {
   isAvailable(): boolean {
@@ -20,7 +21,7 @@ export class GrokTtsEngine implements TtsEngine {
       throw new Error('GROK_API_KEY is not configured');
     }
 
-    const voice = this.mapVoiceName(options.voiceName) || 'eve';
+    const voice = this.resolveVoice(options.voiceName, options.languageCode);
     const sampleRate = 24000;
 
     const res = await fetch(`${baseUrl}/tts`, {
@@ -48,13 +49,49 @@ export class GrokTtsEngine implements TtsEngine {
     return Buffer.from(arrayBuffer);
   }
 
-  private mapVoiceName(voiceName?: string): string | undefined {
-    const validVoices = ['ara', 'eve', 'leo', 'rex', 'sal'];
-    if (!voiceName) return undefined;
-    const lower = voiceName.toLowerCase();
-    if (validVoices.includes(lower)) return lower;
-    // Fallback mappings from Google voice names
-    if (lower.includes('male')) return 'leo';
+  private resolveVoice(voiceName?: string, languageCode?: string): VoiceId {
+    // 1. If a valid voice name is provided, use it
+    if (voiceName) {
+      const lower = voiceName.toLowerCase();
+      if (VALID_VOICES.includes(lower as VoiceId)) {
+        return lower as VoiceId;
+      }
+      // Handle legacy/alias voice name mappings (e.g. gender hints)
+      if (lower.includes('male')) return 'leo';
+    }
+
+    // 2. Use language-specific defaults
+    if (languageCode) {
+      return this.getDefaultVoiceForLanguage(languageCode);
+    }
+
+    // 3. Final fallback
     return 'eve';
+  }
+
+  private getDefaultVoiceForLanguage(languageCode: string): VoiceId {
+    // Map language codes to sensible default voices
+    const langVoices: Record<string, VoiceId> = {
+      'en': 'eve',
+      'en-US': 'eve',
+      'en-GB': 'eve',
+      'zh': 'eve',
+      'cmn-CN': 'eve',
+      'ko': 'eve',
+      'ko-KR': 'eve',
+      'ja': 'eve',
+      'ja-JP': 'eve',
+      'es': 'ara',
+      'es-ES': 'ara',
+      'it': 'ara',
+      'it-IT': 'ara',
+      'de': 'leo',
+      'de-DE': 'leo',
+      'nl': 'sal',
+      'nl-NL': 'sal',
+    };
+
+    // Try exact match first, then language prefix
+    return langVoices[languageCode] || langVoices[languageCode.split('-')[0]] || 'eve';
   }
 }

@@ -11,6 +11,7 @@ export interface AuthUser {
     sttEngine?: string;
     ttsEngine?: string;
     translationEngine?: string;
+    ttsVoice?: string;
   };
 }
 

@@ -2,7 +2,40 @@
 
 **MVP Status**: ✅ **COMPLETED** - End-to-end speech translation working across devices (MacBook ↔ Android)
 **Current Progress**: 100% MVP ready for production deployment
-**Last Updated**: April 22, 2026
+**Last Updated**: July 4, 2026
+
+## 🚀 Voice-First Evolution (July 2026)
+
+### Refactor: Pure Grok Stack
+**Status**: ✅ Completed  
+**Priority**: High
+
+- [x] Remove all Google Cloud STT/TTS/Translate dependencies
+- [x] Consolidate on Grok engines only (no fallbacks)
+- [x] Update registries, handlers, frontend engines, schema, and tests
+- [x] Server-side ephemeral token support for Grok Voice
+
+**Code pointers:**
+- New: `apps/server/src/routes/voice.ts`
+- Refactored: `apps/server/src/services/stt/`, `tts/`, `translation/`, `socket.ts`
+- Frontend: `apps/web/src/lib/speech-engines/`, `pages/Practice.tsx`
+
+### Practice Mode (Grok Voice S2S)
+**Status**: ✅ Completed (Phase 1)  
+**Priority**: High
+
+- [x] Dedicated `/practice` route + bottom nav
+- [x] Language pair selection (home + target)
+- [x] Direct speech-to-speech using `grok-voice-think-fast-1.0`
+- [x] Input transcription + output translated speech + text
+- [x] Server VAD, ephemeral tokens, PCM streaming + playback
+
+**Code pointers:**
+- `apps/web/src/pages/Practice.tsx`
+- `apps/server/src/routes/voice.ts`
+- Supporting: BottomNav, App.tsx, api.ts, locales
+
+**Next for Practice**: Polish (waveforms, better live text, error states).
 
 ## 🚀 Post-MVP Evolution (Jan 2026)
 

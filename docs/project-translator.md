@@ -3,7 +3,7 @@
 **Quick Summary**: A Progressive Web App (PWA) that enables seamless two-way real-time translated conversations between two users on different devices (iOS/Android). Users join a private room, select their language, speak naturally (via device mic or Bluetooth headset), and instantly hear/see the translation in their own language through speaker or Bluetooth headset.
 
 **Live URL**: https://translator.studiodtw.net
-**Current Progress**: 100% ✅ MVP COMPLETE (Auth/infra/deploy/db/backend-core/frontend-core complete — January 6, 2026)
+**Current Progress**: MVP complete + major post-MVP evolution (July 2026): Full Grok Voice speech-to-speech for Practice mode, complete removal of Google Cloud dependencies.
 **Target MVP**: ✅ ACHIEVED - Ready for production deployment
 
 **Engineering Patterns (Canonical)**: Follow existing patterns exactly (see `CODEBASE-PATTERNS.md`) for coding conventions, API design, auth, deployment, and architectural decisions.
@@ -36,15 +36,16 @@
 
 ## Translation Provider Decision (Locked)
 
-**Current Default Provider**: Grok (xAI)
+**Current Default Provider**: Grok (xAI) — pure Grok stack (no Google fallback)
 
 **Implementation Notes (Current Code)**:
-- The server uses engine registries for all three pillars (Grok is default):
+- Engine registries for STT, TTS, and Translation (Grok-only):
   - **Translation**: `grok-translate`
-  - **STT**: `grok-stt`
+  - **STT**: `grok-stt` (WebSocket streaming)
   - **TTS**: `grok-tts`
+- **Practice Mode**: Direct Grok Voice speech-to-speech (`grok-voice-think-fast-1.0` realtime) for natural home→target translation.
 - All engines require `GROK_API_KEY`.
-- Architecture supports adding new providers (e.g. mimo).
+- Server issues ephemeral tokens for secure client-side Voice sessions.
 
 ## TTS Strategy
 
@@ -54,16 +55,35 @@
   - 5 expressive voices with speech tags (`[laugh]`, `<whisper>`, etc.)
 - Benefit: no client-side API keys; swappable engines.
 
-**Phase 2 — Premium Voices (Completed April 2026)**:
-- ✅ Grok TTS integrated as an additional option (not replacement)
-- ✅ Grok STT integrated as an additional option (WebSocket streaming, 25+ languages)
-- Users select engines per-pillar in Profile settings.
-- All Grok engines auto-fallback to Google if unavailable.
+**Phase 2 — Premium Voices & Voice Evolution (Completed 2026)**:
+- ✅ Grok TTS + Grok STT as primary (no Google fallback)
+- ✅ Full removal of Google Cloud STT/TTS/Translate
+- ✅ Grok Voice speech-to-speech for Practice mode (direct realtime, sub-second natural translation)
+- Users select engines per-pillar in Profile; Practice uses dedicated S2S path.
 
 **Future Experiments**:
-- **iFlyTek Online TTS** (Mandarin priority) — best-in-class Mandarin voices, low latency from HK/China servers.
-- Perceived naturalness feedback (thumbs up/down per utterance).
-- Cost-per-minute tracking across engines.
+- More advanced room orchestration with per-speaker Voice sessions.
+- Perceived naturalness feedback.
+- Cost tracking for voice minutes.
+
+## Practice Mode (New in 2026)
+
+Dedicated first-class experience replacing the old "solo mode" toggle.
+
+- Accessed via bottom nav (Mic icon) → `/practice`
+- Select home language (what you speak) + target language (what you want to hear).
+- Speak → Grok Voice speech-to-speech translates and speaks back naturally in the target language.
+- Shows both source transcript ("You said") and translated text ("Heard in").
+- Ideal for:
+  - Solo testing of the voice pipeline.
+  - Language learning / deliberate practice.
+
+**Implementation**:
+- Direct client WebSocket to Grok Voice realtime API (via server-issued ephemeral tokens for security).
+- Server VAD for natural turn-taking.
+- No 3-pipeline chain for this flow.
+
+See `docs/rooms-and-practice-redesign.md` for architecture notes.
 
 ## User Flow (QR-First with Room Code Fallback)
 

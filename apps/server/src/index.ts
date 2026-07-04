@@ -45,7 +45,7 @@ setupSocketIO(io);
 // Initialize cleanup service
 CleanupService.init();
 
-server.listen(PORT, "0.0.0.0", async () => {
+server.listen(PORT, "127.0.0.1", async () => {
   // Configuration validation
   const requiredEnvVars = ['DATABASE_URL', 'JWT_SECRET'];
   const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);

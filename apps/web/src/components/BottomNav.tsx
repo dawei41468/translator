@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { Home, User } from "lucide-react";
+import { Home, Mic, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
 
@@ -9,6 +9,7 @@ const BottomNav = () => {
 
   const navItems = [
     { to: "/dashboard", label: t('nav.dashboard'), icon: Home },
+    { to: "/practice", label: t('nav.practice'), icon: Mic },
     { to: "/profile", label: t('nav.profile'), icon: User },
   ];
 

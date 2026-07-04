@@ -2,6 +2,7 @@
   "app.name": "实时翻译器",
   "app.description": "与任何人、在任何地方进行实时多语言对话。",
   "nav.dashboard": "仪表板",
+  "nav.practice": "练习",
   "nav.profile": "个人资料",
   "nav.settings": "设置",
   "participants.title": "参与者",

@@ -8,6 +8,7 @@ import { authRouter } from "./routes/auth.js";
 import { meRouter } from "./routes/me.js";
 import { roomsRouter } from "./routes/rooms.js";
 import { ttsRouter } from "./routes/tts.js";
+import { voiceRouter } from "./routes/voice.js";
 import { authenticate } from "./middleware/auth.js";
 import { requestLogger } from "./middleware/logger.js";
 
@@ -124,6 +125,7 @@ app.use("/api/me", meRouter);
 app.use("/api/rooms", roomLimiter, authenticate, roomsRouter);
 
 app.use("/api/tts", authenticate, ttsRouter);
+app.use("/api/voice", authenticate, voiceRouter);
 
 app.get("/api/health", (_, res) => res.json({ status: "ok" }));
 app.get("/favicon.ico", (_, res) => res.status(204).end());

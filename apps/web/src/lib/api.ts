@@ -167,6 +167,13 @@ class ApiClient {
       }>;
     }>(`/api/rooms/${roomCode}`);
   }
+
+  // Voice (Grok Voice realtime) - for Practice mode
+  async getVoiceEphemeralToken(): Promise<{ value: string; expires_at: string }> {
+    return this.request<{ value: string; expires_at: string }>("/api/voice/ephemeral", {
+      method: "POST",
+    });
+  }
 }
 
 export const apiClient = new ApiClient(API_BASE_URL);

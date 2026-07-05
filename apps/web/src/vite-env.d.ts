@@ -81,4 +81,5 @@ declare var SpeechRecognition: {
 interface Window {
   SpeechRecognition: typeof SpeechRecognition;
   webkitSpeechRecognition: typeof SpeechRecognition;
+  __practiceAudioSent?: boolean;
 }

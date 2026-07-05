@@ -1,7 +1,7 @@
 # First-Principles Redesign: Practice + Multi-User Rooms
 
-**Date**: 2026-07-04
-**Status**: Practice implemented (July 2026). Rooms architecture pending implementation.
+**Date**: 2026-07-04  
+**Status**: Practice implemented and polished (July 2026). Rooms architecture pending implementation.
 **Context**: Moving beyond the original 3-pillar (STT + Translation + TTS) architecture now that true speech-to-speech (Grok Voice `grok-voice-think-fast-1.0`) is available. User is willing to change the message UI and re-shape features.
 
 ## Status Update (July 4, 2026)
@@ -13,13 +13,14 @@
 - ✅ Grok Voice ephemeral token backend + realtime client integration.
 - ✅ Input transcription + output translated text + spoken audio working.
 - ✅ Bottom nav, routing, and basic UI in place.
+- ✅ Practice polish: real-time microphone waveform visualizer, improved live transcription streaming, and explicit error-state UI with retry.
 
 **Still Left to Implement** (see sections below):
 - Full multi-user Rooms redesign with language-aware delivery.
 - Selective spoken audio (only cross-language) + text for same-language.
 - New voice-centric UI for rooms (utterance cards instead of traditional bubbles).
 - Per-speaker or orchestrated Voice sessions for rooms.
-- Polish on Practice (waveforms, live text, error handling, AudioWorklet).
+- AudioWorklet playback path in Practice (deferred from initial polish pass).
 - Integration of rooms architecture into actual code (currently design doc only).
 
 ## 1. Locked Naming

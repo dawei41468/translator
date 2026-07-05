@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { haptics } from "@/lib/haptics";
+import { AudioWaveform } from "@/components/AudioWaveform";
+import { useRecordingPulse } from "@/lib/useRecordingPulse";
 
 interface ConversationControlsProps {
   isRecording: boolean;
@@ -40,6 +42,8 @@ export function ConversationControls({
   const stopIssuedRef = useRef(false);
   const isRecordingRef = useRef(isRecording);
   const prevIsRecordingRef = useRef(isRecording);
+
+  const { getValues: getPulseValues } = useRecordingPulse(isRecording);
 
   useEffect(() => {
     isRecordingRef.current = isRecording;
@@ -151,7 +155,16 @@ export function ConversationControls({
   }, [canStartRecording, connectionStatus, isLocked, isRecording, pushToTalkEnabled, recordingDisabled, t]);
 
   return (
-    <footer className="relative p-4 pb-8 sm:p-6 overscroll-contain touch-none" role="contentinfo">
+    <>
+      {/* Immersive dim overlay when recording */}
+      {isRecording && (
+        <div
+          className="fixed inset-0 z-30 bg-black/40 animate-in fade-in duration-300"
+          aria-hidden="true"
+        />
+      )}
+
+      <footer className="relative z-40 p-4 pb-8 sm:p-6 overscroll-contain touch-none" role="contentinfo">
       <div className="mb-4 flex flex-col items-center gap-2">
         {!canStartRecording && (
           <div className="text-center">
@@ -190,6 +203,17 @@ export function ConversationControls({
           )}
 
           <div className="relative">
+            {/* Glow + waveform ring for active recording */}
+            {isRecording && (
+              <>
+                <div className="absolute -inset-6 rounded-full bg-primary/20 blur-2xl animate-pulse" />
+                <div className="absolute -inset-3 rounded-full border-2 border-primary/30" />
+                <div className="absolute -inset-8 flex items-center justify-center pointer-events-none">
+                  <AudioWaveform values={getPulseValues()} barCount={32} mirrored className="h-full opacity-40" />
+                </div>
+              </>
+            )}
+
             {/* Ripple Effects for Active Recording */}
             {isRecording && (
               <>
@@ -265,6 +289,7 @@ export function ConversationControls({
           )}
         </div>
       </div>
-    </footer>
+      </footer>
+    </>
   );
 }

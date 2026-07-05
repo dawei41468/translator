@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter } from 'react-router-dom';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
@@ -140,14 +140,8 @@ describe('Dashboard', () => {
 
     renderDashboard();
 
-    const fab = screen.getByTestId('dashboard-fab');
-    expect(fab).toBeInTheDocument();
-
-    fireEvent.click(fab);
-
-    expect(screen.getByText('room.quickActions')).toBeInTheDocument();
-    expect(screen.getAllByText('room.create').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('room.scan').length).toBeGreaterThan(0);
-    expect(screen.getByText('room.enterCode')).toBeInTheDocument();
+    // FAB removed during redesign; quick actions are now surfaced directly on the dashboard.
+    expect(screen.getByTestId('create-room-button')).toBeInTheDocument();
+    expect(screen.getByTestId('join-room-button')).toBeInTheDocument();
   });
 });

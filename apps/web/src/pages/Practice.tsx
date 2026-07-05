@@ -1,6 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { useTranslation } from "react-i18next";
-import { Mic, MicOff, Volume2 } from "lucide-react";
+import { Mic, MicOff, Volume2, AlertCircle, RotateCcw } from "lucide-react";
 import { LANGUAGES, formatLanguageLabel } from "@/lib/languages";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,16 +12,27 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { apiClient } from "@/lib/api";
+import { AudioWaveform } from "@/components/AudioWaveform";
+import { useAudioVisualizer } from "@/lib/useAudioVisualizer";
+import { cn } from "@/lib/utils";
+
+type PracticeStatus = "idle" | "connecting" | "listening" | "processing" | "speaking";
+
+type PracticeError = {
+  title: string;
+  message: string;
+  canRetry: boolean;
+};
 
 const Practice = () => {
-  const { t } = useTranslation();
-
   const [homeLang, setHomeLang] = useState("en");
   const [targetLang, setTargetLang] = useState("zh");
   const [isPracticing, setIsPracticing] = useState(false);
-  const [status, setStatus] = useState<"idle" | "listening" | "processing" | "speaking">("idle");
+  const [status, setStatus] = useState<PracticeStatus>("idle");
   const [lastUtterance, setLastUtterance] = useState<string>("");
   const [translatedText, setTranslatedText] = useState<string>("");
+  const [error, setError] = useState<PracticeError | null>(null);
+  const [visualizerValues, setVisualizerValues] = useState<number[]>([]);
 
   const homeLanguage = LANGUAGES.find(l => l.code === homeLang);
   const targetLanguage = LANGUAGES.find(l => l.code === targetLang);
@@ -38,10 +48,43 @@ const Practice = () => {
   const isPracticingRef = useRef(false);
   const SAMPLE_RATE = 24000;
 
+  const { start: startVisualizer, stop: stopVisualizer } = useAudioVisualizer();
+
   const getLangName = (code: string) => {
     const lang = LANGUAGES.find(l => l.code === code);
     return lang?.nativeName || code;
   };
+
+  const setFatalError = useCallback((title: string, message: string) => {
+    setError({ title, message, canRetry: true });
+    void stopPracticeInternal();
+  }, []);
+
+  const playNextChunk = useCallback(() => {
+    if (!audioContextRef.current || audioQueueRef.current.length === 0) {
+      isPlayingRef.current = false;
+      if (isPracticingRef.current) setStatus("listening");
+      return;
+    }
+
+    isPlayingRef.current = true;
+    setStatus("speaking");
+
+    const ctx = audioContextRef.current;
+    const float32 = audioQueueRef.current.shift()!;
+    const buffer = ctx.createBuffer(1, float32.length, SAMPLE_RATE);
+    buffer.getChannelData(0).set(float32);
+
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(ctx.destination);
+
+    source.onended = () => {
+      playNextChunk();
+    };
+
+    source.start();
+  }, []);
 
   const playAudioChunk = useCallback(async (base64Audio: string) => {
     if (!audioContextRef.current) {
@@ -67,58 +110,69 @@ const Practice = () => {
     }
 
     audioQueueRef.current.push(float32);
-    console.log('[Practice] Received audio delta, queue length:', audioQueueRef.current.length);
     if (!isPlayingRef.current) {
       playNextChunk();
     }
-  }, []);
+  }, [playNextChunk]);
 
-  const playNextChunk = () => {
-    if (!audioContextRef.current || audioQueueRef.current.length === 0) {
-      isPlayingRef.current = false;
-      if (isPracticing) setStatus("listening");
-      return;
+  const stopPracticeInternal = useCallback(() => {
+    isPracticingRef.current = false;
+    setIsPracticing(false);
+    setStatus("idle");
+    stopVisualizer();
+    setVisualizerValues([]);
+
+    if (wsRef.current) {
+      try {
+        wsRef.current.send(JSON.stringify({ type: "input_audio_buffer.commit" }));
+        wsRef.current.close();
+      } catch {}
+      wsRef.current = null;
     }
 
-    isPlayingRef.current = true;
-    setStatus("speaking");
+    if (processorRef.current) {
+      try { processorRef.current.disconnect(); } catch {}
+      processorRef.current = null;
+    }
+    if (inputSourceRef.current) {
+      try { inputSourceRef.current.disconnect(); } catch {}
+      inputSourceRef.current = null;
+    }
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach(t => t.stop());
+      mediaStreamRef.current = null;
+    }
+    if (audioContextRef.current) {
+      audioContextRef.current.close().catch(() => {});
+      audioContextRef.current = null;
+    }
 
-    const ctx = audioContextRef.current;
-    const float32 = audioQueueRef.current.shift()!;
-    const buffer = ctx.createBuffer(1, float32.length, SAMPLE_RATE);
-    buffer.getChannelData(0).set(float32);
+    audioQueueRef.current = [];
+    isPlayingRef.current = false;
+  }, [stopVisualizer]);
 
-    const source = ctx.createBufferSource();
-    source.buffer = buffer;
-    source.connect(ctx.destination);
+  const stopPractice = useCallback(() => {
+    setLastUtterance("");
+    setTranslatedText("");
+    stopPracticeInternal();
+  }, [stopPracticeInternal]);
 
-    console.log('[Practice] Playing audio chunk');
-
-    source.onended = () => {
-      playNextChunk();
-    };
-
-    source.start();
-  };
-
-  const connectVoice = async () => {
+  const connectVoice = useCallback(async () => {
     try {
-      // 1. Get ephemeral token from server
+      setError(null);
+      setStatus("connecting");
       const tokenData = await apiClient.getVoiceEphemeralToken();
       const ephemeralToken = tokenData.value;
 
-      // 2. Connect WS using protocol for browser (no custom headers)
       const wsUrl = `wss://api.x.ai/v1/realtime?model=grok-voice-think-fast-1.0`;
       const ws = new WebSocket(wsUrl, [`xai-client-secret.${ephemeralToken}`]);
       wsRef.current = ws;
 
       ws.onopen = () => {
-        console.log('[Practice] WS connected, sending session.update');
-        // Configure session for translation practice
         const homeName = getLangName(homeLang);
         const targetName = getLangName(targetLang);
 
-        const instructions = 
+        const instructions =
           `You are a helpful language practice partner. ` +
           `The user is speaking in ${homeName}. ` +
           `Listen carefully to what they say. ` +
@@ -146,78 +200,61 @@ const Practice = () => {
           },
         }));
 
-        // Start capturing mic
         startAudioCapture(ws);
       };
 
-      ws.onerror = (err) => {
-        console.error('[Practice] WS error', err);
-        stopPractice();
+      ws.onerror = () => {
+        setFatalError(
+          "Voice connection failed",
+          "Could not connect to the voice service. Please check your network and try again."
+        );
       };
 
-      ws.onclose = (ev) => {
-        console.log('[Practice] WS closed', ev.code, ev.reason);
-        // Only stop if we are still in practicing state (avoid double stop)
+      ws.onclose = () => {
         if (isPracticingRef.current) {
-          stopPractice();
+          setFatalError(
+            "Voice session ended",
+            "The connection to the voice service closed unexpectedly."
+          );
         }
       };
 
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
-        console.log('[Practice] WS event:', data.type);
 
         if (data.type === "response.output_audio.delta" && data.delta) {
           playAudioChunk(data.delta);
         }
 
-        // Input transcription (what the user said in home language)
         if (data.type === 'conversation.item.input_audio_transcription.completed' && data.transcript) {
           setLastUtterance(data.transcript);
         }
 
-        // Output translation transcript (what the model spoke in target language)
         if (data.type === 'response.output_audio_transcript.delta' && data.transcript) {
-          // Append delta for streaming effect, or replace if full
           setTranslatedText(prev => prev + data.transcript);
         }
         if (data.type === 'response.output_audio_transcript.done' && data.transcript) {
-          setTranslatedText(data.transcript); // ensure final
+          setTranslatedText(data.transcript);
         }
 
         if (data.type === "input_audio_buffer.speech_started") {
-          // New utterance starting - clear previous translation
           setTranslatedText("");
         }
 
         if (data.type === "response.done") {
-          if (isPracticing) setStatus("listening");
+          if (isPracticingRef.current) setStatus("listening");
         }
 
         if (data.type === "error") {
-          console.error('[Practice] Voice error:', data);
-          stopPractice();
-        }
-
-        if (data.type === "session.created") {
-          console.log('[Practice] Session created');
+          const message = data.error?.message || data.message || "An error occurred in the voice session.";
+          setFatalError("Voice error", message);
         }
       };
-
-      ws.onerror = (err) => {
-        console.error("Voice WS error", err);
-        stopPractice();
-      };
-
-      ws.onclose = () => {
-        stopPractice();
-      };
-
     } catch (err) {
-      console.error("Failed to start voice practice", err);
-      stopPractice();
+      const message = err instanceof Error ? err.message : "Failed to start voice practice.";
+      setFatalError("Could not start practice", message);
     }
-  };
+  }, [homeLang, targetLang, playAudioChunk, setFatalError]);
 
   const startAudioCapture = async (ws: WebSocket) => {
     try {
@@ -230,7 +267,6 @@ const Practice = () => {
           channelCount: { ideal: 1 },
         },
       });
-      console.log('[Practice] Mic stream acquired');
       mediaStreamRef.current = stream;
 
       const ctx = new (window.AudioContext || (window as any).webkitAudioContext)({
@@ -245,7 +281,6 @@ const Practice = () => {
       const source = ctx.createMediaStreamSource(stream);
       inputSourceRef.current = source;
 
-      // Use ScriptProcessor for raw PCM chunks (reliable for streaming)
       const processor = ctx.createScriptProcessor(4096, 1, 1);
       processorRef.current = processor;
 
@@ -259,7 +294,6 @@ const Practice = () => {
           pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
         }
 
-        // Base64 encode and send
         const bytes = new Uint8Array(pcm16.buffer);
         let binary = "";
         for (let i = 0; i < bytes.byteLength; i++) {
@@ -268,11 +302,8 @@ const Practice = () => {
         const base64 = btoa(binary);
 
         if (!window.__practiceAudioSent) {
-          console.log('[Practice] First audio chunk sent to WS');
           window.__practiceAudioSent = true;
         }
-        // Throttle log to avoid spam
-        if (Math.random() < 0.02) console.log('[Practice] streaming audio...');
 
         ws.send(JSON.stringify({
           type: "input_audio_buffer.append",
@@ -282,74 +313,30 @@ const Practice = () => {
 
       source.connect(processor);
 
-      // Connect through a zero-gain node so the audio graph stays active (required for ScriptProcessor to fire)
-      // without audible echo from the mic.
       const silentGain = ctx.createGain();
       silentGain.gain.value = 0;
       processor.connect(silentGain);
       silentGain.connect(ctx.destination);
 
+      startVisualizer(stream, (values) => {
+        setVisualizerValues(values);
+      });
+
       setStatus("listening");
-      console.log('[Practice] Audio capture started, streaming to WS');
-
     } catch (err) {
-      console.error("Mic capture failed", err);
-      stopPractice();
+      const message = err instanceof Error ? err.message : "Microphone access was denied or unavailable.";
+      setFatalError("Microphone error", message);
     }
   };
-
-  const stopVoiceConnection = () => {
-    if (wsRef.current) {
-      try {
-        wsRef.current.send(JSON.stringify({ type: "input_audio_buffer.commit" }));
-        wsRef.current.close();
-      } catch {}
-      wsRef.current = null;
-    }
-
-    if (processorRef.current) {
-      processorRef.current.disconnect();
-      processorRef.current = null;
-    }
-    if (inputSourceRef.current) {
-      inputSourceRef.current.disconnect();
-      inputSourceRef.current = null;
-    }
-    if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach(t => t.stop());
-      mediaStreamRef.current = null;
-    }
-    if (audioContextRef.current) {
-      audioContextRef.current.close().catch(() => {});
-      audioContextRef.current = null;
-    }
-
-    audioQueueRef.current = [];
-    isPlayingRef.current = false;
-  };
-
-  const stopPractice = useCallback(() => {
-    isPracticingRef.current = false;
-    setIsPracticing(false);
-    setStatus("idle");
-    setLastUtterance("");
-    setTranslatedText("");
-    stopVoiceConnection();
-    if (wsRef.current) {
-      try { wsRef.current.close(); } catch {}
-      wsRef.current = null;
-    }
-  }, []);
 
   const togglePractice = async () => {
     if (isPracticing) {
       stopPractice();
     } else {
-      isPracticingRef.current = true;
+      setError(null);
       isPracticingRef.current = true;
       window.__practiceAudioSent = false;
       setIsPracticing(true);
-      setStatus("listening");
       setLastUtterance("");
       setTranslatedText("");
       await connectVoice();
@@ -359,9 +346,17 @@ const Practice = () => {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      stopVoiceConnection();
+      stopPracticeInternal();
     };
-  }, []);
+  }, [stopPracticeInternal]);
+
+  const statusLabel = {
+    idle: "Ready",
+    connecting: "Connecting...",
+    listening: "Listening...",
+    processing: "Translating...",
+    speaking: "Speaking back...",
+  }[status];
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-2xl">
@@ -419,33 +414,69 @@ const Practice = () => {
       <Card className="mb-6">
         <CardContent className="pt-6">
           <div className="flex flex-col items-center gap-4">
-            <Button
-              size="lg"
-              className="h-20 w-20 rounded-full text-lg"
-              variant={isPracticing ? "destructive" : "default"}
-              onClick={togglePractice}
-            >
-              {isPracticing ? (
-                <MicOff className="h-8 w-8" />
-              ) : (
-                <Mic className="h-8 w-8" />
+            <div className="relative">
+              {isPracticing && (
+                <>
+                  <div className="absolute inset-0 rounded-full bg-primary/20 animate-ping" style={{ animationDuration: '2s' }} />
+                  <div className="absolute inset-0 rounded-full bg-primary/10 animate-ping" style={{ animationDuration: '2s', animationDelay: '0.5s' }} />
+                </>
               )}
-            </Button>
+              <Button
+                size="lg"
+                className={cn(
+                  "relative z-10 h-20 w-20 rounded-full text-lg transition-all duration-300",
+                  isPracticing ? "scale-110" : "hover:scale-105"
+                )}
+                variant={isPracticing ? "destructive" : "default"}
+                onClick={togglePractice}
+                disabled={status === "connecting"}
+              >
+                {isPracticing ? (
+                  <MicOff className="h-8 w-8" />
+                ) : (
+                  <Mic className="h-8 w-8" />
+                )}
+              </Button>
+            </div>
+
+            {isPracticing && (
+              <AudioWaveform values={visualizerValues} className="text-primary" />
+            )}
 
             <div className="text-center">
               <div className="text-sm text-muted-foreground">
                 {isPracticing ? "Tap to stop" : "Tap to start practicing"}
               </div>
               <div className="mt-1 text-lg font-medium capitalize">
-                {status === "idle" && "Ready"}
-                {status === "listening" && "Listening..."}
-                {status === "processing" && "Translating..."}
-                {status === "speaking" && "Speaking back..."}
+                {statusLabel}
               </div>
             </div>
           </div>
         </CardContent>
       </Card>
+
+      {/* Error State */}
+      {error && (
+        <Card className="mb-6 border-destructive">
+          <CardContent className="pt-6">
+            <div className="flex flex-col items-center text-center gap-4">
+              <div className="rounded-full bg-destructive/10 p-3">
+                <AlertCircle className="h-6 w-6 text-destructive" />
+              </div>
+              <div>
+                <h3 className="font-semibold">{error.title}</h3>
+                <p className="text-sm text-muted-foreground mt-1">{error.message}</p>
+              </div>
+              {error.canRetry && (
+                <Button variant="outline" onClick={togglePractice}>
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  Try again
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Feedback Area */}
       {(lastUtterance || translatedText) && (

@@ -14,6 +14,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogOverlay,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useQRScanner } from "@/lib/useQRScanner";
@@ -337,78 +338,82 @@ const Dashboard = () => {
           </div>
         )}
 
-        {showScanner && (
-             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" role="dialog" aria-modal="true" aria-labelledby="scanner-modal-title">
-               <div className="border rounded-xl bg-card text-card-foreground shadow-sm p-4 max-w-sm w-full mx-4" role="document">
-                 <h3 id="scanner-modal-title" className="text-lg font-semibold mb-4 text-center">{t("room.scanTitle")}</h3>
+        <Dialog open={showScanner} onOpenChange={(open) => { if (!open) closeScanner(); }}>
+          <DialogOverlay className="bg-black/50" />
+          <DialogContent
+            className="sm:max-w-md sm:rounded-t-xl sm:rounded-b-none fixed bottom-0 left-0 right-0 top-auto translate-x-0 translate-y-0 p-0 gap-0 border-b-0"
+            aria-describedby="scanner-modal-description"
+          >
+            <div className="p-4">
+              <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-muted" />
+              <DialogHeader className="text-center sm:text-center">
+                <DialogTitle id="scanner-modal-title">{t("room.scanTitle")}</DialogTitle>
+                <DialogDescription id="scanner-modal-description" className="sr-only">
+                  {t('room.cameraPermissionRequired')}
+                </DialogDescription>
+              </DialogHeader>
 
-                 {permissionStatus === 'checking' && (
-                   <div className="text-center py-8">
-                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-                     <p className="text-sm text-muted-foreground">{t('room.checkingPermissions')}</p>
-                   </div>
-                 )}
+              <div className="mt-4">
+                {permissionStatus === 'checking' && (
+                  <div className="text-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                    <p className="text-sm text-muted-foreground">{t('room.checkingPermissions')}</p>
+                  </div>
+                )}
 
-                 {permissionStatus === 'prompt' && (
-                   <div className="text-center space-y-4 py-4">
-                     <div className="text-4xl mb-4">📷</div>
-                     <p className="text-sm">{t('room.cameraPermissionRequired')}</p>
-                     <div className="space-y-2">
-                       <Button onClick={handleRequestPermission} className="w-full">
-                         {t('room.allowCamera')}
-                       </Button>
-                       <Button
-                         onClick={closeScanner}
-                         variant="outline"
-                         className="w-full"
-                       >
-                         {t('common.cancel')}
-                       </Button>
-                     </div>
-                   </div>
-                 )}
+                {permissionStatus === 'prompt' && (
+                  <div className="text-center space-y-4 py-4">
+                    <div className="text-4xl mb-4">📷</div>
+                    <p className="text-sm">{t('room.cameraPermissionRequired')}</p>
+                    <div className="space-y-2">
+                      <Button onClick={handleRequestPermission} className="w-full">
+                        {t('room.allowCamera')}
+                      </Button>
+                      <Button onClick={closeScanner} variant="outline" className="w-full">
+                        {t('common.cancel')}
+                      </Button>
+                    </div>
+                  </div>
+                )}
 
-                 {permissionStatus === 'denied' && (
-                   <div className="text-center space-y-4 py-4">
-                     <div className="text-4xl mb-4">🚫</div>
-                     <p className="text-sm font-medium">{t('room.cameraAccessDenied')}</p>
-                     <p className="text-xs text-muted-foreground">{t('room.cameraSettingsHelp')}</p>
-                     <div className="space-y-2">
-                       {isIOS && (
-                         <Button onClick={openAppSettings} className="w-full">
-                           {t('room.goToSettings')}
-                         </Button>
-                       )}
-                       <Button
-                         onClick={closeScanner}
-                         variant="outline"
-                         className="w-full"
-                       >
-                         {t('common.cancel')}
-                       </Button>
-                     </div>
-                   </div>
-                 )}
+                {permissionStatus === 'denied' && (
+                  <div className="text-center space-y-4 py-4">
+                    <div className="text-4xl mb-4">🚫</div>
+                    <p className="text-sm font-medium">{t('room.cameraAccessDenied')}</p>
+                    <p className="text-xs text-muted-foreground">{t('room.cameraSettingsHelp')}</p>
+                    <div className="space-y-2">
+                      {isIOS && (
+                        <Button onClick={openAppSettings} className="w-full">
+                          {t('room.goToSettings')}
+                        </Button>
+                      )}
+                      <Button onClick={closeScanner} variant="outline" className="w-full">
+                        {t('common.cancel')}
+                      </Button>
+                    </div>
+                  </div>
+                )}
 
-                 {permissionStatus === 'granted' && isScanning && (
-                   <>
-                     <div id="qr-reader" className="w-full" aria-label={t("room.qrScannerAlt")}></div>
-                     <Button
-                       onClick={closeScanner}
-                       className="w-full mt-4"
-                       variant="secondary"
-                       aria-label={t("common.closeModal")}
-                       autoFocus
-                     >
-                       {t("common.cancel")}
-                     </Button>
-                   </>
-                 )}
-               </div>
-             </div>
-           )}
+                {permissionStatus === 'granted' && isScanning && (
+                  <>
+                    <div id="qr-reader" className="w-full" aria-label={t("room.qrScannerAlt")}></div>
+                    <Button
+                      onClick={closeScanner}
+                      className="w-full mt-4"
+                      variant="secondary"
+                      aria-label={t("common.closeModal")}
+                      autoFocus
+                    >
+                      {t('common.cancel')}
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
-        <Dialog open={isGuestDialogOpen} onOpenChange={setIsGuestDialogOpen}>
+          <Dialog open={isGuestDialogOpen} onOpenChange={setIsGuestDialogOpen}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>{t('auth.guestJoin', 'Join as Guest')}</DialogTitle>

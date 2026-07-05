@@ -64,8 +64,9 @@ Translation often needs to happen *immediately*. Forcing a multi-step signup pro
 - **Action:** Make the QR scanner slide up in a "half-sheet" bottom drawer instead of a full-screen modal.
 - **Benefit:** Feels less jarring and maintains context.
 
-**Status (Current Code):** ❌ Not implemented
-- Current scanner is a full-screen overlay modal in `apps/web/src/pages/Dashboard.tsx`.
+**Status (Current Code):** ✅ Implemented
+- Scanner now opens as a bottom half-sheet drawer in `apps/web/src/pages/Dashboard.tsx` using the existing Radix Dialog primitives.
+- Includes a drag-handle visual and maintains context while scanning.
 
 ---
 
@@ -97,9 +98,10 @@ Screen real estate is consumed by "settings" and redundant text rather than the 
     - **Haptics:** Add `navigator.vibrate()` feedback when pressing/releasing the mic.
 - **Benefit:** Provides physical and visual confirmation of state without needing to stare at the button, increasing immersion.
 
-**Status (Current Code):** 🟡 Partially implemented
+**Status (Current Code):** ✅ Implemented
 - Haptics wrapper exists (`apps/web/src/lib/haptics.ts`) and is used by the mic control (`apps/web/src/pages/conversation/components/ConversationControls.tsx`).
-- Recording visual feedback exists (ripple/ping + scale), but there is no full-screen dimming overlay or waveform visualization.
+- Recording now dims the rest of the interface with a full-screen overlay.
+- A dynamic waveform/glow animation renders behind the mic button while recording.
 
 ### ✅ Relocate "Solo Mode"
 - **Action:** Move the "Solo" toggle and "Translate To" selector out of the primary footer. Place them in the "Settings" sheet or a specific "Practice Mode" tab.
@@ -140,7 +142,8 @@ Screen real estate is consumed by "settings" and redundant text rather than the 
 
 ## 🛠 Proposed Implementation Priorities
 
-1.  **Dashboard:** Implement **Inline Scanner** (half-sheet UI).
-2.  **Conversation UI:** Finish **Immersive Mic UI** visuals (add dimming + waveform/glow).
+1. ✅ **Dashboard:** Implement **Inline Scanner** (half-sheet UI). — Done.
+2. ✅ **Conversation UI:** Finish **Immersive Mic UI** visuals (add dimming + waveform/glow). — Done.
 3.  **Onboarding:** Add **Biometric Auth for PWA** (WebAuthn).
 4.  **Mobile polish:** Verify/extend **Safe Area Insets** in conversation footer on real iOS devices.
+5.  **Practice polish:** Replace `ScriptProcessorNode` playback with an **AudioWorklet** path for lower latency.

@@ -1,149 +1,105 @@
-# UX/UI Audit & Improvement Roadmap (2026)
+# UX/UI Audit & Improvement Roadmap (2026–07)
 
-This document outlines a comprehensive UX/UI audit of the Live Translator app, with a focus on optimizing for Mobile/PWA users. The goal is to elevate the app from a functional tool to a polished, professional product.
+A fresh review of the Live Translator web app based on the current codebase, superseding the January 2026 audit.
 
-## 🔍 Executive Summary
-
-The app handles real-time translation logic well, but the **User Journey** has friction points that hinder quick interactions. The **UI Hierarchy** in the conversation view is crowded, consuming valuable screen real estate with settings rather than the conversation itself. The recommendations below aim to reduce "time-to-conversation" and maximize immersion.
+The app is now a functional PWA with three primary surfaces: **Dashboard** (room entry), **Conversation** (multi-user translated voice chat), and **Practice** (solo Grok Voice speech-to-speech). The core translation loop works well; the remaining UX work is mostly about removing friction, finishing mobile polish, and making failure states understandable.
 
 ---
 
-## 1. 🚀 Onboarding & Access (Reducing Friction)
+## 1. Current UX State
 
-**Current State:**
-- Users are greeted with a "Login to Join" message or standard auth forms.
-- Joining via QR code requires a full signup/login flow.
+### Strengths
+- **Clear core loop.** Dashboard exposes create, scan, manual join, and recent rooms above the fold.
+- **Touch-first recording.** `ConversationControls` differentiates push-to-talk (mobile) from tap-to-talk (desktop) and supports hold-and-drag-to-lock.
+- **Smooth guest fallback.** Unauthenticated users can create/join/scan after entering only a display name; pending actions resume after guest sign-in.
+- **Visual room onboarding.** After creating a room, a large QR code + monospace room code make sharing easy.
+- **Scaffolded PWA features.** Bottom nav, install banner, wake lock, haptics, and status-bar meta tags are already wired in.
 
-**Problem:**
-Translation often needs to happen *immediately*. Forcing a multi-step signup process just to listen to a room is a high barrier to entry that hurts adoption.
-
-**Recommendations:**
-
-### ✅ Guest Mode (High Impact)
-- **Action:** Allow users to join a room via QR Code or Room Code with *only* a "Display Name" (no email/password required).
-- **Implementation:** Create a temporary session/token for these users.
-- **Benefit:** Drastically lowers the barrier to entry for casual listeners or one-time participants.
-
-**Status (Current Code):** ✅ Implemented
-- Dashboard prompts for a display name when unauthenticated and then performs the pending action (create / scan / join).
-- Backend creates a persisted `users` row with `isGuest=true` and authenticates via the same `auth_token` cookie.
-
-### ✅ Biometric Auth for PWA
-- **Action:** Implement WebAuthn (FaceID/TouchID) for returning users on supported devices.
-- **Benefit:** Typing passwords on mobile while trying to start a conversation is cumbersome. Biometrics make reentry seamless.
-
-**Status (Current Code):** ❌ Not implemented
-- No WebAuthn / `navigator.credentials.*` usage found in `apps/web`.
+### Weaknesses
+1. **Mobile safe areas are not handled.** `Layout`, `BottomNav`, and `ConversationControls` use fixed bottom padding with no `env(safe-area-inset-bottom)`. On iOS the home indicator can cover the mic button and bottom nav. `index.html` also lacks `viewport-fit=cover`.
+2. **Conversation feedback is too subtle.** Connection state is only a small colored dot; the disabled-mic state when alone is explained only by a small hint and a Settings link. There is no empty-state guidance when joining an empty room.
+3. **Dashboard still has friction.** The room-code input is `type="text"` with no auto-formatting; the QR scanner half-sheet is forced to a mobile layout even on desktop; only two recent rooms are shown with no metadata or way to clear them.
+4. **Practice feels unfinished.** It has hardcoded English copy, no wake lock, no haptics, no intro/empty state, and no way to replay the last spoken translation.
+5. **Error/empty surfaces are inconsistent.** `EmptyState` and `ErrorState` components exist but are under-used; many failures rely on `sonner` toasts that are easy to miss.
+6. **i18n gaps remain.** `Practice.tsx`, `StatusIndicator.tsx`, and `DebugPanel.tsx` contain hardcoded English strings.
+7. **PWA install metadata is incomplete.** There are SVG icons in `public/` but no `manifest.json` and no `<link rel="manifest">` in `index.html`.
+8. **Audio and solo-mode controls are unclear.** The volume icon toggles text-to-speech but has no label or tooltip. “Solo mode” is buried in Settings and the term is not self-explanatory.
 
 ---
 
-## 2. 🏠 Dashboard (The "Home Base")
+## 2. Recommended Improvements (ranked)
 
-**Current State:**
-- Two static cards ("Start New", "Join Existing") and a hidden scanner.
-- Layout feels like a web form rather than a mobile app home screen.
+### 1. Fix mobile safe areas and viewport-fit
+**Why:** The mic button and bottom nav are the most-tapped controls; on iOS they can be hidden by the home indicator or overlap the status bar.  
+**Expected impact:** High. Low effort.  
+**Files:** `apps/web/index.html`, `apps/web/src/components/Layout.tsx`, `apps/web/src/components/BottomNav.tsx`, `apps/web/src/pages/conversation/components/ConversationControls.tsx`, `apps/web/src/index.css`.
 
-**Recommendations:**
+### 2. Surface connection/participant state inline in the conversation
+**Why:** A tiny colored dot is not enough. Users need to know why the mic is disabled and how to start speaking when alone.  
+**Expected impact:** High.  
+**Files:** `RoomHeader.tsx`, `ConversationControls.tsx`, `Conversation.tsx`, `locales/en.json`.
 
-### ✅ Floating Action Button (FAB)
-- **Action:** Replace the static cards with a large, primary **FAB (Floating Action Button)** (+) at the bottom right.
-- **Behavior:** Tapping it expands to options like "Create Room" or "Scan QR".
-- **Benefit:** Aligns with standard mobile patterns for "creating content" and frees up screen space.
+### 3. Add empty-state guidance and inline error surfaces
+**Why:** A blank message list on first join is disorienting; generic toasts for connection failures are easy to miss. Use the existing `EmptyState`/`ErrorState` components and inline banners.  
+**Expected impact:** Medium-high.  
+**Files:** `MessageList.tsx`, `Conversation.tsx`, `Dashboard.tsx`, `Practice.tsx`, `locales/en.json`.
 
-**Status (Current Code):** ✅ Implemented
-- Mobile-only FAB with quick actions: Create room / Scan QR / Enter code.
+### 4. Add a proper PWA manifest and install metadata
+**Why:** Without `manifest.json`, add-to-homescreen relies on browser heuristics rather than the app’s name, theme, and icons.  
+**Expected impact:** Medium. Quick win.  
+**Files:** `apps/web/public/manifest.json`, `apps/web/index.html`.
 
-### ✅ Recent History
-- **Action:** Add a "Recent Conversations" list on the dashboard.
-- **Benefit:** Users often rejoin the same room (e.g., a recurring meeting). Re-scanning or re-typing codes is repetitive friction.
+### 5. Polish the Dashboard entry flow
+**Why:** Reduce mis-taps and input friction before users ever reach a room.  
+**Specific changes:**
+- Auto-format and validate the room-code input.
+- Use a centered modal for the QR scanner on desktop, keep the half-sheet on mobile.
+- Show more than two recent rooms, with last-used metadata and a clear action.
+- Make the install banner less dominant on repeat visits.
+**Expected impact:** Medium.  
+**Files:** `Dashboard.tsx`, `useQRScanner.ts`, `useRecentRooms.ts`, `usePwaBanner.ts`.
 
-**Status (Current Code):** ✅ Implemented
-- Recent rooms are stored client-side and shown as quick-join buttons.
+### 6. Finish Practice mode polish
+**Why:** Practice is a first-class feature but still feels like a prototype.  
+**Specific changes:**
+- Internationalize all copy.
+- Add wake lock and haptic feedback.
+- Add an intro/empty state.
+- Add a replay button for the last spoken translation.
+**Expected impact:** Medium.  
+**Files:** `Practice.tsx`, `useWakeLock.ts`, `haptics.ts`, `locales/*.json`.
 
-### ✅ Inline Scanner
-- **Action:** Make the QR scanner slide up in a "half-sheet" bottom drawer instead of a full-screen modal.
-- **Benefit:** Feels less jarring and maintains context.
+### 7. Internationalize remaining hardcoded strings
+**Why:** The app is localized everywhere except Practice and a few helper components. Practice is the page most likely to be shown to language learners.  
+**Expected impact:** Medium.  
+**Files:** `Practice.tsx`, `DebugPanel.tsx`, `StatusIndicator.tsx`, `locales/*.json`.
 
-**Status (Current Code):** ✅ Implemented
-- Scanner now opens as a bottom half-sheet drawer in `apps/web/src/pages/Dashboard.tsx` using the existing Radix Dialog primitives.
-- Includes a drag-handle visual and maintains context while scanning.
-
----
-
-## 3. 💬 Conversation Interface (The Core Loop)
-
-**Current State:**
-- **Header:** Crowded with Room Code, Connection Status, Audio Toggle, Leave Button, Language Selector.
-- **Footer:** Mic Button, Solo Toggle, Solo Language Selector.
-- **Bubbles:** Text-heavy (Original + Translation), consuming vertical space.
-
-**Problem:**
-Screen real estate is consumed by "settings" and redundant text rather than the actual conversation.
-
-**Recommendations:**
-
-### ✅ Header Simplification
-- **Action:** Move "Room Code" and "Language Selector" to a "Settings" gear icon or side sheet.
-- **Keep:** Only the "Status" indicator and "Leave" button should be visible at top-level.
-- **Benefit:** A cleaner, focused view that emphasizes the content.
-
-**Status (Current Code):** ✅ Implemented
-- Header shows the room code in the top bar (tap opens the QR invite modal).
-- Participants count is displayed next to the room code.
-- Language + solo mode controls are in a settings dialog.
-
-### ✅ Immersive Mic UI
-- **Action:** Update the Mic button interaction.
-    - **Visuals:** When recording, dim the rest of the interface and show a dynamic "waveform" or "glow" animation behind the button.
-    - **Haptics:** Add `navigator.vibrate()` feedback when pressing/releasing the mic.
-- **Benefit:** Provides physical and visual confirmation of state without needing to stare at the button, increasing immersion.
-
-**Status (Current Code):** ✅ Implemented
-- Haptics wrapper exists (`apps/web/src/lib/haptics.ts`) and is used by the mic control (`apps/web/src/pages/conversation/components/ConversationControls.tsx`).
-- Recording now dims the rest of the interface with a full-screen overlay.
-- A dynamic waveform/glow animation renders behind the mic button while recording.
-
-### ✅ Relocate "Solo Mode"
-- **Action:** Move the "Solo" toggle and "Translate To" selector out of the primary footer. Place them in the "Settings" sheet or a specific "Practice Mode" tab.
-- **Benefit:** The footer becomes dedicated *only* to the primary action (Speaking), reducing cognitive load.
-
-**Status (Current Code):** ✅ Implemented
-- Solo mode and target language are controlled from the room settings dialog.
-
-### ✅ Message Bubble Clarity
-- **Action:** Collapse the "Original Text" by default (e.g., show a small "Show Original" icon) or reduce its opacity significantly.
-- **Benefit:** The user primarily wants to read the translation. Reducing density makes the chat easier to scan.
-
-**Status (Current Code):** ✅ Implemented
-- The original text is collapsed by default with a per-message toggle ("Show original" / "Hide original") in `apps/web/src/pages/conversation/components/MessageList.tsx`.
+### 8. Clarify audio and solo-mode controls
+**Why:** The volume icon toggles TTS but has no label. “Solo mode” is jargon buried in Settings.  
+**Specific changes:**
+- Add a tooltip or `sr-only` label to the audio toggle.
+- Surface a one-tap “Practice / Solo” action when the user is the only participant.
+- Rename or explain “Solo mode” in the UI.
+**Expected impact:** Medium.  
+**Files:** `RoomHeader.tsx`, `ConversationControls.tsx`, `locales/en.json`.
 
 ---
 
-## 4. 📱 Mobile Core (PWA Polish)
+## 3. Implementation Priorities
 
-**Recommendations:**
-
-### ✅ Wake Lock
-- **Action:** Implement the **Screen Wake Lock API**.
-- **Reason:** Currently, if a user is listening to a long translation, their phone screen might turn off, cutting the connection or audio. The app must keep the screen awake while connected.
-
-**Status (Current Code):** ✅ Implemented
-- Wake lock is enabled while connected in the conversation view.
-
-### ✅ Safe Area Insets
-- **Action:** Ensure bottom padding accounts for the iOS "Home Indicator" bar.
-- **Reason:** Prevents the Mic button from sitting too low or being overlapped by system gestures.
-
-**Status (Current Code):** 🟡 Partially implemented
-- The dashboard FAB accounts for `env(safe-area-inset-bottom)` in `apps/web/src/pages/dashboard/DashboardQuickActionsFab.tsx`.
-- The rest of the UI should still be visually verified on iOS (especially the conversation footer).
+1. **Safe areas & viewport-fit** — unblock reliable mobile tapping first.
+2. **Inline connection/empty states in conversation** — biggest clarity win for active users.
+3. **PWA manifest + install metadata** — quick installability win.
+4. **Dashboard entry-flow polish** — reduce drop-off before users enter a room.
+5. **Practice wake lock + haptics + i18n** — finish the mobile practice experience.
+6. **Empty/error states across surfaces** — make failures recoverable.
+7. **Audio/solo-mode clarity** — polish the conversation chrome.
+8. **Device QA** — test iOS Safari, Android Chrome, and standalone PWA modes against the changes.
 
 ---
 
-## 🛠 Proposed Implementation Priorities
+## 4. Out of scope for this audit
 
-1. ✅ **Dashboard:** Implement **Inline Scanner** (half-sheet UI). — Done.
-2. ✅ **Conversation UI:** Finish **Immersive Mic UI** visuals (add dimming + waveform/glow). — Done.
-3.  **Onboarding:** Add **Biometric Auth for PWA** (WebAuthn).
-4.  **Mobile polish:** Verify/extend **Safe Area Insets** in conversation footer on real iOS devices.
-5.  **Practice polish:** Replace `ScriptProcessorNode` playback with an **AudioWorklet** path for lower latency.
+- **Multi-user Rooms S2S redesign** is tracked separately in `docs/rooms-and-practice-redesign.md`.
+- **AudioWorklet playback in Practice** is also tracked there.
+- **Backend features** such as password reset, email verification, and transcript persistence are architecture/ops work, not UX polish.

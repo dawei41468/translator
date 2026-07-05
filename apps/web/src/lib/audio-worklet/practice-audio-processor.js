@@ -1,3 +1,5 @@
+import { decodeBase64ToPCM16, pcm16ToFloat32 } from "./audio-utils";
+
 /**
  * AudioWorkletProcessor that plays queued PCM16 audio deltas.
  *
@@ -22,11 +24,8 @@ class PracticeAudioProcessor extends AudioWorkletProcessor {
     this.port.onmessage = (event) => {
       const { type } = event.data;
       if (type === 'audio') {
-        const pcm16 = this.decodeBase64ToPCM16(event.data.base64);
-        const float32 = new Float32Array(pcm16.length);
-        for (let i = 0; i < pcm16.length; i++) {
-          float32[i] = pcm16[i] / 32768.0;
-        }
+        const pcm16 = decodeBase64ToPCM16(event.data.base64);
+        const float32 = pcm16ToFloat32(pcm16);
         this.queue.push(float32);
         this.hadAudio = true;
       } else if (type === 'clear') {
@@ -36,19 +35,6 @@ class PracticeAudioProcessor extends AudioWorkletProcessor {
         this.hadAudio = false;
       }
     };
-  }
-
-  /**
-   * @param {string} base64
-   * @returns {Int16Array}
-   */
-  decodeBase64ToPCM16(base64) {
-    const binaryString = atob(base64);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
-    return new Int16Array(bytes.buffer);
   }
 
   /**

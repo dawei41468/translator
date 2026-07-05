@@ -6,6 +6,8 @@ export interface AudioWorkletPlayer {
   playChunk: (base64Audio: string) => void;
   /** Resume the audio context if suspended. */
   resume: () => Promise<void>;
+  /** Eagerly create the AudioContext and worklet node. Returns true if ready. */
+  initialize: () => Promise<boolean>;
   /** Clear queued audio and stop playback. */
   clear: () => void;
   /** Dispose the worklet node and close the audio context. */
@@ -81,6 +83,15 @@ export function useAudioWorkletPlayer(
     }
   }, [ensureContext]);
 
+  const initialize = useCallback(async () => {
+    try {
+      await ensureContext();
+      return isReadyRef.current;
+    } catch {
+      return false;
+    }
+  }, [ensureContext]);
+
   const resume = useCallback(async () => {
     const ctx = audioContextRef.current;
     if (ctx && ctx.state === "suspended") {
@@ -133,11 +144,12 @@ export function useAudioWorkletPlayer(
   return useMemo(() => ({
     playChunk,
     resume,
+    initialize,
     clear,
     dispose,
     onPlaybackEmpty,
     get isReady() {
       return isReadyRef.current;
     },
-  }), [playChunk, resume, clear, dispose, onPlaybackEmpty]);
+  }), [playChunk, resume, initialize, clear, dispose, onPlaybackEmpty]);
 }

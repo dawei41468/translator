@@ -35,6 +35,8 @@ const Practice = () => {
   const [error, setError] = useState<PracticeError | null>(null);
   const [visualizerValues, setVisualizerValues] = useState<number[]>([]);
 
+  const [workletReady, setWorkletReady] = useState<boolean | null>(null);
+
   const homeLanguage = LANGUAGES.find(l => l.code === homeLang);
   const targetLanguage = LANGUAGES.find(l => l.code === targetLang);
 
@@ -371,6 +373,23 @@ const Practice = () => {
     }
   };
 
+  // Runtime self-test: try to initialize the AudioWorklet player on mount.
+  useEffect(() => {
+    let cancelled = false;
+    audioWorkletPlayer.initialize().then((ready) => {
+      if (cancelled) return;
+      setWorkletReady(ready);
+      if (ready) {
+        console.log('[Practice] AudioWorklet playback ready');
+      } else {
+        console.warn('[Practice] AudioWorklet unavailable, using legacy playback fallback');
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [audioWorkletPlayer]);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -540,6 +559,11 @@ const Practice = () => {
 
       <div className="mt-8 text-center text-xs text-muted-foreground">
         Powered by Grok Voice speech-to-speech. Uses server VAD for natural turn-taking.
+        {workletReady !== null && (
+          <span className="block mt-1" data-testid="worklet-status">
+            {workletReady ? "AudioWorklet playback active" : "Legacy playback active"}
+          </span>
+        )}
       </div>
     </div>
   );

@@ -13,14 +13,13 @@
 - ✅ Grok Voice ephemeral token backend + realtime client integration.
 - ✅ Input transcription + output translated text + spoken audio working.
 - ✅ Bottom nav, routing, and basic UI in place.
-- ✅ Practice polish: real-time microphone waveform visualizer, improved live transcription streaming, and explicit error-state UI with retry.
+- ✅ Practice polish: real-time microphone waveform visualizer, improved live transcription streaming, explicit error-state UI with retry, and AudioWorklet playback path with legacy fallback.
 
 **Still Left to Implement** (see sections below):
 - Full multi-user Rooms redesign with language-aware delivery.
 - Selective spoken audio (only cross-language) + text for same-language.
 - New voice-centric UI for rooms (utterance cards instead of traditional bubbles).
 - Per-speaker or orchestrated Voice sessions for rooms.
-- AudioWorklet playback path in Practice (deferred from initial polish pass).
 - Integration of rooms architecture into actual code (currently design doc only).
 
 ## 1. Locked Naming

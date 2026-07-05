@@ -101,5 +101,5 @@ The app is now a functional PWA with three primary surfaces: **Dashboard** (room
 ## 4. Out of scope for this audit
 
 - **Multi-user Rooms S2S redesign** is tracked separately in `docs/rooms-and-practice-redesign.md`.
-- **AudioWorklet playback in Practice** is also tracked there.
+- **AudioWorklet playback in Practice** is complete; the worklet processor is reusable for future S2S surfaces.
 - **Backend features** such as password reset, email verification, and transcript persistence are architecture/ops work, not UX polish.

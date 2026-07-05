@@ -14,6 +14,7 @@ import {
 import { apiClient } from "@/lib/api";
 import { AudioWaveform } from "@/components/AudioWaveform";
 import { useAudioVisualizer } from "@/lib/useAudioVisualizer";
+import { useAudioWorkletPlayer } from "@/lib/audio-worklet/useAudioWorkletPlayer";
 import { cn } from "@/lib/utils";
 
 type PracticeStatus = "idle" | "connecting" | "listening" | "processing" | "speaking";
@@ -43,12 +44,24 @@ const Practice = () => {
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
   const inputSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
-  const audioQueueRef = useRef<Float32Array[]>([]);
-  const isPlayingRef = useRef(false);
   const isPracticingRef = useRef(false);
   const SAMPLE_RATE = 24000;
 
   const { start: startVisualizer, stop: stopVisualizer } = useAudioVisualizer();
+  const audioWorkletPlayer = useAudioWorkletPlayer(SAMPLE_RATE);
+
+  useEffect(() => {
+    audioWorkletPlayer.onPlaybackEmpty(() => {
+      if (isPracticingRef.current) setStatus("listening");
+    });
+    return () => {
+      audioWorkletPlayer.onPlaybackEmpty(null);
+    };
+  }, [audioWorkletPlayer]);
+
+  // Legacy fallback playback refs (used when AudioWorklet is unavailable)
+  const audioQueueRef = useRef<Float32Array[]>([]);
+  const isPlayingRef = useRef(false);
 
   const getLangName = (code: string) => {
     const lang = LANGUAGES.find(l => l.code === code);
@@ -86,7 +99,30 @@ const Practice = () => {
     source.start();
   }, []);
 
+  const decodeBase64ToFloat32 = (base64Audio: string): Float32Array => {
+    const binaryString = atob(base64Audio);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    const pcm16 = new Int16Array(bytes.buffer);
+    const float32 = new Float32Array(pcm16.length);
+    for (let i = 0; i < pcm16.length; i++) {
+      float32[i] = pcm16[i] / 32768.0;
+    }
+    return float32;
+  };
+
   const playAudioChunk = useCallback(async (base64Audio: string) => {
+    // Prefer AudioWorklet playback when available.
+    if (audioWorkletPlayer.isReady) {
+      await audioWorkletPlayer.resume();
+      audioWorkletPlayer.playChunk(base64Audio);
+      setStatus("speaking");
+      return;
+    }
+
+    // Legacy AudioBufferSourceNode fallback.
     if (!audioContextRef.current) {
       audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({
         sampleRate: SAMPLE_RATE,
@@ -98,22 +134,12 @@ const Practice = () => {
       await ctx.resume();
     }
 
-    const binaryString = atob(base64Audio);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
-    const pcm16 = new Int16Array(bytes.buffer);
-    const float32 = new Float32Array(pcm16.length);
-    for (let i = 0; i < pcm16.length; i++) {
-      float32[i] = pcm16[i] / 32768.0;
-    }
-
+    const float32 = decodeBase64ToFloat32(base64Audio);
     audioQueueRef.current.push(float32);
     if (!isPlayingRef.current) {
       playNextChunk();
     }
-  }, [playNextChunk]);
+  }, [audioWorkletPlayer, playNextChunk]);
 
   const stopPracticeInternal = useCallback(() => {
     isPracticingRef.current = false;
@@ -149,7 +175,9 @@ const Practice = () => {
 
     audioQueueRef.current = [];
     isPlayingRef.current = false;
-  }, [stopVisualizer]);
+    audioWorkletPlayer.clear();
+    void audioWorkletPlayer.dispose();
+  }, [stopVisualizer, audioWorkletPlayer]);
 
   const stopPractice = useCallback(() => {
     setLastUtterance("");

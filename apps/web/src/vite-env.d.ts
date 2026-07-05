@@ -82,4 +82,47 @@ interface Window {
   SpeechRecognition: typeof SpeechRecognition;
   webkitSpeechRecognition: typeof SpeechRecognition;
   __practiceAudioSent?: boolean;
+  AudioContext: typeof AudioContext;
+  webkitAudioContext: typeof AudioContext;
+}
+
+interface AudioWorkletProcessor {
+  readonly port: MessagePort;
+  process(
+    inputs: Float32Array[][],
+    outputs: Float32Array[][],
+    parameters: Record<string, Float32Array>
+  ): boolean;
+}
+
+declare var AudioWorkletProcessor: {
+  prototype: AudioWorkletProcessor;
+  new(options?: AudioWorkletNodeOptions): AudioWorkletProcessor;
+};
+
+declare function registerProcessor(
+  name: string,
+  processorCtor: (new (
+    options?: AudioWorkletNodeOptions
+  ) => AudioWorkletProcessor) & {
+    parameterDescriptors?: AudioParamDescriptor[];
+  }
+): void;
+
+interface AudioParamDescriptor {
+  name: string;
+  defaultValue?: number;
+  minValue?: number;
+  maxValue?: number;
+  automationRate?: "a-rate" | "k-rate";
+}
+
+interface AudioWorkletGlobalScope {
+  readonly sampleRate: number;
+  readonly currentTime: number;
+}
+
+declare module "*.ts?raw" {
+  const content: string;
+  export default content;
 }

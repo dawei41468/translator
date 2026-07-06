@@ -110,12 +110,7 @@ export class SpeakerVoiceSession {
       session: {
         voice: "eve",
         instructions,
-        turn_detection: {
-          type: "server_vad",
-          silence_duration_ms: 400,
-          threshold: 0.6,
-          prefix_padding_ms: 200,
-        },
+        turn_detection: { type: "server_vad" },
       },
     };
 

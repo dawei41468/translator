@@ -81,12 +81,7 @@ export function handlePracticeWsUpgrade(
         session: {
           voice: "eve",
           instructions: "You are a helpful language practice partner. Listen to the user and respond naturally.",
-          turn_detection: {
-            type: "server_vad",
-            silence_duration_ms: 400,
-            threshold: 0.6,
-            prefix_padding_ms: 200,
-          },
+          turn_detection: { type: "server_vad" },
         },
       }));
 
@@ -96,8 +91,16 @@ export function handlePracticeWsUpgrade(
 
     // Proxy: Grok → Browser
     grokWs.on("message", (data: WebSocket.Data) => {
+      const msg = data.toString();
+      // Log non-audio messages for debugging
+      try {
+        const parsed = JSON.parse(msg);
+        if (parsed.type !== "response.output_audio.delta") {
+          logger.info("Practice proxy: Grok message", { userId, type: parsed.type });
+        }
+      } catch { /* ignore parse errors */ }
       if (clientWs.readyState === WebSocket.OPEN) {
-        clientWs.send(data.toString());
+        clientWs.send(msg);
       }
     });
 

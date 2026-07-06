@@ -114,7 +114,9 @@ describe("SpeakerVoiceSession", () => {
 
     expect(configMessages.length).toBe(1);
     const payload = JSON.parse(configMessages[0]![0] as string);
-    expect(payload.session["audio.input.transcription.language_hint"]).toBe("en");
+    expect(payload.session.voice).toBe("eve");
+    expect(payload.session.instructions).toContain("Spanish");
+    expect(payload.session.turn_detection.type).toBe("server_vad");
   });
 
   it("emits source transcript from input audio transcription event", async () => {

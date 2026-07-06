@@ -7,6 +7,7 @@ import { app } from "./app.js";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import { setupSocketIO } from "./socket.js";
+import { handlePracticeWsUpgrade } from "./routes/voice-practice-ws.js";
 import cron from "node-cron";
 
 import { CleanupService } from "./services/cleanup.js";
@@ -36,6 +37,11 @@ const io = new Server(server, {
 });
 
 setupSocketIO(io);
+
+// WebSocket upgrade handler for Practice mode voice proxy
+server.on("upgrade", (req, socket, head) => {
+  handlePracticeWsUpgrade(req, socket, head);
+});
 
 // Initialize cleanup service
 CleanupService.init();

@@ -11,7 +11,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { apiClient } from "@/lib/api";
 import { AudioWaveform } from "@/components/AudioWaveform";
 import { useAudioVisualizer } from "@/lib/useAudioVisualizer";
 import { useS2SAudioPlayer } from "@/lib/audio-worklet/useS2SAudioPlayer";
@@ -128,64 +127,52 @@ const Practice = () => {
     try {
       setError(null);
       setStatus("connecting");
-      const tokenData = await apiClient.getVoiceEphemeralToken();
-      const ephemeralToken = tokenData.value;
 
-      const wsUrl = `wss://api.x.ai/v1/realtime?model=grok-voice-latest`;
-      const ws = new WebSocket(wsUrl, [`xai-client-secret.${ephemeralToken}`]);
+      // Connect through server-side proxy (not directly to xAI)
+      const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const wsUrl = `${wsProtocol}//${window.location.host}/api/voice/practice-ws`;
+      const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
       ws.onopen = () => {
-        console.log('[Practice] WebSocket connected to Grok Voice');
-        const homeName = getLangName(homeLang);
-        const targetName = getLangName(targetLang);
-
-        const instructions =
-          `You are a helpful language practice partner. ` +
-          `The user is speaking in ${homeName}. ` +
-          `Listen carefully to what they say. ` +
-          `Translate it accurately into natural, conversational ${targetName}. ` +
-          `Speak ONLY the translation back to the user with good pronunciation, tone and prosody. ` +
-          `Do not add any extra commentary, explanations, or English text. ` +
-          `Keep it concise and match the user's speaking style.`;
-
-        ws.send(JSON.stringify({
-          type: "session.update",
-          session: {
-            voice: "eve",
-            instructions,
-            turn_detection: {
-              type: "server_vad",
-              silence_duration_ms: 400,
-              threshold: 0.6,
-              prefix_padding_ms: 200,
-            },
-          },
-        }));
-
-        startAudioCapture(ws);
-      };
-
-      ws.onerror = (err) => {
-        console.error('[Practice] WebSocket error:', err);
-        setFatalError(
-          "Voice connection failed",
-          "Could not connect to the voice service. Please check your network and try again."
-        );
-      };
-
-      ws.onclose = (event) => {
-        console.log('[Practice] WebSocket closed:', event.code, event.reason);
-        if (isPracticingRef.current) {
-          setFatalError(
-            "Voice session ended",
-            "The connection to the voice service closed unexpectedly."
-          );
-        }
+        console.log('[Practice] WebSocket connected to voice proxy');
       };
 
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
+
+        // Wait for server ready signal before configuring session
+        if (data.type === "practice.ready") {
+          console.log('[Practice] Voice proxy ready, configuring session');
+          const homeName = getLangName(homeLang);
+          const targetName = getLangName(targetLang);
+
+          const instructions =
+            `You are a helpful language practice partner. ` +
+            `The user is speaking in ${homeName}. ` +
+            `Listen carefully to what they say. ` +
+            `Translate it accurately into natural, conversational ${targetName}. ` +
+            `Speak ONLY the translation back to the user with good pronunciation, tone and prosody. ` +
+            `Do not add any extra commentary, explanations, or English text. ` +
+            `Keep it concise and match the user's speaking style.`;
+
+          ws.send(JSON.stringify({
+            type: "session.update",
+            session: {
+              voice: "eve",
+              instructions,
+              turn_detection: {
+                type: "server_vad",
+                silence_duration_ms: 400,
+                threshold: 0.6,
+                prefix_padding_ms: 200,
+              },
+            },
+          }));
+
+          startAudioCapture(ws);
+          return;
+        }
 
         if (import.meta.env.DEV) {
           console.log('[Practice] ws message:', data.type, data);
@@ -218,6 +205,24 @@ const Practice = () => {
           console.error('[Practice] Grok Voice error:', data);
           const message = data.error?.message || data.message || "An error occurred in the voice session.";
           setFatalError("Voice error", message);
+        }
+      };
+
+      ws.onerror = (err) => {
+        console.error('[Practice] WebSocket error:', err);
+        setFatalError(
+          "Voice connection failed",
+          "Could not connect to the voice service. Please check your network and try again."
+        );
+      };
+
+      ws.onclose = (event) => {
+        console.log('[Practice] WebSocket closed:', event.code, event.reason);
+        if (isPracticingRef.current) {
+          setFatalError(
+            "Voice session ended",
+            "The connection to the voice service closed unexpectedly."
+          );
         }
       };
     } catch (err) {

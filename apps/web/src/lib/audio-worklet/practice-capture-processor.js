@@ -21,18 +21,35 @@ function floatTo16BitPCM(input) {
   return output;
 }
 
+const BASE64_CHARS =
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
 /**
- * Encode an ArrayBuffer as a base64 string.
+ * Encode an ArrayBuffer as a base64 string without relying on `btoa`, which is
+ * unavailable inside an AudioWorklet global scope.
  * @param {ArrayBuffer} buffer
  * @returns {string}
  */
 function arrayBufferToBase64(buffer) {
   const bytes = new Uint8Array(buffer);
-  let binary = "";
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i]);
+  const len = bytes.length;
+  let result = "";
+  let i = 0;
+
+  while (i < len) {
+    const b1 = bytes[i++];
+    const b2 = i < len ? bytes[i++] : 0;
+    const b3 = i < len ? bytes[i++] : 0;
+
+    const bitmap = (b1 << 16) | (b2 << 8) | b3;
+
+    result += BASE64_CHARS.charAt((bitmap >> 18) & 63);
+    result += BASE64_CHARS.charAt((bitmap >> 12) & 63);
+    result += i - 1 < len ? BASE64_CHARS.charAt((bitmap >> 6) & 63) : "=";
+    result += i < len ? BASE64_CHARS.charAt(bitmap & 63) : "=";
   }
-  return btoa(binary);
+
+  return result;
 }
 
 class PracticeCaptureProcessor extends AudioWorkletProcessor {

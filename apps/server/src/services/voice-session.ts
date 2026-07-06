@@ -2,7 +2,7 @@ import { WebSocket } from "ws";
 import { logger } from "../logger.js";
 import { normalizeLang } from "./socket-utils.js";
 
-const GROK_VOICE_MODEL = "grok-voice-think-fast-1.0";
+const GROK_VOICE_MODEL = "grok-voice-latest";
 const GROK_VOICE_WS_URL = "wss://api.x.ai/v1/realtime";
 const SAMPLE_RATE = 24000;
 
@@ -114,11 +114,6 @@ export class SpeakerVoiceSession {
           threshold: 0.6,
           prefix_padding_ms: 200,
         },
-        audio: {
-          input: { format: { type: "audio/pcm", rate: SAMPLE_RATE } },
-          output: { format: { type: "audio/pcm", rate: SAMPLE_RATE } },
-        },
-        "audio.input.transcription.language_hint": this.sourceLang,
       },
     };
 

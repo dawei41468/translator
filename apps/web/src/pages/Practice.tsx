@@ -131,7 +131,7 @@ const Practice = () => {
       const tokenData = await apiClient.getVoiceEphemeralToken();
       const ephemeralToken = tokenData.value;
 
-      const wsUrl = `wss://api.x.ai/v1/realtime?model=grok-voice-think-fast-1.0`;
+      const wsUrl = `wss://api.x.ai/v1/realtime?model=grok-voice-latest`;
       const ws = new WebSocket(wsUrl, [`xai-client-secret.${ephemeralToken}`]);
       wsRef.current = ws;
 
@@ -160,11 +160,6 @@ const Practice = () => {
               threshold: 0.6,
               prefix_padding_ms: 200,
             },
-            audio: {
-              input: { format: { type: "audio/pcm", rate: SAMPLE_RATE } },
-              output: { format: { type: "audio/pcm", rate: SAMPLE_RATE } },
-            },
-            "audio.input.transcription.language_hint": homeLang,
           },
         }));
 

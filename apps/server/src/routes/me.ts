@@ -5,7 +5,6 @@ import { eq } from "drizzle-orm";
 import { db } from "../../../../packages/db/src/index.js";
 import { users } from "../../../../packages/db/src/schema.js";
 import { authenticate, parseCookies } from "../middleware/auth.js";
-// import { logError, logInfo, getRequestContext } from "../logger.js";
 
 const router = express.Router();
 
@@ -56,10 +55,6 @@ router.get("/", async (req, res) => {
       return res.json({ user: null });
     }
 
-    // if (!user.isActive) {
-    //   return res.json({ user: null });
-    // }
-
     return res.json({
       user: {
         id: user.id,
@@ -77,7 +72,6 @@ router.get("/", async (req, res) => {
 });
 
 router.put("/language", authenticate, async (req, res) => {
-  // const context = getRequestContext(req);
   try {
     const { language } = req.body;
     if (!language || typeof language !== "string" || !["en", "zh", "ko", "es", "ja", "it", "de", "nl"].includes(language)) {
@@ -86,17 +80,13 @@ router.put("/language", authenticate, async (req, res) => {
 
     await db.update(users).set({ language }).where(eq(users.id, req.user!.id));
 
-    // logInfo("User updated language", { ...context, language });
-
     res.json({ message: "Language updated" });
   } catch (err) {
-    // logError("Update language error", err as Error, context);
     res.status(500).json({ error: "Server error" });
   }
 });
 
 router.patch("/", authenticate, async (req, res) => {
-  // const context = getRequestContext(req);
   try {
     const { displayName, language, preferences } = req.body;
 
@@ -150,11 +140,8 @@ router.patch("/", authenticate, async (req, res) => {
 
     await db.update(users).set(updateData).where(eq(users.id, req.user!.id));
 
-    // logInfo("User updated profile", { ...context, updateData });
-
     res.json({ message: "Profile updated" });
   } catch (err) {
-    // logError("Update profile error", err as Error, context);
     res.status(500).json({ error: "Server error" });
   }
 });

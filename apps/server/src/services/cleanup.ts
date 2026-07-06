@@ -18,11 +18,16 @@ export class CleanupService {
       await this.cleanupExpiredRooms();
     });
 
+    // Schedule guest account cleanup daily at 2:00 AM
+    cron.schedule('0 2 * * *', async () => {
+      await this.cleanupGuestAccounts();
+    });
+
     // Schedule TTS cache cleanup daily at 3:00 AM
     cron.schedule('0 3 * * *', async () => {
       await this.cleanupTtsCache();
     });
-    
+
     logger.info('Cleanup service initialized');
   }
 
@@ -37,6 +42,24 @@ export class CleanupService {
     } catch (error) {
       logger.error('Error cleaning up expired rooms', error);
       throw error;
+    }
+  }
+
+  /**
+   * Deletes guest accounts older than 24 hours.
+   * Cascade deletes handle sessions, room_participants, and rooms created by the guest.
+   */
+  static async cleanupGuestAccounts() {
+    try {
+      const result = await db.execute(
+        sql`delete from users where is_guest = true and created_at < now() - interval '24 hours'`
+      );
+      const count = result.length ?? 0;
+      if (count > 0) {
+        logger.info(`Guest account cleanup: deleted ${count} stale accounts`);
+      }
+    } catch (error) {
+      logger.error('Error cleaning up guest accounts', error);
     }
   }
 

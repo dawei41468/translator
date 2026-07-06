@@ -7,7 +7,6 @@ import { z, ZodError } from "zod";
 import { eq } from "drizzle-orm";
 import { db } from "../../../../packages/db/src/index.js";
 import { users } from "../../../../packages/db/src/schema.js";
-// import { logInfo, logWarn, logError, getRequestContext } from "../middleware/logger.js";
 import { authenticate } from "../middleware/auth.js";
 
 const router = express.Router();
@@ -42,18 +41,7 @@ router.post("/login", async (req, res) => {
     typeof body === "object" && body !== null && typeof (body as { password?: unknown }).password === "string"
       ? (body as { password: string }).password
       : undefined;
-  // const context = getRequestContext(req);
-
   if (!email || !password) {
-    const passwordLength = typeof password === "string" ? password.length : null;
-    // logWarn("Login attempt with missing fields", {
-    //   ...context,
-    //   email,
-    //   contentType: req.headers["content-type"],
-    //   bodyKeys: typeof body === "object" && body !== null ? Object.keys(body as Record<string, unknown>) : null,
-    //   passwordType: typeof password,
-    //   passwordLength,
-    // });
     return res.status(400).json({ error: "Missing fields" });
   }
 
@@ -63,18 +51,12 @@ router.post("/login", async (req, res) => {
     });
 
     if (matchingUsers.length > 1) {
-      // logError(
-      //   "Duplicate email detected during login",
-      //   new Error("Duplicate email"),
-      //   { ...context, email }
-      // );
       return res.status(409).json({ error: "Multiple accounts share this email. Contact an admin." });
     }
 
     const user = matchingUsers[0];
 
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
-      // logWarn("Failed login attempt", { ...context, email });
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
@@ -98,8 +80,6 @@ router.post("/login", async (req, res) => {
       path: "/",
     });
 
-    // logInfo("User logged in successfully", { ...context, userId: user.id });
-
     res.json({
       user: {
         id: user.id,
@@ -110,7 +90,6 @@ router.post("/login", async (req, res) => {
       },
     });
   } catch (err) {
-    // logError("Login error", err as Error, context);
     res.status(500).json({ error: "Server error" });
   }
 });
@@ -269,7 +248,6 @@ router.post("/logout", (req, res) => {
 });
 
 router.post("/change-password", authenticate, async (req, res) => {
-  // const context = getRequestContext(req);
   try {
     const data = changePasswordSchema.parse(req.body);
 
@@ -309,13 +287,11 @@ router.post("/change-password", authenticate, async (req, res) => {
       path: "/",
     });
 
-    // logInfo("User changed password", { ...context, userId: user.id });
     return res.json({ message: "Password updated" });
   } catch (err) {
     if (err instanceof ZodError) {
       return res.status(400).json({ error: "Invalid input", details: (err as ZodError).errors });
     }
-    // logError("Change password error", err as Error, context);
     return res.status(500).json({ error: "Server error" });
   }
 });

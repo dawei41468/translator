@@ -12,6 +12,13 @@ import { voiceRouter } from "./routes/voice.js";
 import { authenticate } from "./middleware/auth.js";
 import { requestLogger } from "./middleware/logger.js";
 
+export interface UserPreferences {
+  sttEngine?: string;
+  ttsEngine?: string;
+  translationEngine?: string;
+  ttsVoice?: string;
+}
+
 declare global {
   namespace Express {
     interface Request {
@@ -19,8 +26,10 @@ declare global {
         id: string;
         email: string;
         name: string | null;
+        displayName: string | null;
         language: string | null;
-        preferences: any;
+        isGuest: boolean | null;
+        preferences: UserPreferences | null;
         createdAt: Date | null;
         updatedAt: Date | null;
         deletedAt: Date | null;
@@ -69,14 +78,6 @@ app.use(json({ limit: "10kb" }));
 app.use(express.urlencoded({ extended: true, limit: "10kb" }));
 
 // Rate limiting
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // limit each IP to 10 requests per windowMs
-  message: "Too many authentication attempts, please try again later.",
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
 const roomLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
   max: 30, // limit each IP to 30 room operations per minute
@@ -118,7 +119,7 @@ app.use(
 
 
 // ────── AUTH ENDPOINTS ──────
-app.use("/api/auth", authLimiter, authRouter);
+app.use("/api/auth", authRouter);
 
 app.use("/api/me", meRouter);
 

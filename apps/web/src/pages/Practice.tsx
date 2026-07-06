@@ -36,8 +36,6 @@ const Practice = () => {
   const [error, setError] = useState<PracticeError | null>(null);
   const [visualizerValues, setVisualizerValues] = useState<number[]>([]);
 
-  const [workletReady, setWorkletReady] = useState<boolean | null>(null);
-
   const homeLanguage = LANGUAGES.find(l => l.code === homeLang);
   const targetLanguage = LANGUAGES.find(l => l.code === targetLang);
 
@@ -63,10 +61,6 @@ const Practice = () => {
     };
   }, [audioWorkletPlayer]);
 
-  // Legacy fallback playback refs (used when AudioWorklet is unavailable)
-  const audioQueueRef = useRef<Float32Array[]>([]);
-  const isPlayingRef = useRef(false);
-
   const getLangName = (code: string) => {
     const lang = LANGUAGES.find(l => l.code === code);
     return lang?.nativeName || code;
@@ -77,73 +71,11 @@ const Practice = () => {
     void stopPracticeInternal();
   }, []);
 
-  const playNextChunk = useCallback(() => {
-    if (!audioContextRef.current || audioQueueRef.current.length === 0) {
-      isPlayingRef.current = false;
-      if (isPracticingRef.current) setStatus("listening");
-      return;
-    }
-
-    isPlayingRef.current = true;
-    setStatus("speaking");
-
-    const ctx = audioContextRef.current;
-    const float32 = audioQueueRef.current.shift()!;
-    const buffer = ctx.createBuffer(1, float32.length, SAMPLE_RATE);
-    buffer.getChannelData(0).set(float32);
-
-    const source = ctx.createBufferSource();
-    source.buffer = buffer;
-    source.connect(ctx.destination);
-
-    source.onended = () => {
-      playNextChunk();
-    };
-
-    source.start();
-  }, []);
-
-  const decodeBase64ToFloat32 = (base64Audio: string): Float32Array => {
-    const binaryString = atob(base64Audio);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
-    const pcm16 = new Int16Array(bytes.buffer);
-    const float32 = new Float32Array(pcm16.length);
-    for (let i = 0; i < pcm16.length; i++) {
-      float32[i] = pcm16[i] / 32768.0;
-    }
-    return float32;
-  };
-
   const playAudioChunk = useCallback(async (base64Audio: string) => {
-    // Prefer AudioWorklet playback when available.
-    if (audioWorkletPlayer.isReady) {
-      await audioWorkletPlayer.resume();
-      audioWorkletPlayer.playChunk(base64Audio);
-      setStatus("speaking");
-      return;
-    }
-
-    // Legacy AudioBufferSourceNode fallback.
-    if (!audioContextRef.current) {
-      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({
-        sampleRate: SAMPLE_RATE,
-      });
-    }
-
-    const ctx = audioContextRef.current;
-    if (ctx.state === 'suspended') {
-      await ctx.resume();
-    }
-
-    const float32 = decodeBase64ToFloat32(base64Audio);
-    audioQueueRef.current.push(float32);
-    if (!isPlayingRef.current) {
-      playNextChunk();
-    }
-  }, [audioWorkletPlayer, playNextChunk]);
+    await audioWorkletPlayer.resume();
+    audioWorkletPlayer.playChunk(base64Audio);
+    setStatus("speaking");
+  }, [audioWorkletPlayer]);
 
   const stopPracticeInternal = useCallback(() => {
     isPracticingRef.current = false;
@@ -182,8 +114,6 @@ const Practice = () => {
       audioContextRef.current = null;
     }
 
-    audioQueueRef.current = [];
-    isPlayingRef.current = false;
     audioWorkletPlayer.clear();
     void audioWorkletPlayer.dispose();
   }, [stopVisualizer, audioWorkletPlayer]);
@@ -338,10 +268,6 @@ const Practice = () => {
         if (type !== 'audio' || !base64) return;
         if (!ws || ws.readyState !== WebSocket.OPEN || !isPracticingRef.current) return;
 
-        if (!window.__practiceAudioSent) {
-          window.__practiceAudioSent = true;
-        }
-
         ws.send(JSON.stringify({
           type: "input_audio_buffer.append",
           audio: base64,
@@ -368,30 +294,12 @@ const Practice = () => {
     } else {
       setError(null);
       isPracticingRef.current = true;
-      window.__practiceAudioSent = false;
       setIsPracticing(true);
       setLastUtterance("");
       setTranslatedText("");
       await connectVoice();
     }
   };
-
-  // Runtime self-test: try to initialize the S2S audio player on mount.
-  useEffect(() => {
-    let cancelled = false;
-    audioWorkletPlayer.initialize().then((ready) => {
-      if (cancelled) return;
-      setWorkletReady(ready);
-      if (ready) {
-        console.log('[Practice] S2S audio playback ready');
-      } else {
-        console.warn('[Practice] S2S audio playback unavailable, using legacy playback fallback');
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [audioWorkletPlayer]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -562,11 +470,6 @@ const Practice = () => {
 
       <div className="mt-8 text-center text-xs text-muted-foreground">
         Powered by Grok Voice speech-to-speech. Uses server VAD for natural turn-taking.
-        {workletReady !== null && (
-          <span className="block mt-1" data-testid="worklet-status">
-            {workletReady ? "S2S audio playback active" : "Legacy playback active"}
-          </span>
-        )}
       </div>
     </div>
   );

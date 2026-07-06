@@ -54,6 +54,17 @@ const AUTH_COOKIE_NAME = "auth_token";
 // Rate limiting for socket events
 const rateLimits = new Map<string, { count: number; resetTime: number }>();
 
+// Prune expired entries every 60 seconds to prevent unbounded growth
+const RATE_LIMIT_PRUNE_INTERVAL = 60_000;
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of rateLimits) {
+    if (now > entry.resetTime) {
+      rateLimits.delete(key);
+    }
+  }
+}, RATE_LIMIT_PRUNE_INTERVAL);
+
 function checkRateLimit(userId: string, event: string, maxRequests: number, windowMs: number): boolean {
   const key = `${userId}:${event}`;
   const now = Date.now();
@@ -412,7 +423,20 @@ export function setupSocketIO(io: Server) {
       }
     });
 
+    // Add heartbeat/ping to detect connection issues early
+    const heartbeat = setInterval(() => {
+      if (socket.connected) {
+        socket.emit("ping");
+      }
+    }, 30000); // 30 second heartbeat
+
+    socket.on("pong", () => {
+      // Client responds to ping - connection is healthy
+    });
+
     socket.on("disconnect", async (reason) => {
+      clearInterval(heartbeat);
+
       logger.info(`User disconnected from socket`, {
         userId: socket.userId,
         reason,
@@ -422,7 +446,6 @@ export function setupSocketIO(io: Server) {
       await disposeActiveUtterance();
 
       if (socket.roomId && socket.userId) {
-        // Update status to disconnected instead of deleting
         try {
           await withRetry(() =>
             db.update(roomParticipants)
@@ -436,7 +459,6 @@ export function setupSocketIO(io: Server) {
               )), 2, 500
           );
 
-          // Broadcast status change
           socket.to(socket.roomId).emit("participant-status-changed", {
             userId: socket.userId,
             status: 'disconnected',
@@ -455,22 +477,6 @@ export function setupSocketIO(io: Server) {
     // Handle reconnection - client will rejoin room automatically
     socket.on("reconnect", () => {
       logger.info(`User reconnected to socket`, { userId: socket.userId });
-      // Note: Client handles room rejoining via React useEffect
-    });
-
-    // Add heartbeat/ping to detect connection issues early
-    const heartbeat = setInterval(() => {
-      if (socket.connected) {
-        socket.emit("ping");
-      }
-    }, 30000); // 30 second heartbeat
-
-    socket.on("pong", () => {
-      // Client responds to ping - connection is healthy
-    });
-
-    socket.on("disconnect", () => {
-      clearInterval(heartbeat);
     });
   });
 }

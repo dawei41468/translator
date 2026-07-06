@@ -84,6 +84,36 @@ describe('CleanupService', () => {
     });
   });
 
+  describe('cleanupGuestAccounts', () => {
+    it('should delete guest accounts older than 24 hours', async () => {
+      (db.execute as any).mockResolvedValue([{ id: 1 }, { id: 2 }]);
+
+      await CleanupService.cleanupGuestAccounts();
+
+      expect(db.execute).toHaveBeenCalledWith(
+        sql`delete from users where is_guest = true and created_at < now() - interval '24 hours'`
+      );
+      expect(logger.info).toHaveBeenCalledWith('Guest account cleanup: deleted 2 stale accounts');
+    });
+
+    it('should not log when no accounts were deleted', async () => {
+      (db.execute as any).mockResolvedValue([]);
+
+      await CleanupService.cleanupGuestAccounts();
+
+      expect(logger.info).not.toHaveBeenCalled();
+    });
+
+    it('should log error and not throw if cleanup fails', async () => {
+      const error = new Error('DB Error');
+      (db.execute as any).mockRejectedValue(error);
+
+      await CleanupService.cleanupGuestAccounts();
+
+      expect(logger.error).toHaveBeenCalledWith('Error cleaning up guest accounts', error);
+    });
+  });
+
   describe('cleanupTtsCache', () => {
     it('should do nothing if cache dir does not exist', async () => {
       (fs.access as any).mockRejectedValue(new Error('ENOENT'));

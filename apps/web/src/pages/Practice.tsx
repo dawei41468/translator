@@ -14,7 +14,8 @@ import {
 import { apiClient } from "@/lib/api";
 import { AudioWaveform } from "@/components/AudioWaveform";
 import { useAudioVisualizer } from "@/lib/useAudioVisualizer";
-import { useAudioWorkletPlayer } from "@/lib/audio-worklet/useAudioWorkletPlayer";
+import { useS2SAudioPlayer } from "@/lib/audio-worklet/useS2SAudioPlayer";
+import captureProcessorSource from "@/lib/audio-worklet/practice-capture-processor.js?raw";
 import { cn } from "@/lib/utils";
 
 type PracticeStatus = "idle" | "connecting" | "listening" | "processing" | "speaking";
@@ -44,13 +45,14 @@ const Practice = () => {
   const wsRef = useRef<WebSocket | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
-  const processorRef = useRef<ScriptProcessorNode | null>(null);
+  const processorRef = useRef<AudioWorkletNode | null>(null);
   const inputSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const captureBlobUrlRef = useRef<string | null>(null);
   const isPracticingRef = useRef(false);
   const SAMPLE_RATE = 24000;
 
   const { start: startVisualizer, stop: stopVisualizer } = useAudioVisualizer();
-  const audioWorkletPlayer = useAudioWorkletPlayer(SAMPLE_RATE);
+  const audioWorkletPlayer = useS2SAudioPlayer(SAMPLE_RATE);
 
   useEffect(() => {
     audioWorkletPlayer.onPlaybackEmpty(() => {
@@ -159,12 +161,17 @@ const Practice = () => {
     }
 
     if (processorRef.current) {
+      try { processorRef.current.port.postMessage({ type: 'stop' }); } catch {}
       try { processorRef.current.disconnect(); } catch {}
       processorRef.current = null;
     }
     if (inputSourceRef.current) {
       try { inputSourceRef.current.disconnect(); } catch {}
       inputSourceRef.current = null;
+    }
+    if (captureBlobUrlRef.current) {
+      URL.revokeObjectURL(captureBlobUrlRef.current);
+      captureBlobUrlRef.current = null;
     }
     if (mediaStreamRef.current) {
       mediaStreamRef.current.getTracks().forEach(t => t.stop());
@@ -311,25 +318,25 @@ const Practice = () => {
       const source = ctx.createMediaStreamSource(stream);
       inputSourceRef.current = source;
 
-      const processor = ctx.createScriptProcessor(4096, 1, 1);
-      processorRef.current = processor;
+      // Load the capture processor from an inlined Blob URL so it works in any
+      // bundler environment without needing a separate public asset.
+      const blob = new Blob([captureProcessorSource], { type: 'application/javascript' });
+      const blobUrl = URL.createObjectURL(blob);
+      captureBlobUrlRef.current = blobUrl;
 
-      processor.onaudioprocess = (e) => {
+      await ctx.audioWorklet.addModule(blobUrl);
+
+      const worklet = new AudioWorkletNode(ctx, 'practice-capture-processor', {
+        channelCount: 1,
+        numberOfInputs: 1,
+        numberOfOutputs: 0,
+      });
+      processorRef.current = worklet;
+
+      worklet.port.onmessage = (event) => {
+        const { type, base64 } = event.data;
+        if (type !== 'audio' || !base64) return;
         if (!ws || ws.readyState !== WebSocket.OPEN || !isPracticingRef.current) return;
-
-        const inputData = e.inputBuffer.getChannelData(0);
-        const pcm16 = new Int16Array(inputData.length);
-        for (let i = 0; i < inputData.length; i++) {
-          const s = Math.max(-1, Math.min(1, inputData[i]));
-          pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-        }
-
-        const bytes = new Uint8Array(pcm16.buffer);
-        let binary = "";
-        for (let i = 0; i < bytes.byteLength; i++) {
-          binary += String.fromCharCode(bytes[i]);
-        }
-        const base64 = btoa(binary);
 
         if (!window.__practiceAudioSent) {
           window.__practiceAudioSent = true;
@@ -341,12 +348,8 @@ const Practice = () => {
         }));
       };
 
-      source.connect(processor);
-
-      const silentGain = ctx.createGain();
-      silentGain.gain.value = 0;
-      processor.connect(silentGain);
-      silentGain.connect(ctx.destination);
+      source.connect(worklet);
+      worklet.port.postMessage({ type: 'start' });
 
       startVisualizer(stream, (values) => {
         setVisualizerValues(values);
@@ -373,16 +376,16 @@ const Practice = () => {
     }
   };
 
-  // Runtime self-test: try to initialize the AudioWorklet player on mount.
+  // Runtime self-test: try to initialize the S2S audio player on mount.
   useEffect(() => {
     let cancelled = false;
     audioWorkletPlayer.initialize().then((ready) => {
       if (cancelled) return;
       setWorkletReady(ready);
       if (ready) {
-        console.log('[Practice] AudioWorklet playback ready');
+        console.log('[Practice] S2S audio playback ready');
       } else {
-        console.warn('[Practice] AudioWorklet unavailable, using legacy playback fallback');
+        console.warn('[Practice] S2S audio playback unavailable, using legacy playback fallback');
       }
     });
     return () => {
@@ -561,7 +564,7 @@ const Practice = () => {
         Powered by Grok Voice speech-to-speech. Uses server VAD for natural turn-taking.
         {workletReady !== null && (
           <span className="block mt-1" data-testid="worklet-status">
-            {workletReady ? "AudioWorklet playback active" : "Legacy playback active"}
+            {workletReady ? "S2S audio playback active" : "Legacy playback active"}
           </span>
         )}
       </div>

@@ -1,8 +1,8 @@
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { useAudioWorkletPlayer } from "../useAudioWorkletPlayer";
+import { useS2SAudioPlayer } from "../useS2SAudioPlayer";
 
-describe("useAudioWorkletPlayer", () => {
+describe("useS2SAudioPlayer", () => {
   const mockPostMessage = vi.fn();
   const mockDisconnect = vi.fn();
   const mockClose = vi.fn().mockResolvedValue(undefined);
@@ -81,7 +81,7 @@ describe("useAudioWorkletPlayer", () => {
   });
 
   it("initializes the worklet node lazily on first playChunk", async () => {
-    const { result } = renderHook(() => useAudioWorkletPlayer(24000));
+    const { result } = renderHook(() => useS2SAudioPlayer(24000));
 
     expect(result.current.isReady).toBe(false);
 
@@ -94,7 +94,7 @@ describe("useAudioWorkletPlayer", () => {
   });
 
   it("posts audio chunks to the worklet port", async () => {
-    const { result } = renderHook(() => useAudioWorkletPlayer(24000));
+    const { result } = renderHook(() => useS2SAudioPlayer(24000));
 
     await act(async () => {
       await result.current.playChunk("AAAA");
@@ -104,7 +104,7 @@ describe("useAudioWorkletPlayer", () => {
   });
 
   it("clears queued audio on clear()", async () => {
-    const { result } = renderHook(() => useAudioWorkletPlayer(24000));
+    const { result } = renderHook(() => useS2SAudioPlayer(24000));
 
     await act(async () => {
       await result.current.playChunk("AAAA");
@@ -116,7 +116,7 @@ describe("useAudioWorkletPlayer", () => {
 
   it("notifies onPlaybackEmpty when worklet posts playback-empty", async () => {
     const onEmpty = vi.fn();
-    const { result } = renderHook(() => useAudioWorkletPlayer(24000));
+    const { result } = renderHook(() => useS2SAudioPlayer(24000));
 
     act(() => {
       result.current.onPlaybackEmpty(onEmpty);
@@ -150,7 +150,7 @@ describe("useAudioWorkletPlayer", () => {
       configurable: true,
     });
 
-    const { result } = renderHook(() => useAudioWorkletPlayer(24000));
+    const { result } = renderHook(() => useS2SAudioPlayer(24000));
 
     await act(async () => {
       await result.current.playChunk("AAAA");
@@ -160,7 +160,7 @@ describe("useAudioWorkletPlayer", () => {
   });
 
   it("disposes context and revokes blob URL on unmount", async () => {
-    const { result, unmount } = renderHook(() => useAudioWorkletPlayer(24000));
+    const { result, unmount } = renderHook(() => useS2SAudioPlayer(24000));
 
     await act(async () => {
       await result.current.playChunk("AAAA");

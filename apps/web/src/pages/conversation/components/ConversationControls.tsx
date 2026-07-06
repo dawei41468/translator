@@ -15,7 +15,6 @@ interface ConversationControlsProps {
   pushToTalkEnabled: boolean;
   canStartRecording: boolean;
   connectionStatus: string;
-  openSettings: () => void;
 }
 
 export function ConversationControls({
@@ -26,7 +25,6 @@ export function ConversationControls({
   pushToTalkEnabled,
   canStartRecording,
   connectionStatus,
-  openSettings,
 }: ConversationControlsProps) {
   const { t } = useTranslation();
 
@@ -171,15 +169,6 @@ export function ConversationControls({
             <p className="text-xs text-muted-foreground" role="note">
               {t('conversation.onlyParticipantHint')}
             </p>
-            <Button
-              type="button"
-              variant="link"
-              size="sm"
-              className="px-0 h-auto"
-              onClick={openSettings}
-            >
-              {t('common.settings', 'Settings')}
-            </Button>
           </div>
         )}
       </div>

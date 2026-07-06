@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useUpdateLanguage } from "@/lib/hooks";
 import { useAuth } from "@/lib/auth";
@@ -19,14 +18,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { User, Settings, LogOut, Check, Edit } from "lucide-react";
+import { User, LogOut, Check, Edit } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 
 const Profile = () => {
   const { t } = useTranslation();
-  const navigate = useNavigate();
-  const { user, logout, speechEngineRegistry } = useAuth();
+  const { user, logout } = useAuth();
   const queryClient = useQueryClient();
 
   const updateLanguageMutation = useUpdateLanguage();
@@ -66,17 +64,6 @@ const Profile = () => {
     updateLanguageMutation.mutate(language);
   };
 
-  const handleEnginePreferenceChange = (type: 'stt' | 'tts' | 'translation', engineId: string) => {
-    const currentPreferences = user?.preferences || {};
-    const newPreferences = {
-      ...currentPreferences,
-      [type === 'stt' ? 'sttEngine' : type === 'tts' ? 'ttsEngine' : 'translationEngine']: engineId
-    };
-
-    // Update database - registry will be recreated automatically
-    updateProfileMutation.mutate({ preferences: newPreferences });
-  };
-
   const handleLogout = () => {
     logout();
   };
@@ -88,42 +75,6 @@ const Profile = () => {
       </div>
     );
   }
-
-  const preferences = user.preferences || {};
-
-	const DEFAULT_STT_ENGINE_ID = "grok-stt";
-	const DEFAULT_TTS_ENGINE_ID = "grok-tts";
-	const DEFAULT_TRANSLATION_ENGINE_ID = "grok-translate";
-
-	const allSttEngines = speechEngineRegistry.getAvailableSttEngines();
-	const sttEnginesNoMocks = allSttEngines.filter((e) => !e.id.startsWith("mock-"));
-	const availableSttEngines = sttEnginesNoMocks.length > 0 ? sttEnginesNoMocks : allSttEngines;
-	const resolvedSttEngineId =
-		preferences.sttEngine && availableSttEngines.some((e) => e.id === preferences.sttEngine)
-			? preferences.sttEngine
-			: availableSttEngines.some((e) => e.id === DEFAULT_STT_ENGINE_ID)
-					? DEFAULT_STT_ENGINE_ID
-					: availableSttEngines[0]?.id || DEFAULT_STT_ENGINE_ID;
-
-	const allTtsEngines = speechEngineRegistry.getAvailableTtsEngines();
-	const ttsEnginesNoMocks = allTtsEngines.filter((e) => !e.id.startsWith("mock-"));
-	const availableTtsEngines = ttsEnginesNoMocks.length > 0 ? ttsEnginesNoMocks : allTtsEngines;
-	const resolvedTtsEngineId =
-		preferences.ttsEngine && availableTtsEngines.some((e) => e.id === preferences.ttsEngine)
-			? preferences.ttsEngine
-			: availableTtsEngines.some((e) => e.id === DEFAULT_TTS_ENGINE_ID)
-					? DEFAULT_TTS_ENGINE_ID
-					: availableTtsEngines[0]?.id || DEFAULT_TTS_ENGINE_ID;
-
-	const availableTranslationEngines = [
-		{ id: "grok-translate", name: "Grok (xAI) Translation" },
-	];
-
-	const resolvedTranslationEngineId =
-		preferences.translationEngine &&
-		availableTranslationEngines.some((e) => e.id === preferences.translationEngine)
-			? preferences.translationEngine
-			: DEFAULT_TRANSLATION_ENGINE_ID;
 
   const platform = getMobilePlatform();
   const standalone = isStandalone();
@@ -156,8 +107,8 @@ const Profile = () => {
                 className="mt-1"
               />
               <p className="text-sm text-muted-foreground mt-1">
-                {user.isGuest 
-                  ? t('profile.guestEmailDescription', 'Guest accounts are temporary sessions.') 
+                {user.isGuest
+                  ? t('profile.guestEmailDescription', 'Guest accounts are temporary sessions.')
                   : t('profile.emailDescription', 'Your email address cannot be changed')}
               </p>
             </div>
@@ -217,132 +168,6 @@ const Profile = () => {
               </Select>
               <p className="text-sm text-muted-foreground mt-1">
                 {t('profile.languageDescription', 'Your preferred language for the interface and speech recognition')}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Engine Preferences */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Settings className="h-5 w-5" />
-              {t('profile.enginePreferences', 'Engine Preferences')}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {user.isGuest && (
-              <div className="bg-muted/50 border rounded-lg p-4 mb-4">
-                <h4 className="font-medium text-sm mb-1">{t('profile.unlockFeatures', 'Unlock Premium Features')}</h4>
-                <p className="text-sm text-muted-foreground mb-3">
-                  {t('profile.guestEngineDescription', 'Sign up to use premium speech engines (OpenAI, Deepgram) and save your preferences.')}
-                </p>
-                <Button 
-                  onClick={() => navigate('/register')} 
-                  variant="default" 
-                  size="sm"
-                >
-                  {t('auth.createAccount', 'Create Account')}
-                </Button>
-              </div>
-            )}
-            <div>
-              <Label htmlFor="sttEngine">{t('profile.defaultSttEngine', 'Default STT Engine')}</Label>
-              <Select
-                value={resolvedSttEngineId}
-                onValueChange={(value) => handleEnginePreferenceChange('stt', value)}
-                disabled={updateProfileMutation.isPending || user.isGuest}
-              >
-                <SelectTrigger className="mt-1">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableSttEngines.map((engine) => (
-                    <SelectItem key={engine.id} value={engine.id}>
-                      {engine.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-sm text-muted-foreground mt-1">
-                {t('profile.sttEngineDescription', 'Engine used for speech-to-text conversion')}
-              </p>
-            </div>
-
-            <div>
-              <Label htmlFor="ttsEngine">{t('profile.defaultTtsEngine', 'Default TTS Engine')}</Label>
-              <Select
-                value={resolvedTtsEngineId}
-                onValueChange={(value) => handleEnginePreferenceChange('tts', value)}
-                disabled={updateProfileMutation.isPending || user.isGuest}
-              >
-                <SelectTrigger className="mt-1">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableTtsEngines.map((engine) => (
-                    <SelectItem key={engine.id} value={engine.id}>
-                      {engine.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-sm text-muted-foreground mt-1">
-                {t('profile.ttsEngineDescription', 'Engine used for text-to-speech playback')}
-              </p>
-            </div>
-
-            {resolvedTtsEngineId === 'grok-tts' && (
-              <div>
-                <Label htmlFor="ttsVoice">{t('profile.ttsVoice', 'TTS Voice')}</Label>
-                <Select
-                  value={preferences.ttsVoice || 'eve'}
-                  onValueChange={(value) => {
-                    const newPreferences = {
-                      ...preferences,
-                      ttsVoice: value,
-                    };
-                    updateProfileMutation.mutate({ preferences: newPreferences });
-                  }}
-                  disabled={updateProfileMutation.isPending || user.isGuest}
-                >
-                  <SelectTrigger className="mt-1">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="eve">Eve (energetic)</SelectItem>
-                    <SelectItem value="ara">Ara (warm)</SelectItem>
-                    <SelectItem value="leo">Leo (authoritative)</SelectItem>
-                    <SelectItem value="rex">Rex (confident)</SelectItem>
-                    <SelectItem value="sal">Sal (balanced)</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-sm text-muted-foreground mt-1">
-                  {t('profile.ttsVoiceDescription', 'Voice used for Grok TTS playback')}
-                </p>
-              </div>
-            )}
-
-            <div>
-              <Label htmlFor="translationEngine">{t('profile.defaultTranslationEngine', 'Default Translation Engine')}</Label>
-              <Select
-                value={resolvedTranslationEngineId}
-                onValueChange={(value) => handleEnginePreferenceChange('translation', value)}
-                disabled={updateProfileMutation.isPending || user.isGuest}
-              >
-                <SelectTrigger className="mt-1">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableTranslationEngines.map((engine) => (
-                    <SelectItem key={engine.id} value={engine.id}>
-                      {engine.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-sm text-muted-foreground mt-1">
-                {t('profile.translationEngineDescription', 'Engine used for language translation')}
               </p>
             </div>
           </CardContent>

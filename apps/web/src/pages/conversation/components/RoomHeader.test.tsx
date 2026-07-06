@@ -29,10 +29,6 @@ describe('RoomHeader participants', () => {
         onSettingsOpenChange={vi.fn()}
         isRecording={false}
         hasOtherParticipants={true}
-        soloMode={false}
-        toggleSoloMode={vi.fn()}
-        soloTargetLang="es"
-        onSoloLangChange={vi.fn()}
         participants={[
           { id: 'u2', name: 'Alice', language: 'es' },
           { id: 'u1', name: 'Bob', language: 'en' },

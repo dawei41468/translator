@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { io, Socket } from "socket.io-client";
 import { useRoom, useUpdateLanguage } from "@/lib/hooks";
@@ -8,8 +8,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/ui/error-state";
 import { Card } from "@/components/ui/card";
 import { useAuth } from "@/lib/auth";
-import { LANGUAGES } from "@/lib/languages";
 import { useWakeLock } from "@/lib/useWakeLock";
+import { useS2SAudioPlayer } from "@/lib/audio-worklet/useS2SAudioPlayer";
 
 // Local imports
 import { Message, ConnectionStatus } from "./conversation/types";
@@ -21,19 +21,17 @@ import { ConversationControls } from "./conversation/components/ConversationCont
 import { DebugPanel } from "./conversation/components/DebugPanel";
 import { ParticipantStatus } from "@/components/StatusIndicator";
 
-const TTS_ENABLED_STORAGE_KEY = "translator_tts_enabled";
+const AUDIO_ENABLED_STORAGE_KEY = "translator_audio_enabled";
 
 const Conversation = () => {
   const { t } = useTranslation();
   const { code } = useParams<{ code: string }>();
   const navigate = useNavigate();
-  const { user, speechEngineRegistry } = useAuth();
+  const { user } = useAuth();
   const updateLanguageMutation = useUpdateLanguage();
   const tRef = useRef(t);
 
-  const ownSpeakerName = useMemo(() => {
-    return user?.displayName || user?.name || undefined;
-  }, [user?.displayName, user?.name]);
+  const ownSpeakerName = user?.displayName || user?.name || undefined;
   const ownSpeakerNameRef = useRef<string | undefined>(ownSpeakerName);
 
   useEffect(() => {
@@ -44,13 +42,13 @@ const Conversation = () => {
     ownSpeakerNameRef.current = ownSpeakerName;
   }, [ownSpeakerName]);
 
-  const isTtsDebugEnabled = import.meta.env.VITE_ENABLE_TTS_DEBUG === 'true';
+  const isDebugEnabled = import.meta.env.VITE_ENABLE_TTS_DEBUG === 'true';
   const [socket, setSocket] = useState<Socket | null>(null);
   const socketRef = useRef<Socket | null>(null);
 
   const [messages, setMessages] = useState<Message[]>(() => {
     if (code) {
-      const stored = localStorage.getItem(`messages-${code}`);
+      const stored = sessionStorage.getItem(`translator_messages_${code}`);
       return stored ? JSON.parse(stored) : [];
     }
     return [];
@@ -80,24 +78,13 @@ const Conversation = () => {
 
   // Keep screen awake while connected to the conversation
   useWakeLock(connectionStatus === 'connected');
-  const [soloMode, setSoloMode] = useState(false);
-  const soloModeRef = useRef(soloMode);
-  useEffect(() => {
-    soloModeRef.current = soloMode;
-  }, [soloMode]);
 
-  const [soloTargetLang, setSoloTargetLang] = useState<string>(user?.language ?? "en");
-  const soloTargetLangRef = useRef(soloTargetLang);
-  useEffect(() => {
-    soloTargetLangRef.current = soloTargetLang;
-  }, [soloTargetLang]);
-  const [hasUserSelectedSoloLang, setHasUserSelectedSoloLang] = useState(false);
   const [debugPanelExpanded, setDebugPanelExpanded] = useState(false);
   const [isRoomSettingsOpen, setIsRoomSettingsOpen] = useState(false);
-  
+
   const [audioEnabled, setAudioEnabled] = useState(() => {
     try {
-      const stored = localStorage.getItem(TTS_ENABLED_STORAGE_KEY);
+      const stored = localStorage.getItem(AUDIO_ENABLED_STORAGE_KEY);
       if (stored === null) return false;
       return stored === "true";
     } catch {
@@ -105,37 +92,23 @@ const Conversation = () => {
     }
   });
 
-  const pushToTalkEnabled = useMemo(() => {
-    if (typeof window === 'undefined') return false;
-    const coarse = typeof window.matchMedia === 'function' && (
-      window.matchMedia('(pointer: coarse)').matches || window.matchMedia('(any-pointer: coarse)').matches
-    );
-    const hoverNone = typeof window.matchMedia === 'function' && (
-      window.matchMedia('(hover: none)').matches || window.matchMedia('(any-hover: none)').matches
-    );
-    return coarse && hoverNone;
-  }, []);
+  const pushToTalkEnabled = typeof window !== 'undefined' && typeof window.matchMedia === 'function' && (
+    window.matchMedia('(pointer: coarse)').matches || window.matchMedia('(any-pointer: coarse)').matches
+  ) && (
+    window.matchMedia('(hover: none)').matches || window.matchMedia('(any-hover: none)').matches
+  );
 
   const {
     isRecording,
-    sttStatus,
-    ttsStatus,
-    setTtsStatus,
+    status: s2sStatus,
     toggleRecording,
     startRecording,
     stopRecording,
     stopRecordingInternal,
     stopRecordingForUnmount,
-    speakText,
-    refreshVoices,
-    recordingParamsRef
   } = useSpeechEngine({
-    speechEngineRegistry,
     socketRef,
     userLanguage: user?.language,
-    audioEnabled,
-    soloMode,
-    soloTargetLang,
     disableAutoStopOnSilence: pushToTalkEnabled,
   });
 
@@ -144,16 +117,11 @@ const Conversation = () => {
     isRecordingRef.current = isRecording;
   }, [isRecording]);
 
-  const sttStatusRef = useRef(sttStatus);
-  useEffect(() => {
-    sttStatusRef.current = sttStatus;
-  }, [sttStatus]);
-
   const audioEnabledRef = useRef(audioEnabled);
   useEffect(() => {
     audioEnabledRef.current = audioEnabled;
     try {
-      localStorage.setItem(TTS_ENABLED_STORAGE_KEY, String(audioEnabled));
+      localStorage.setItem(AUDIO_ENABLED_STORAGE_KEY, String(audioEnabled));
     } catch {
       // ignore
     }
@@ -163,22 +131,17 @@ const Conversation = () => {
     socketRef.current = socket;
   }, [socket]);
 
-  // Sync soloTargetLang with user language on initial load and ensure it remains valid
-  useEffect(() => {
-    const availableLanguages = LANGUAGES.filter(lang => lang.code !== user?.language);
-    if (!hasUserSelectedSoloLang) {
-      const next = availableLanguages[0]?.code || LANGUAGES[0]?.code || "en";
-      setSoloTargetLang(next);
-      return;
-    }
+  // S2S audio player for cross-language utterance playback.
+  const s2sAudioPlayer = useS2SAudioPlayer(24000);
 
-    if (!availableLanguages.some(lang => lang.code === soloTargetLang)) {
-      const fallback = availableLanguages[0]?.code || LANGUAGES[0]?.code || "en";
-      if (fallback && fallback !== soloTargetLang) {
-        setSoloTargetLang(fallback);
-      }
-    }
-  }, [user?.language, hasUserSelectedSoloLang, soloTargetLang]);
+  useEffect(() => {
+    s2sAudioPlayer.onPlaybackEmpty(() => {
+      // Playback finished; UI is driven by utterance-done so nothing needed here.
+    });
+    return () => {
+      s2sAudioPlayer.onPlaybackEmpty(null);
+    };
+  }, [s2sAudioPlayer]);
 
   // Save messages to sessionStorage
   useEffect(() => {
@@ -192,11 +155,6 @@ const Conversation = () => {
   }, [messages, code]);
 
   const { data: roomData, isLoading, error, refetch } = useRoom(code);
-
-  const speakTextRef = useRef(speakText);
-  useEffect(() => {
-    speakTextRef.current = speakText;
-  }, [speakText]);
 
   const stopRecordingInternalRef = useRef(stopRecordingInternal);
   useEffect(() => {
@@ -246,12 +204,10 @@ const Conversation = () => {
       setConnectionStatus('connected');
 
       if (isRecordingRef.current) {
-        const params = recordingParamsRef.current || {
-          languageCode: sttStatusRef.current.language,
-          soloMode: soloModeRef.current,
-          soloTargetLang: soloModeRef.current ? soloTargetLangRef.current : undefined,
-        };
-        socketInstance.emit('start-speech', params);
+        // Reconnecting mid-utterance is not automatically resumed; client stops the
+        // local recorder and the user can restart speaking. This avoids mismatched
+        // utterance state between client and server.
+        stopRecordingInternalRef.current();
       }
     });
 
@@ -260,65 +216,54 @@ const Conversation = () => {
       toast.error('Unable to connect to conversation server.');
     });
 
-    socketInstance.on('translated-message', (data: any) => {
-      const message: Message = {
-        id: Date.now().toString(),
-        text: data.originalText,
-        translatedText: data.translatedText,
-        isOwn: false,
+    socketInstance.on('utterance-started', (data: { utteranceId: string; speakerId: string; sourceLang: string }) => {
+      const isOwn = data.speakerId === user?.id;
+      const newMessage: Message = {
+        id: data.utteranceId,
+        utteranceId: data.utteranceId,
+        text: "",
+        isOwn,
         timestamp: new Date(),
-        speakerName: data.speakerName,
+        speakerName: isOwn ? ownSpeakerNameRef.current : undefined,
+        speakerId: data.speakerId,
+        sourceLang: data.sourceLang,
       };
-      setMessages((prev: Message[]) => [...prev, message]);
-
-      if (
-        audioEnabledRef.current &&
-        !soloModeRef.current &&
-        typeof data?.translatedText === 'string' &&
-        typeof data?.originalText === 'string' &&
-        data.translatedText !== data.originalText
-      ) {
-        speakTextRef.current(data.translatedText, data.targetLang);
-      }
-    });
-
-    socketInstance.on('recognized-speech', (data: { id?: string; text: string; sourceLang: string; speakerName?: string }) => {
-      const message: Message = {
-        id: data.id ?? Date.now().toString(),
-        text: data.text,
-        isOwn: true,
-        timestamp: new Date(),
-        speakerName: ownSpeakerNameRef.current ?? data.speakerName,
-      };
-      setMessages((prev: Message[]) => [...prev, message]);
-    });
-
-    socketInstance.on('solo-translated', (data: any) => {
-      setMessages((prev: Message[]) => {
-        const existing = prev.find((m) => m.id === data.id);
-        if (existing) {
-          return prev.map((m) => (m.id === data.id ? { ...m, translatedText: data.translatedText } : m));
-        }
-        return [
-          ...prev,
-          {
-            id: data.id,
-            text: data.originalText,
-            translatedText: data.translatedText,
-            isOwn: true,
-            timestamp: new Date(),
-            speakerName: ownSpeakerNameRef.current ?? data.speakerName,
-          },
-        ];
+      setMessages((prev) => {
+        if (prev.some((m) => m.utteranceId === data.utteranceId)) return prev;
+        return [...prev, newMessage];
       });
+    });
 
-      if (audioEnabledRef.current && data.translatedText && data.translatedText.trim().length > 0) {
-        speakTextRef.current(data.translatedText, data.targetLang);
+    socketInstance.on('utterance-text', (data: { utteranceId: string; text: string; lang: string; isTranslation: boolean }) => {
+      setMessages((prev) => {
+        const idx = prev.findIndex((m) => m.utteranceId === data.utteranceId);
+        if (idx === -1) return prev;
+        const next = [...prev];
+        next[idx] = {
+          ...next[idx],
+          text: data.text,
+          targetLang: data.isTranslation ? data.lang : next[idx].targetLang,
+          isTranslation: data.isTranslation,
+        };
+        return next;
+      });
+    });
+
+    socketInstance.on('utterance-audio', async (data: { utteranceId: string; base64Audio: string; targetLang: string }) => {
+      if (!audioEnabledRef.current) return;
+      await s2sAudioPlayer.resume();
+      s2sAudioPlayer.playChunk(data.base64Audio);
+    });
+
+    socketInstance.on('utterance-done', (data: { utteranceId: string }) => {
+      // Finalize any pending UI state for the utterance if needed.
+      if (import.meta.env.DEV) {
+        console.log('[Conversation] utterance done', data.utteranceId);
       }
     });
 
-    socketInstance.on('speech-error', (error: string) => {
-      toast.error(error);
+    socketInstance.on('utterance-error', (data: { utteranceId: string; message: string }) => {
+      toast.error(data.message || 'Speech error');
       stopRecordingInternalRef.current();
     });
 
@@ -341,7 +286,7 @@ const Conversation = () => {
     return () => {
       socketInstance.disconnect();
     };
-  }, [code]); // Only recreate socket if room code changes
+  }, [code, user?.id, s2sAudioPlayer]);
 
   // Handle visibility changes for participant status
   useEffect(() => {
@@ -358,57 +303,18 @@ const Conversation = () => {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [socket]);
 
-  // Initialize speech engines
   useEffect(() => {
-    const initializeEngines = async () => {
-      try {
-        const ttsEngine = speechEngineRegistry.getTtsEngine();
-        if (ttsEngine) {
-          await ttsEngine.initialize();
-          const voices = await ttsEngine.getVoices();
-          setTtsStatus(prev => ({
-            ...prev,
-            voicesCount: voices.length,
-            voicesLoaded: voices.length > 0
-          }));
-        }
-
-        const sttEngine = speechEngineRegistry.getSttEngine();
-        if (sttEngine) {
-          // Local initialization if needed
-        }
-      } catch (error) {
-        // Speech engine initialization failed
-      }
-    };
-
-    initializeEngines();
     return () => stopRecordingForUnmountRef.current();
-  }, [speechEngineRegistry]);
+  }, []);
 
   const toggleAudio = async () => {
     const next = !audioEnabled;
     setAudioEnabled(next);
-    
+
     if (next) {
-      const ttsEngine = speechEngineRegistry.getTtsEngine();
-      if (ttsEngine) {
-        try {
-          await ttsEngine.initialize();
-          // Resume AudioContext on user gesture
-          const voices = await ttsEngine.getVoices();
-          setTtsStatus(prev => ({
-            ...prev,
-            voicesCount: voices.length,
-            voicesLoaded: voices.length > 0
-          }));
-        } catch (error) {
-          // Audio enable failed
-        }
-      }
+      await s2sAudioPlayer.resume();
     } else {
-      const ttsEngine = speechEngineRegistry.getTtsEngine();
-      if (ttsEngine) ttsEngine.stop();
+      s2sAudioPlayer.clear();
     }
   };
 
@@ -417,7 +323,7 @@ const Conversation = () => {
   };
 
   const hasOtherParticipants = !!roomData?.participants?.some((p) => p.id !== user?.id);
-  const canStartRecording = soloMode || hasOtherParticipants;
+  const canStartRecording = hasOtherParticipants;
   const handleToggleRecording = () => {
     if (!isRecording && !canStartRecording) {
       return;
@@ -455,8 +361,8 @@ const Conversation = () => {
   if (error || !roomData) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <ErrorState 
-          message={error?.message || t('error.roomNotFound')} 
+        <ErrorState
+          message={error?.message || t('error.roomNotFound')}
           onRetry={() => refetch()}
         />
       </div>
@@ -482,13 +388,6 @@ const Conversation = () => {
           onSettingsOpenChange={setIsRoomSettingsOpen}
           isRecording={isRecording}
           hasOtherParticipants={hasOtherParticipants}
-          soloMode={soloMode}
-          toggleSoloMode={() => setSoloMode((p) => !p)}
-          soloTargetLang={soloTargetLang}
-          onSoloLangChange={(val: string) => {
-            setSoloTargetLang(val);
-            setHasUserSelectedSoloLang(true);
-          }}
           participants={(roomData.participants ?? []).map(p => ({
             ...p,
             status: participantStatuses.get(p.id)?.status || 'active',
@@ -498,17 +397,15 @@ const Conversation = () => {
         />
 
         <DebugPanel
-          isTtsDebugEnabled={isTtsDebugEnabled}
+          isDebugEnabled={isDebugEnabled}
           debugPanelExpanded={debugPanelExpanded}
           setDebugPanelExpanded={setDebugPanelExpanded}
-          sttStatus={sttStatus}
-          ttsStatus={ttsStatus}
-          refreshVoices={refreshVoices}
+          s2SStatus={s2sStatus}
         />
       </Card>
 
       <Card className="min-h-0 overflow-hidden flex flex-col rounded-none border-t-0 shadow-none">
-        <MessageList messages={messages} />
+        <MessageList messages={messages} currentUserId={user?.id} />
       </Card>
 
       <Card className="rounded-none border-t-0 shadow-none">
@@ -520,7 +417,6 @@ const Conversation = () => {
           pushToTalkEnabled={pushToTalkEnabled}
           canStartRecording={canStartRecording}
           connectionStatus={connectionStatus}
-          openSettings={() => setIsRoomSettingsOpen(true)}
         />
       </Card>
     </div>

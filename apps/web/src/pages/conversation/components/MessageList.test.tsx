@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { MessageList } from './MessageList';
 
@@ -9,48 +9,52 @@ vi.mock('react-i18next', () => ({
 }));
 
 describe('MessageList', () => {
-  it('renders a translated message with original section when translatedText differs', () => {
+  it('renders a translated message with target language label', () => {
     render(
       <MessageList
         messages={[
           {
-            id: '1',
-            text: 'hello',
-            translatedText: 'ciao',
+            id: 'utt_1',
+            utteranceId: 'utt_1',
+            text: 'ciao',
             isOwn: false,
             timestamp: new Date('2026-01-01T00:00:00.000Z'),
             speakerName: 'Alice',
+            speakerId: 'user-2',
+            sourceLang: 'en',
+            targetLang: 'it',
+            isTranslation: true,
           },
         ]}
+        currentUserId="user-1"
       />
     );
 
-    expect(screen.getByTestId('message-translated-text')).toHaveTextContent('ciao');
-    expect(screen.queryByTestId('message-original-text')).toBeNull();
-    expect(screen.getByTestId('toggle-original-text')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByTestId('toggle-original-text'));
-    expect(screen.getByTestId('message-original-text')).toHaveTextContent('hello');
+    expect(screen.getByTestId('message-text')).toHaveTextContent('ciao');
+    expect(screen.getByTestId('chat-message')).toHaveAttribute('data-is-own', 'false');
   });
 
-  it('renders a passthrough message (same-language) as a single text block', () => {
+  it('renders an own source message with source language label', () => {
     render(
       <MessageList
         messages={[
           {
-            id: '1',
+            id: 'utt_2',
+            utteranceId: 'utt_2',
             text: 'hello',
-            translatedText: 'hello',
-            isOwn: false,
+            isOwn: true,
             timestamp: new Date('2026-01-01T00:00:00.000Z'),
-            speakerName: 'Alice',
+            speakerName: 'You',
+            speakerId: 'user-1',
+            sourceLang: 'en',
+            isTranslation: false,
           },
         ]}
+        currentUserId="user-1"
       />
     );
 
     expect(screen.getByTestId('message-text')).toHaveTextContent('hello');
-    expect(screen.queryByTestId('message-translated-text')).toBeNull();
-    expect(screen.queryByTestId('message-original-text')).toBeNull();
+    expect(screen.getByTestId('chat-message')).toHaveAttribute('data-is-own', 'true');
   });
 });

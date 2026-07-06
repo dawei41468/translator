@@ -1,10 +1,8 @@
-import React, { createContext, useContext, useEffect, useMemo } from "react";
+import React, { createContext, useContext, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "./api";
 import type { AuthUser } from "./types";
 import { useTranslation } from "react-i18next";
-import { createSpeechEngineRegistry } from "./speech-engines";
-import type { SpeechEngineRegistry } from "./speech-engines/registry";
 
 interface AuthContextType {
   user: AuthUser | null;
@@ -14,7 +12,6 @@ interface AuthContextType {
   logout: () => void;
   isLoading: boolean;
   isAuthenticated: boolean;
-  speechEngineRegistry: SpeechEngineRegistry;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -31,16 +28,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   });
 
   const user = meQuery.data?.user ?? null;
-
-  const speechEngineRegistry = useMemo(
-    () => createSpeechEngineRegistry({
-      stt: user?.preferences?.sttEngine,
-      tts: user?.preferences?.ttsEngine,
-      translation: user?.preferences?.translationEngine,
-      ttsVoice: user?.preferences?.ttsVoice,
-    }),
-    [user?.preferences]
-  );
 
   useEffect(() => {
     if (user?.language) {
@@ -91,7 +78,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     logout,
     isLoading: meQuery.isLoading,
     isAuthenticated: !!user && !meQuery.isError,
-    speechEngineRegistry,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -35,7 +35,6 @@ describe('ConversationControls (push-to-talk)', () => {
       pushToTalkEnabled: opts?.pushToTalkEnabled ?? true,
       canStartRecording: true,
       connectionStatus: 'connected',
-      openSettings: vi.fn(),
     };
 
     const { rerender } = render(<ConversationControls {...props} />);

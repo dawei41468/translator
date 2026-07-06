@@ -1,27 +1,23 @@
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "react-i18next";
-import { SttStatus, TtsStatus } from "../types";
+import { S2SStatus } from "../types";
 
 interface DebugPanelProps {
-  isTtsDebugEnabled: boolean;
+  isDebugEnabled: boolean;
   debugPanelExpanded: boolean;
   setDebugPanelExpanded: (expanded: boolean) => void;
-  sttStatus: SttStatus;
-  ttsStatus: TtsStatus;
-  refreshVoices: () => void;
+  s2SStatus: S2SStatus;
 }
 
 export function DebugPanel({
-  isTtsDebugEnabled,
+  isDebugEnabled,
   debugPanelExpanded,
   setDebugPanelExpanded,
-  sttStatus,
-  ttsStatus,
-  refreshVoices,
+  s2SStatus,
 }: DebugPanelProps) {
   const { t } = useTranslation();
 
-  if (!isTtsDebugEnabled) return null;
+  if (!isDebugEnabled) return null;
 
   return (
     <div className="mt-2">
@@ -41,44 +37,24 @@ export function DebugPanel({
         <div className="p-2 bg-muted/50 rounded text-xs space-y-2">
           <div className="font-medium flex items-center justify-between">
             <span>Speech Debug:</span>
-            <div className="flex gap-1">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={refreshVoices}
-                className="h-6 px-2 text-xs"
-                aria-label={t('conversation.debugRefreshVoices')}
-              >
-                Refresh
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => setDebugPanelExpanded(false)}
-                className="h-6 px-2 text-xs"
-                aria-label={t('conversation.debugPanelCollapse')}
-                aria-expanded="true"
-              >
-                ✕
-              </Button>
-            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setDebugPanelExpanded(false)}
+              className="h-6 px-2 text-xs"
+              aria-label={t('conversation.debugPanelCollapse')}
+              aria-expanded="true"
+            >
+              ✕
+            </Button>
           </div>
 
           <div className="border-t pt-2">
-            <div className="font-medium text-blue-600 mb-1">STT:</div>
-            <div>Recording: {sttStatus.isRecording ? 'Yes' : 'No'} | Started: {sttStatus.recognitionStarted ? 'Yes' : 'No'} | Lang: {sttStatus.language}</div>
-            <div>Transcripts: {sttStatus.transcriptsReceived}</div>
-            {sttStatus.lastAttempt && <div>Last: {sttStatus.lastAttempt}</div>}
-            {sttStatus.lastError && <div className="text-red-600">Error: {sttStatus.lastError}</div>}
-          </div>
-
-          <div className="border-t pt-2">
-            <div className="font-medium text-green-600 mb-1">TTS:</div>
-            <div>Voices: {ttsStatus.voicesCount} | Speaking: {ttsStatus.isSpeaking ? 'Yes' : 'No'} | Loaded: {ttsStatus.voicesLoaded ? 'Yes' : 'No'}</div>
-            {ttsStatus.lastAttempt && <div>Last: {ttsStatus.lastAttempt}</div>}
-            {ttsStatus.lastError && <div className="text-red-600">Error: {ttsStatus.lastError}</div>}
+            <div className="font-medium text-blue-600 mb-1">S2S:</div>
+            <div>Recording: {s2SStatus.isRecording ? 'Yes' : 'No'} | Lang: {s2SStatus.language}</div>
+            {s2SStatus.lastAttempt && <div>Last: {s2SStatus.lastAttempt}</div>}
+            {s2SStatus.lastError && <div className="text-red-600">Error: {s2SStatus.lastError}</div>}
           </div>
         </div>
       )}

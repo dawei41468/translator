@@ -8,10 +8,7 @@ export interface AuthUser {
   language: string;
   isGuest?: boolean;
   preferences?: {
-    sttEngine?: string;
-    ttsEngine?: string;
     translationEngine?: string;
-    ttsVoice?: string;
   };
 }
 

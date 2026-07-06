@@ -3,14 +3,10 @@ import jwt from "jsonwebtoken";
 import { db } from "../../../packages/db/src/index.js";
 import { users, rooms, roomParticipants } from "../../../packages/db/src/schema.js";
 import { eq, and } from "drizzle-orm";
-import { translationRegistry } from "./services/translation/index.js";
-import { sttRegistry } from "./services/stt/index.js";
-import { ttsRegistry } from "./services/tts/index.js";
-import type { SttEngine } from "./services/stt/index.js";
 import { logger } from "./logger.js";
 import { parseCookies } from "./middleware/auth.js";
-import { withRetry, validateSocketData, isRecoverableSttError, canRestartStt, handleSocketError } from "./services/socket-utils.js";
-import { handleTranscript } from "./services/transcript-handler.js";
+import { withRetry, validateSocketData, handleSocketError } from "./services/socket-utils.js";
+import { UtteranceOrchestrator, generateUtteranceId, Participant } from "./services/utterance-orchestrator.js";
 
 // Handle automatic disconnect after background timeout
 async function handleAutoDisconnect(socket: AuthenticatedSocket) {
@@ -40,40 +36,16 @@ async function handleAutoDisconnect(socket: AuthenticatedSocket) {
   socket.disconnect();
 }
 
-// Graceful degradation for speech recognition
-function handleSpeechError(socket: AuthenticatedSocket, error: any, context: string) {
-  logger.warn(`Speech recognition error: ${context}`, {
-    userId: socket.userId,
-    roomId: socket.roomId,
-    error: error instanceof Error ? error.message : String(error)
-  });
-
-  // Stop recognition to prevent further errors
-  if (socket.sttEngine) {
-    socket.sttEngine.destroy();
-    socket.sttEngine = undefined;
-  }
-
-  socket.sttNeedsRestart = true;
-
-  socket.emit("speech-error", "Speech recognition temporarily unavailable. Please try again.");
-}
-
-const speechStartSchema = {
+const utteranceStartSchema = {
   languageCode: (v: any) => typeof v === 'string' && v.length >= 2 && v.length <= 10,
-  soloMode: (v: any) => typeof v === 'boolean' || v === undefined,
-  soloTargetLang: (v: any) => typeof v === 'string' || v === undefined,
-  encoding: (v: any) => v === undefined || v === 'WEBM_OPUS' || v === 'LINEAR16',
-  sampleRateHertz: (v: any) => v === undefined || typeof v === 'number',
+};
+
+const utteranceAudioSchema = {
+  base64Audio: (v: any) => typeof v === 'string' && v.length > 0,
 };
 
 const roomCodeSchema = {
   roomCode: (v: any) => typeof v === 'string' && v.length === 6 && /^[A-Z0-9]+$/.test(v),
-};
-
-const speechTranscriptSchema = {
-  transcript: (v: any) => typeof v === 'string' && v.length > 0 && v.length <= 10000, // Reasonable max length
-  sourceLang: (v: any) => typeof v === 'string' && v.length >= 2 && v.length <= 10,
 };
 
 const JWT_SECRET = process.env.JWT_SECRET!;
@@ -103,16 +75,24 @@ function checkRateLimit(userId: string, event: string, maxRequests: number, wind
 interface AuthenticatedSocket extends Socket {
   userId?: string;
   roomId?: string;
-  sttEngine?: SttEngine;
-  soloMode?: boolean;
-  soloTargetLang?: string;
-  sttLanguageCode?: string;
-  sttActive?: boolean;
-  sttNeedsRestart?: boolean;
-  sttRestartWindowStartedAt?: number;
-  sttRestartCount?: number;
+  activeUtterance?: UtteranceOrchestrator;
   participantStatus?: 'active' | 'away' | 'disconnected';
   backgroundTimeout?: NodeJS.Timeout;
+}
+
+async function fetchRoomParticipants(roomId: string): Promise<Participant[]> {
+  const rows = await withRetry(() =>
+    db.query.roomParticipants.findMany({
+      where: eq(roomParticipants.roomId, roomId),
+      with: { user: true },
+    }), 2, 500
+  );
+
+  return rows.map((row) => ({
+    userId: row.userId,
+    language: row.user?.language ?? "en",
+    displayName: row.user?.displayName ?? row.user?.name ?? undefined,
+  }));
 }
 
 export function setupSocketIO(io: Server) {
@@ -138,22 +118,6 @@ export function setupSocketIO(io: Server) {
       }
 
       socket.userId = userId;
-
-      const preferredTranslationEngine = (user as any)?.preferences?.translationEngine;
-      if (typeof preferredTranslationEngine === 'string' && preferredTranslationEngine.length > 0) {
-        translationRegistry.setUserPreference(userId, preferredTranslationEngine);
-      }
-
-      const preferredSttEngine = (user as any)?.preferences?.sttEngine;
-      if (typeof preferredSttEngine === 'string' && preferredSttEngine.length > 0) {
-        sttRegistry.setUserPreference(userId, preferredSttEngine);
-      }
-
-      const preferredTtsEngine = (user as any)?.preferences?.ttsEngine;
-      if (typeof preferredTtsEngine === 'string' && preferredTtsEngine.length > 0) {
-        ttsRegistry.setUserPreference(userId, preferredTtsEngine);
-      }
-
       next();
     } catch (err) {
       logger.warn("Socket authentication failed", {
@@ -187,231 +151,108 @@ export function setupSocketIO(io: Server) {
       handleSocketError(socket, "socket-error", error, "Connection error occurred");
     });
 
-    const stopRecognition = () => {
-      try {
-        if (socket.sttEngine) {
-          socket.sttEngine.destroy();
-          socket.sttEngine = undefined;
+    const disposeActiveUtterance = async () => {
+      if (socket.activeUtterance) {
+        try {
+          await socket.activeUtterance.dispose();
+        } catch (error) {
+          logger.warn("Error disposing active utterance", {
+            userId: socket.userId,
+            roomId: socket.roomId,
+            error: error instanceof Error ? error.message : String(error)
+          });
         }
-      } catch (error) {
-        logger.warn("Error stopping recognition", {
-          userId: socket.userId,
-          error: error instanceof Error ? error.message : String(error)
-        });
-      }
-
-      socket.sttActive = false;
-      socket.sttNeedsRestart = false;
-      socket.sttLanguageCode = undefined;
-    };
-
-    const socketCanRestartStt = () => canRestartStt(socket);
-
-    const startRecognitionStream = (data: { 
-      languageCode: string;
-      encoding?: "WEBM_OPUS" | "LINEAR16";
-      sampleRateHertz?: number;
-    }) => {
-      stopRecognition();
-
-      socket.sttActive = true;
-      socket.sttLanguageCode = data.languageCode;
-      socket.sttNeedsRestart = false;
-
-      try {
-        const engine = sttRegistry.getEngine(socket.userId);
-        engine.start({ 
-          languageCode: data.languageCode,
-          encoding: data.encoding,
-          sampleRateHertz: data.sampleRateHertz
-        });
-
-        engine.onTranscript(async (transcript, isFinal) => {
-          if (isFinal && transcript && transcript.trim().length > 0) {
-            const sourceLang = data.languageCode.split('-')[0];
-            await handleTranscriptLocal(transcript, sourceLang);
-          }
-        });
-
-        engine.onError((error) => {
-          if (isRecoverableSttError(error)) {
-            if (socket.sttEngine) {
-              try {
-                socket.sttEngine.destroy();
-              } catch {
-                // ignore
-              }
-              socket.sttEngine = undefined;
-            }
-            socket.sttNeedsRestart = true;
-            return;
-          }
-
-          handleSpeechError(socket, error, "stream error");
-        });
-
-        engine.onEnd(() => {
-          socket.sttEngine = undefined;
-          if (socket.sttActive) {
-            socket.sttNeedsRestart = true;
-            if (socket.sttLanguageCode && socketCanRestartStt()) {
-              startRecognitionStream({ languageCode: socket.sttLanguageCode });
-            } else if (socket.sttLanguageCode) {
-              socket.emit("speech-error", "Speech recognition session ended. Please stop and start again.");
-            }
-          }
-        });
-
-        engine.onClose(() => {
-          socket.sttEngine = undefined;
-          if (socket.sttActive) {
-            socket.sttNeedsRestart = true;
-            if (socket.sttLanguageCode && socketCanRestartStt()) {
-              startRecognitionStream({ languageCode: socket.sttLanguageCode });
-            } else if (socket.sttLanguageCode) {
-              socket.emit("speech-error", "Speech recognition session ended. Please stop and start again.");
-            }
-          }
-        });
-
-        socket.sttEngine = engine;
-      } catch (error) {
-        handleSpeechError(socket, error, "failed to start recognition");
+        socket.activeUtterance = undefined;
       }
     };
 
-    socket.on(
-      "start-speech",
-      (data: { 
-        languageCode: string; 
-        soloMode?: boolean; 
-        soloTargetLang?: string;
-        encoding?: "WEBM_OPUS" | "LINEAR16";
-        sampleRateHertz?: number;
-      }) => {
-      if (!validateSocketData(data, speechStartSchema)) {
-        handleSocketError(socket, "start-speech", new Error("Invalid speech start data"));
+    socket.on("start-utterance", async (data: { languageCode: string }) => {
+      if (!validateSocketData(data, utteranceStartSchema)) {
+        handleSocketError(socket, "start-utterance", new Error("Invalid utterance start data"));
         return;
       }
 
-      if (!socket.userId || !checkRateLimit(socket.userId, 'start-speech', 20, 60000)) {
-        socket.emit("speech-error", "Too many speech start attempts - please wait");
+      if (!socket.userId || !checkRateLimit(socket.userId, 'start-utterance', 20, 60000)) {
+        socket.emit("utterance-error", { utteranceId: "", message: "Too many utterance start attempts - please wait" });
         return;
       }
 
       if (!socket.roomId) {
-        socket.emit("speech-error", "Not in a room");
+        socket.emit("utterance-error", { utteranceId: "", message: "Not in a room" });
         return;
       }
 
-      socket.soloMode = Boolean(data.soloMode);
-      socket.soloTargetLang = data.soloTargetLang;
-
-      startRecognitionStream({ 
-        languageCode: data.languageCode,
-        encoding: data.encoding,
-        sampleRateHertz: data.sampleRateHertz
-      });
-    }
-    );
-
-    socket.on("speech-data", (data: Buffer) => {
-      // Validate that data is a Buffer and not too large
-      if (!(data instanceof Buffer) || data.length === 0 || data.length > 102400) { // 100KB max
-        handleSocketError(socket, "speech-data", new Error("Invalid speech data"));
-        return;
-      }
-
-      logger.info("Speech data received", {
-        userId: socket.userId,
-        roomId: socket.roomId,
-        dataLength: data.length
-      });
-
-      if (!socket.sttEngine && socket.sttActive && socket.sttLanguageCode && socket.sttNeedsRestart) {
-        if (!socketCanRestartStt()) {
-          socket.emit("speech-error", "Speech recognition is unstable right now. Please stop and try again.");
-          return;
-        }
-
-        startRecognitionStream({ languageCode: socket.sttLanguageCode });
-      }
-
-      if (socket.sttEngine) {
-        try {
-          socket.sttEngine.write(data);
-        } catch (error) {
-          if (isRecoverableSttError(error)) {
-            if (socket.sttEngine) {
-              try {
-                socket.sttEngine.destroy();
-              } catch {
-                // ignore
-              }
-              socket.sttEngine = undefined;
-            }
-            socket.sttNeedsRestart = true;
-            return;
-          }
-          handleSpeechError(socket, error, "writing to stream");
-        }
-      }
-    });
-
-    socket.on("stop-speech", () => {
-      stopRecognition();
-    });
-
-    const handleTranscriptLocal = async (transcript: string, sourceLang: string) => {
-      if (!socket.roomId || !socket.userId) {
-        handleSocketError(socket, "handleTranscript", new Error("Missing room or user ID"));
-        return;
-      }
-
-      if (!transcript || transcript.trim().length === 0) {
-        return;
-      }
-
-      logger.info("Processing transcript", {
-        userId: socket.userId,
-        roomId: socket.roomId,
-        transcript: transcript.substring(0, 100),
-        sourceLang
-      });
+      // Dispose any previous active utterance for this speaker.
+      await disposeActiveUtterance();
 
       try {
-        await handleTranscript({
-          transcript,
-          sourceLang,
-          roomId: socket.roomId,
-          userId: socket.userId,
-          soloMode: !!socket.soloMode,
-          soloTargetLang: socket.soloTargetLang,
-          translationEngine: translationRegistry.getEngine(socket.userId),
-          getParticipants: async (roomId: string) => {
-            return withRetry(() =>
-              db.query.roomParticipants.findMany({
-                where: eq(roomParticipants.roomId, roomId),
-                with: { user: true },
-              }), 2, 500
-            );
-          },
-          emitToRoom: (participantId: string, event: string, data: any) => {
-            io.to(`user:${participantId}`).emit(event, data);
-          },
-          emitToSelf: (event: string, data: any) => {
-            socket.emit(event, data);
-          },
-          logInfo: logger.info,
-          logWarn: logger.warn,
-          logError: logger.error,
-        });
+        const participants = await fetchRoomParticipants(socket.roomId);
+        const utteranceId = generateUtteranceId();
+
+        socket.activeUtterance = new UtteranceOrchestrator(
+          utteranceId,
+          socket.userId,
+          data.languageCode,
+          participants,
+          {
+            emitStarted: (participantId, payload) => {
+              io.to(`user:${participantId}`).emit("utterance-started", payload);
+            },
+            emitText: (participantId, payload) => {
+              io.to(`user:${participantId}`).emit("utterance-text", payload);
+            },
+            emitAudio: (participantId, payload) => {
+              io.to(`user:${participantId}`).emit("utterance-audio", payload);
+            },
+            emitDone: (participantId, payload) => {
+              io.to(`user:${participantId}`).emit("utterance-done", payload);
+            },
+            emitError: (participantId, payload) => {
+              io.to(`user:${participantId}`).emit("utterance-error", payload);
+            },
+          }
+        );
       } catch (error) {
-        handleSocketError(socket, "handleTranscript", error, "Failed to process your speech", {
-          transcript: transcript.substring(0, 100)
+        handleSocketError(socket, "start-utterance", error, "Failed to start utterance");
+        socket.emit("utterance-error", {
+          utteranceId: "",
+          message: error instanceof Error ? error.message : "Failed to start utterance"
         });
       }
-    };
+    });
+
+    socket.on("utterance-audio", (data: { base64Audio: string }) => {
+      if (!validateSocketData(data, utteranceAudioSchema)) {
+        handleSocketError(socket, "utterance-audio", new Error("Invalid utterance audio data"));
+        return;
+      }
+
+      if (!socket.userId || !checkRateLimit(socket.userId, 'utterance-audio', 120, 60000)) {
+        return;
+      }
+
+      if (!socket.activeUtterance) {
+        return;
+      }
+
+      try {
+        socket.activeUtterance.appendAudio(data.base64Audio);
+      } catch (error) {
+        handleSocketError(socket, "utterance-audio", error, "Failed to forward utterance audio");
+      }
+    });
+
+    socket.on("stop-utterance", async () => {
+      if (!socket.activeUtterance) return;
+
+      try {
+        await socket.activeUtterance.stop();
+      } catch (error) {
+        handleSocketError(socket, "stop-utterance", error, "Failed to stop utterance");
+      } finally {
+        socket.activeUtterance = undefined;
+      }
+    });
 
     socket.on("join-room", async (roomCode: string) => {
       logger.info(`User attempting to join room`, {
@@ -431,7 +272,6 @@ export function setupSocketIO(io: Server) {
       }
 
       try {
-
         const normalizedCode = roomCode.toUpperCase();
 
         const room = await withRetry(() =>
@@ -494,6 +334,8 @@ export function setupSocketIO(io: Server) {
     });
 
     socket.on("leave-room", async () => {
+      await disposeActiveUtterance();
+
       if (socket.roomId && socket.userId) {
         socket.to(socket.roomId).emit("user-left", { userId: socket.userId });
 
@@ -516,24 +358,6 @@ export function setupSocketIO(io: Server) {
         socket.leave(socket.roomId);
         socket.roomId = undefined;
       }
-    });
-
-    socket.on("speech-transcript", async (data: { transcript: string; sourceLang: string }) => {
-      if (!validateSocketData(data, speechTranscriptSchema)) {
-        handleSocketError(socket, "speech-transcript", new Error("Invalid transcript data"));
-        return;
-      }
-
-      if (!socket.userId || !checkRateLimit(socket.userId, 'speech-transcript', 60, 60000)) {
-        // Don't emit error for transcript rate limiting to avoid spam
-        return;
-      }
-
-      if (!data.transcript || data.transcript.trim().length === 0) {
-        return; // Ignore empty transcripts (common from STT on silence/noise)
-      }
-
-      handleTranscriptLocal(data.transcript, data.sourceLang);
     });
 
     socket.on("client-error", (data: { code: string; message: string; details?: any }) => {
@@ -594,7 +418,8 @@ export function setupSocketIO(io: Server) {
         reason,
         roomId: socket.roomId
       });
-      stopRecognition();
+
+      await disposeActiveUtterance();
 
       if (socket.roomId && socket.userId) {
         // Update status to disconnected instead of deleting

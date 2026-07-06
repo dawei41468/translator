@@ -13,10 +13,15 @@ export class PcmRecorder {
 
   constructor() {}
 
-  async start(stream: MediaStream, onData: (data: ArrayBuffer) => void) {
+  async start(
+    stream: MediaStream,
+    onData: (data: ArrayBuffer) => void,
+    targetSampleRate?: number
+  ) {
     this.onDataAvailable = onData;
-    this.context = new (window.AudioContext || (window as any).webkitAudioContext)();
-    
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    this.context = new AudioContextClass(targetSampleRate ? { sampleRate: targetSampleRate } : undefined);
+
     // Resume context if needed
     if (this.context.state === 'suspended') {
       await this.context.resume();

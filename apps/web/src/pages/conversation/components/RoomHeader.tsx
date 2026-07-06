@@ -38,10 +38,6 @@ interface RoomHeaderProps {
   onSettingsOpenChange: (open: boolean) => void;
   isRecording: boolean;
   hasOtherParticipants: boolean;
-  soloMode: boolean;
-  toggleSoloMode: () => void;
-  soloTargetLang: string;
-  onSoloLangChange: (lang: string) => void;
   participants: Array<{
     id: string;
     name: string | null;
@@ -65,10 +61,6 @@ export function RoomHeader({
   onSettingsOpenChange,
   isRecording,
   hasOtherParticipants,
-  soloMode,
-  toggleSoloMode,
-  soloTargetLang,
-  onSoloLangChange,
   participants,
   currentUserId,
 }: RoomHeaderProps) {
@@ -217,10 +209,10 @@ export function RoomHeader({
             <DialogHeader>
               <DialogTitle>{t('room.settings', 'Room Settings')}</DialogTitle>
               <DialogDescription>
-                {t('room.settingsDescription', 'Manage language and solo mode.')}
+                {t('room.settingsDescription', 'Manage your language for this room.')}
               </DialogDescription>
             </DialogHeader>
-            
+
             <div className="space-y-6 py-4">
               {/* Language Section */}
               <div className="space-y-3">
@@ -228,7 +220,7 @@ export function RoomHeader({
                 <Select
                   value={userLanguage || ""}
                   onValueChange={onUpdateLanguage}
-                  disabled={isUpdatingLanguage}
+                  disabled={isUpdatingLanguage || isRecording}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder={t('conversation.translateTo')} />
@@ -247,50 +239,9 @@ export function RoomHeader({
               </div>
 
               {!hasOtherParticipants && (
-                <div className="space-y-3">
-                  <Label>{t('conversation.soloMode', 'Solo mode')}</Label>
-                  <div className="flex items-center gap-3">
-                    <Button
-                      type="button"
-                      variant={soloMode ? "default" : "outline"}
-                      size="sm"
-                      onClick={toggleSoloMode}
-                      aria-pressed={soloMode}
-                      disabled={isRecording}
-                      data-testid="toggle-solo-mode"
-                    >
-                      {t('conversation.soloMode', 'Solo mode')}
-                    </Button>
-                    <p className="text-xs text-muted-foreground">
-                      {t('conversation.onlyParticipantHint')}
-                    </p>
-                  </div>
-
-                  {soloMode && (
-                    <div className="space-y-2">
-                      <Label>{t('conversation.translateTo')}</Label>
-                      <Select
-                        value={soloTargetLang}
-                        onValueChange={onSoloLangChange}
-                        disabled={isRecording}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder={t('conversation.translateTo')} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {LANGUAGES.filter((lang) => lang.code !== userLanguage).map((lang) => (
-                            <SelectItem key={lang.code} value={lang.code}>
-                              {formatLanguageLabel(lang)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <p className="text-xs text-muted-foreground">
-                        {t('conversation.soloModeHint')}
-                      </p>
-                    </div>
-                  )}
-                </div>
+                <p className="text-xs text-muted-foreground">
+                  {t('conversation.onlyParticipantHint')}
+                </p>
               )}
             </div>
           </DialogContent>

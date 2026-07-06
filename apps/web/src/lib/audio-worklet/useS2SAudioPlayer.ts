@@ -1,7 +1,7 @@
 import { useRef, useCallback, useEffect, useMemo } from "react";
 import processorSource from "./practice-audio-processor.js?raw";
 
-export interface AudioWorkletPlayer {
+export interface S2SAudioPlayer {
   /** Feed a base64-encoded PCM16 delta to the worklet. */
   playChunk: (base64Audio: string) => void;
   /** Resume the audio context if suspended. */
@@ -25,9 +25,9 @@ export interface AudioWorkletPlayer {
  * inlines the processor source as a Blob URL so it works with Vite without
  * needing a separate public asset.
  */
-export function useAudioWorkletPlayer(
+export function useS2SAudioPlayer(
   sampleRate: number
-): AudioWorkletPlayer {
+): S2SAudioPlayer {
   const audioContextRef = useRef<AudioContext | null>(null);
   const workletNodeRef = useRef<AudioWorkletNode | null>(null);
   const blobUrlRef = useRef<string | null>(null);
@@ -66,6 +66,9 @@ export function useAudioWorkletPlayer(
       } catch (error) {
         // Worklet setup failed; fall back to legacy path elsewhere.
         isReadyRef.current = false;
+        if (import.meta.env.DEV) {
+          console.warn("[useS2SAudioPlayer] AudioWorklet setup failed", error);
+        }
       }
     }
 

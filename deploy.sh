@@ -3,6 +3,10 @@
 # GitHub (origin/main) is the source of truth.
 set -euo pipefail
 
+# pnpm is installed via standalone script, not system package manager
+export PNPM_HOME="/home/ubuntu/.local/share/pnpm"
+export PATH="$PNPM_HOME:$PATH"
+
 DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$DIR"
 

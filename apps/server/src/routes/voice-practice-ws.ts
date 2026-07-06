@@ -67,7 +67,9 @@ export function handlePracticeWsUpgrade(
     const wsUrl = new URL(GROK_VOICE_WS_URL);
     wsUrl.searchParams.set("model", GROK_VOICE_MODEL);
 
-    const grokWs = new WebSocket(wsUrl.toString(), [`xai-api-key.${apiKey}`]);
+    const grokWs = new WebSocket(wsUrl.toString(), {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
 
     grokWs.on("open", () => {
       logger.info("Practice proxy: connected to Grok Voice", { userId, sourceLang });

@@ -56,7 +56,9 @@ export class SpeakerVoiceSession {
     const wsUrl = new URL(GROK_VOICE_WS_URL);
     wsUrl.searchParams.set("model", GROK_VOICE_MODEL);
 
-    const ws = new WebSocket(wsUrl.toString(), [`xai-api-key.${this.apiKey}`]);
+    const ws = new WebSocket(wsUrl.toString(), {
+      headers: { Authorization: `Bearer ${this.apiKey}` },
+    });
 
     const session: TargetSession = {
       targetLang,

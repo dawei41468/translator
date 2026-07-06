@@ -136,6 +136,7 @@ const Practice = () => {
       wsRef.current = ws;
 
       ws.onopen = () => {
+        console.log('[Practice] WebSocket connected to Grok Voice');
         const homeName = getLangName(homeLang);
         const targetName = getLangName(targetLang);
 
@@ -170,14 +171,16 @@ const Practice = () => {
         startAudioCapture(ws);
       };
 
-      ws.onerror = () => {
+      ws.onerror = (err) => {
+        console.error('[Practice] WebSocket error:', err);
         setFatalError(
           "Voice connection failed",
           "Could not connect to the voice service. Please check your network and try again."
         );
       };
 
-      ws.onclose = () => {
+      ws.onclose = (event) => {
+        console.log('[Practice] WebSocket closed:', event.code, event.reason);
         if (isPracticingRef.current) {
           setFatalError(
             "Voice session ended",
@@ -188,6 +191,10 @@ const Practice = () => {
 
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
+
+        if (import.meta.env.DEV) {
+          console.log('[Practice] ws message:', data.type, data);
+        }
 
         if (data.type === "response.output_audio.delta" && data.delta) {
           playAudioChunk(data.delta);
@@ -213,6 +220,7 @@ const Practice = () => {
         }
 
         if (data.type === "error") {
+          console.error('[Practice] Grok Voice error:', data);
           const message = data.error?.message || data.message || "An error occurred in the voice session.";
           setFatalError("Voice error", message);
         }
@@ -263,6 +271,7 @@ const Practice = () => {
       });
       processorRef.current = worklet;
 
+      let audioChunkCount = 0;
       worklet.port.onmessage = (event) => {
         const { type, base64 } = event.data;
         if (type !== 'audio' || !base64) return;
@@ -272,6 +281,10 @@ const Practice = () => {
           type: "input_audio_buffer.append",
           audio: base64,
         }));
+        audioChunkCount++;
+        if (audioChunkCount === 1 || audioChunkCount % 100 === 0) {
+          console.log(`[Practice] Sent ${audioChunkCount} audio chunks, last size: ${base64.length} chars`);
+        }
       };
 
       source.connect(worklet);

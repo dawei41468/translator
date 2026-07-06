@@ -1,7 +1,7 @@
-import { WebSocket } from "ws";
+import WebSocket, { WebSocketServer } from "ws";
 import jwt from "jsonwebtoken";
 import type { IncomingMessage } from "http";
-import type { Socket } from "net";
+import type { Duplex } from "stream";
 import { logger } from "../logger.js";
 import { parseCookies } from "../middleware/auth.js";
 import { db } from "../../../../packages/db/src/index.js";
@@ -16,7 +16,7 @@ const PRACTICE_WS_PATH = "/api/voice/practice-ws";
 
 export function handlePracticeWsUpgrade(
   req: IncomingMessage,
-  socket: Socket,
+  socket: Duplex,
   head: Buffer
 ) {
   const url = new URL(req.url || "/", `http://${req.headers.host}`);
@@ -43,8 +43,8 @@ export function handlePracticeWsUpgrade(
   }
 
   // Accept the browser WebSocket
-  const wss = new WebSocket.Server({ noServer: true });
-  wss.handleUpgrade(req, socket, head, async (clientWs) => {
+  const wss = new WebSocketServer({ noServer: true });
+  wss.handleUpgrade(req, socket, head, async (clientWs: WebSocket) => {
     // Look up user language preference
     let sourceLang = "en";
     try {
@@ -93,13 +93,13 @@ export function handlePracticeWsUpgrade(
     });
 
     // Proxy: Grok → Browser
-    grokWs.on("message", (data) => {
+    grokWs.on("message", (data: WebSocket.Data) => {
       if (clientWs.readyState === WebSocket.OPEN) {
         clientWs.send(data.toString());
       }
     });
 
-    grokWs.on("error", (err) => {
+    grokWs.on("error", (err: Error) => {
       logger.error("Practice proxy: Grok WebSocket error", { error: err.message, userId });
       if (clientWs.readyState === WebSocket.OPEN) {
         clientWs.send(JSON.stringify({ type: "error", error: { message: "Voice service error" } }));
@@ -107,7 +107,7 @@ export function handlePracticeWsUpgrade(
       }
     });
 
-    grokWs.on("close", (code, reason) => {
+    grokWs.on("close", (code: number, reason: Buffer) => {
       logger.info("Practice proxy: Grok WebSocket closed", { userId, code, reason: reason?.toString() });
       if (clientWs.readyState === WebSocket.OPEN) {
         clientWs.close();
@@ -115,7 +115,7 @@ export function handlePracticeWsUpgrade(
     });
 
     // Proxy: Browser → Grok
-    clientWs.on("message", (data) => {
+    clientWs.on("message", (data: WebSocket.Data) => {
       if (grokWs.readyState === WebSocket.OPEN) {
         grokWs.send(data.toString());
       }

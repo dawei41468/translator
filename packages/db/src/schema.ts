@@ -1,5 +1,5 @@
 // packages/db/src/schema.ts
-import { pgTable, uuid, varchar, timestamp, text, boolean, index, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, uuid, varchar, timestamp, text, boolean, index, uniqueIndex, jsonb } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
@@ -38,7 +38,7 @@ export const rooms = pgTable("rooms", {
   id: uuid("id").defaultRandom().primaryKey(),
   name: varchar("name", { length: 255 }),
   code: varchar("code", { length: 10 }).unique().notNull(), // shareable room code
-  createdBy: uuid("created_by").references(() => users.id).notNull(),
+  createdBy: uuid("created_by").references(() => users.id, { onDelete: "cascade" }).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => sql`now()`),
   deletedAt: timestamp("deleted_at"),
@@ -60,7 +60,7 @@ export const roomParticipants = pgTable("room_participants", {
   lastSeen: timestamp("last_seen").defaultNow(),
   backgroundedAt: timestamp("backgrounded_at"),
 }, (table) => ({
-  roomUserIdx: index("room_participants_room_user_idx").on(table.roomId, table.userId),
+  roomUserIdx: uniqueIndex("room_participants_room_user_idx").on(table.roomId, table.userId),
   statusIdx: index("room_participants_status_idx").on(table.status),
   lastSeenIdx: index("room_participants_last_seen_idx").on(table.lastSeen),
 }));

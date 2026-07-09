@@ -2,92 +2,141 @@ import express from "express";
 import { db } from "../../../../packages/db/src/index.js";
 import { rooms, roomParticipants } from "../../../../packages/db/src/schema.js";
 import { eq, sql } from "drizzle-orm";
-import { v4 as uuidv4 } from "uuid";
 import { logger } from "../logger.js";
+import { isUniqueViolation } from "../services/socket-utils.js";
 
 const router = express.Router();
 
+const MAX_CODE_COLLISION_RETRIES = 10;
+const MAX_ROOM_PARTICIPANTS = 10;
+
+function generateRoomCode(): string {
+  return Math.random().toString(36).substring(2, 8).toUpperCase();
+}
+
 // Create a new room
 router.post("/", async (req, res) => {
+  const userId = req.user!.id;
+
   try {
-    const userId = req.user!.id;
+    for (let attempt = 0; attempt < MAX_CODE_COLLISION_RETRIES; attempt++) {
+      const roomCode = generateRoomCode();
 
-    // Generate unique room code
-    let roomCode: string;
-    let existingRoom;
-    do {
-      roomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-      existingRoom = await db.query.rooms.findFirst({
-        where: eq(rooms.code, roomCode),
-      });
-    } while (existingRoom);
+      try {
+        const newRoom = await db.transaction(async (tx) => {
+          const [room] = await tx.insert(rooms).values({
+            code: roomCode,
+            createdBy: userId,
+          }).returning();
 
-    const [newRoom] = await db.insert(rooms).values({
-      code: roomCode,
-      createdBy: userId,
-    }).returning();
+          await tx.insert(roomParticipants).values({
+            roomId: room.id,
+            userId,
+          });
 
-    // Add creator as participant
-    await db.insert(roomParticipants).values({
-      roomId: newRoom.id,
-      userId,
-    });
+          return room;
+        });
 
-    res.json({
-      roomId: newRoom.id,
-      roomCode: newRoom.code,
-    });
+        return res.json({
+          roomId: newRoom.id,
+          roomCode: newRoom.code,
+        });
+      } catch (error) {
+        // A concurrent request created the same code; retry with a new one.
+        if (isUniqueViolation(error)) {
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    logger.error("Failed to generate a unique room code after max retries", { userId });
+    res.status(500).json({ error: "Failed to create room" });
   } catch (error) {
     logger.error("Error creating room", error, { userId: req.user?.id });
     res.status(500).json({ error: "Failed to create room" });
   }
 });
 
+type JoinResult =
+  | { kind: "notFound" }
+  | { kind: "alreadyJoined"; roomId: string; roomCode: string }
+  | { kind: "full" }
+  | { kind: "joined"; roomId: string; roomCode: string };
+
 // Join a room by code
 router.post("/join/:code", async (req, res) => {
+  const userId = req.user!.id;
+  const roomCode = req.params.code.toUpperCase();
+
   try {
-    const userId = req.user!.id;
-    const roomCode = req.params.code.toUpperCase();
+    let result: JoinResult | null;
 
-    const room = await db.query.rooms.findFirst({
-      where: eq(rooms.code, roomCode),
-    });
+    try {
+      result = await db.transaction(async (tx) => {
+        const room = await tx.query.rooms.findFirst({
+          where: eq(rooms.code, roomCode),
+        });
 
-    if (!room) {
-      return res.status(404).json({ error: "Room not found" });
-    }
+        if (!room) {
+          return { kind: "notFound" as const };
+        }
 
-    // Check if user is already a participant
-    const existingParticipant = await db.query.roomParticipants.findFirst({
-      where: (rp, { and }) => and(
-        eq(rp.roomId, room.id),
-        eq(rp.userId, userId)
-      ),
-    });
+        const existingParticipant = await tx.query.roomParticipants.findFirst({
+          where: (rp, { and }) => and(
+            eq(rp.roomId, room.id),
+            eq(rp.userId, userId)
+          ),
+        });
 
-    if (existingParticipant) {
-      return res.json({
-        roomId: room.id,
-        roomCode: room.code,
-        alreadyJoined: true,
+        if (existingParticipant) {
+          return { kind: "alreadyJoined" as const, roomId: room.id, roomCode: room.code };
+        }
+
+        const participantCount = await tx.$count(roomParticipants, eq(roomParticipants.roomId, room.id));
+        if (participantCount >= MAX_ROOM_PARTICIPANTS) {
+          return { kind: "full" as const };
+        }
+
+        await tx.insert(roomParticipants).values({
+          roomId: room.id,
+          userId,
+        });
+
+        return { kind: "joined" as const, roomId: room.id, roomCode: room.code };
       });
+    } catch (error) {
+      // Another request joined concurrently; the unique constraint guarantees
+      // the user is now a participant, so re-fetch the room info.
+      if (isUniqueViolation(error)) {
+        const room = await db.query.rooms.findFirst({
+          where: eq(rooms.code, roomCode),
+        });
+        result = room
+          ? { kind: "alreadyJoined", roomId: room.id, roomCode: room.code }
+          : { kind: "notFound" };
+      } else {
+        throw error;
+      }
     }
 
-    // Check room capacity (max 10 for multi-user support)
-    const participantCount = await db.$count(roomParticipants, eq(roomParticipants.roomId, room.id));
-    if (participantCount >= 10) {
-      return res.status(400).json({ error: "Room is full" });
+    switch (result.kind) {
+      case "notFound":
+        return res.status(404).json({ error: "Room not found" });
+      case "full":
+        return res.status(400).json({ error: "Room is full" });
+      case "alreadyJoined":
+        return res.json({
+          roomId: result.roomId,
+          roomCode: result.roomCode,
+          alreadyJoined: true,
+        });
+      case "joined":
+        return res.json({
+          roomId: result.roomId,
+          roomCode: result.roomCode,
+        });
     }
-
-    await db.insert(roomParticipants).values({
-      roomId: room.id,
-      userId,
-    });
-
-    res.json({
-      roomId: room.id,
-      roomCode: room.code,
-    });
   } catch (error) {
     logger.error("Error joining room", error, { userId: req.user?.id, roomCode: req.params.code });
     res.status(500).json({ error: "Failed to join room" });

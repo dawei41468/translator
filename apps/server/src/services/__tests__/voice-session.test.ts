@@ -114,9 +114,16 @@ describe("SpeakerVoiceSession", () => {
 
     expect(configMessages.length).toBe(1);
     const payload = JSON.parse(configMessages[0]![0] as string);
+    expect(payload.type).toBe("session.update");
     expect(payload.session.voice).toBe("eve");
+    expect(payload.session.instructions).toContain("English");
     expect(payload.session.instructions).toContain("Spanish");
-    expect(payload.session.turn_detection.type).toBe("server_vad");
+    expect(payload.session.turn_detection).toEqual({
+      type: "server_vad",
+      silence_duration_ms: 400,
+      threshold: 0.6,
+      prefix_padding_ms: 200,
+    });
   });
 
   it("emits source transcript from input audio transcription event", async () => {

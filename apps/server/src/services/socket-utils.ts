@@ -104,3 +104,10 @@ export function handleSocketError(
   const message = userMessage || "An unexpected error occurred";
   socket.emit("error", { message, errorId });
 }
+
+export function isUniqueViolation(error: any): boolean {
+  if (!error) return false;
+  if (error.code === "23505") return true;
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes("23505");
+}

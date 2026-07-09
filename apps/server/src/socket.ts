@@ -5,7 +5,7 @@ import { users, rooms, roomParticipants } from "../../../packages/db/src/schema.
 import { eq, and } from "drizzle-orm";
 import { logger } from "./logger.js";
 import { parseCookies } from "./middleware/auth.js";
-import { withRetry, validateSocketData, handleSocketError } from "./services/socket-utils.js";
+import { withRetry, validateSocketData, handleSocketError, isUniqueViolation } from "./services/socket-utils.js";
 import { UtteranceOrchestrator, generateUtteranceId, Participant } from "./services/utterance-orchestrator.js";
 
 // Handle automatic disconnect after background timeout
@@ -282,63 +282,89 @@ export function setupSocketIO(io: Server) {
         return;
       }
 
+      const normalizedCode = roomCode.toUpperCase();
+
       try {
-        const normalizedCode = roomCode.toUpperCase();
+        type SocketJoinResult =
+          | { kind: "notFound" }
+          | { kind: "joined"; roomId: string; roomCode: string }
+          | { kind: "full" };
 
-        const room = await withRetry(() =>
-          db.query.rooms.findFirst({
-            where: eq(rooms.code, normalizedCode),
-          }), 2, 500
-        );
+        let result: SocketJoinResult;
 
-        if (!room) {
-          socket.emit("error", "Room not found or expired");
-          return;
-        }
+        try {
+          result = await db.transaction(async (tx) => {
+            const room = await tx.query.rooms.findFirst({
+              where: eq(rooms.code, normalizedCode),
+            });
 
-        // Check if user is already a participant
-        const existingParticipant = await withRetry(() =>
-          db.query.roomParticipants.findFirst({
-            where: (rp, { and }) => and(
-              eq(rp.roomId, room.id),
-              eq(rp.userId, socket.userId!)
-            ),
-          }), 2, 500
-        );
+            if (!room) {
+              return { kind: "notFound" as const };
+            }
 
-        if (!existingParticipant) {
-          // Check room capacity
-          const participantCount = await withRetry(() =>
-            db.$count(roomParticipants, eq(roomParticipants.roomId, room.id)), 2, 500
-          );
-          if (participantCount >= 10) {
-            socket.emit("error", "Room is full");
-            return;
-          }
+            const existingParticipant = await tx.query.roomParticipants.findFirst({
+              where: (rp, { and }) => and(
+                eq(rp.roomId, room.id),
+                eq(rp.userId, socket.userId!)
+              ),
+            });
 
-          await withRetry(() =>
-            db.insert(roomParticipants).values({
+            if (existingParticipant) {
+              return { kind: "joined" as const, roomId: room.id, roomCode: room.code };
+            }
+
+            const participantCount = await tx.$count(roomParticipants, eq(roomParticipants.roomId, room.id));
+            if (participantCount >= 10) {
+              return { kind: "full" as const };
+            }
+
+            await tx.insert(roomParticipants).values({
               roomId: room.id,
               userId: socket.userId!,
               status: 'active',
               lastSeen: new Date()
-            }), 2, 500
-          );
+            });
+
+            return { kind: "joined" as const, roomId: room.id, roomCode: room.code };
+          });
+        } catch (error) {
+          // Concurrent join by the same user; unique constraint guarantees
+          // membership, so treat as already joined.
+          if (isUniqueViolation(error)) {
+            const room = await db.query.rooms.findFirst({
+              where: eq(rooms.code, normalizedCode),
+            });
+            result = room
+              ? { kind: "joined", roomId: room.id, roomCode: room.code }
+              : { kind: "notFound" };
+          } else {
+            throw error;
+          }
         }
 
-        socket.roomId = room.id;
+        if (result.kind === "notFound") {
+          socket.emit("error", "Room not found or expired");
+          return;
+        }
+
+        if (result.kind === "full") {
+          socket.emit("error", "Room is full");
+          return;
+        }
+
+        socket.roomId = result.roomId;
         socket.participantStatus = 'active';
-        socket.join(room.id);
+        socket.join(result.roomId);
 
         // Notify others in the room
-        socket.to(room.id).emit("user-joined", { userId: socket.userId });
+        socket.to(result.roomId).emit("user-joined", { userId: socket.userId });
 
         logger.info(`User successfully joined room`, {
           userId: socket.userId,
-          roomId: room.id,
-          roomCode: room.code
+          roomId: result.roomId,
+          roomCode: result.roomCode
         });
-        socket.emit("joined-room", { roomId: room.id });
+        socket.emit("joined-room", { roomId: result.roomId });
       } catch (error) {
         handleSocketError(socket, "join-room", error, "Unable to join room - please try again", { roomCode });
       }

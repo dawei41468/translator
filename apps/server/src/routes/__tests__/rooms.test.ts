@@ -4,8 +4,8 @@ import express from 'express';
 import { db } from '../../../../../packages/db/src/index.js';
 import { roomsRouter } from '../rooms.js';
 
-vi.mock('../../../../../packages/db/src/index.js', () => ({
-  db: {
+vi.mock('../../../../../packages/db/src/index.js', () => {
+  const mockDb = {
     query: {
       rooms: {
         findFirst: vi.fn(),
@@ -21,10 +21,10 @@ vi.mock('../../../../../packages/db/src/index.js', () => ({
       })),
     }),
     $count: vi.fn().mockResolvedValue(0),
-  },
-}));
-
-
+    transaction: vi.fn(async (callback: any) => callback(mockDb)),
+  };
+  return { db: mockDb };
+});
 
 function createApp() {
   const app = express();
@@ -40,6 +40,16 @@ function createApp() {
 describe('Rooms Routes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Reset mutable mock state between tests
+    (db.query.rooms.findFirst as any).mockReset();
+    (db.query.roomParticipants.findFirst as any).mockReset();
+    (db.$count as any).mockReset().mockResolvedValue(0);
+    (db.insert as any).mockReturnValue({
+      values: vi.fn().mockImplementation((vals: any) => ({
+        returning: vi.fn().mockResolvedValue([{ id: 'room-id-1', ...vals }]),
+      })),
+    });
+    (db.transaction as any).mockImplementation(async (callback: any) => callback(db));
   });
 
   describe('POST /api/rooms', () => {
@@ -53,17 +63,24 @@ describe('Rooms Routes', () => {
       expect(res.body.roomCode).toMatch(/^[A-Z0-9]{6}$/);
     });
 
-    it('regenerates code if collision occurs', async () => {
+    it('retries on room code collision', async () => {
       const app = createApp();
-      let callCount = 0;
-      (db.query.rooms.findFirst as any).mockImplementation(() => {
-        callCount++;
-        return callCount === 1 ? { id: 'existing' } : null;
+      // Simulate a unique violation on the first transaction attempt, then success.
+      let attempt = 0;
+      (db.transaction as any).mockImplementation(async (callback: any) => {
+        attempt++;
+        if (attempt === 1) {
+          const error = new Error('duplicate key value violates unique constraint') as any;
+          error.code = '23505';
+          throw error;
+        }
+        return callback(db);
       });
 
       const res = await request(app).post('/api/rooms').send({});
       expect(res.status).toBe(200);
-      expect(db.query.rooms.findFirst).toHaveBeenCalledTimes(2);
+      expect(res.body.roomCode).toMatch(/^[A-Z0-9]{6}$/);
+      expect(db.transaction).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -108,6 +125,24 @@ describe('Rooms Routes', () => {
       expect(res.status).toBe(200);
       expect(res.body.roomId).toBe('room-1');
       expect(res.body.roomCode).toBe('ABCDEF');
+    });
+
+    it('returns alreadyJoined on concurrent join unique violation', async () => {
+      const app = createApp();
+      (db.query.rooms.findFirst as any)
+        .mockResolvedValueOnce({ id: 'room-1', code: 'ABCDEF' }) // inside transaction
+        .mockResolvedValueOnce({ id: 'room-1', code: 'ABCDEF' }); // re-fetch after unique violation
+      (db.query.roomParticipants.findFirst as any).mockResolvedValue(null);
+      (db.$count as any).mockResolvedValue(3);
+
+      const uniqueViolationError = new Error('duplicate key value violates unique constraint') as any;
+      uniqueViolationError.code = '23505';
+      (db.transaction as any).mockRejectedValue(uniqueViolationError);
+
+      const res = await request(app).post('/api/rooms/join/ABCDEF').send({});
+      expect(res.status).toBe(200);
+      expect(res.body.alreadyJoined).toBe(true);
+      expect(res.body.roomId).toBe('room-1');
     });
   });
 

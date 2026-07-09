@@ -1,15 +1,11 @@
 import express from "express";
-import jwt from "jsonwebtoken";
-import type { JwtPayload } from "jsonwebtoken";
 import { eq } from "drizzle-orm";
 import { db } from "../../../../packages/db/src/index.js";
 import { users } from "../../../../packages/db/src/schema.js";
 import { authenticate, parseCookies } from "../middleware/auth.js";
+import { AUTH_COOKIE_NAME, verifyAuthToken } from "../services/auth-session.js";
 
 const router = express.Router();
-
-const AUTH_COOKIE_NAME = "auth_token";
-const JWT_SECRET = process.env.JWT_SECRET!;
 
 function normalizeEnginePreferences(preferences: any): any {
   if (!preferences || typeof preferences !== "object") return preferences;
@@ -27,12 +23,6 @@ function normalizeEnginePreferences(preferences: any): any {
   return next;
 }
 
-function getUserIdFromJwtPayload(payload: string | JwtPayload): string | null {
-  if (typeof payload === "string") return null;
-  const userId = payload["userId"];
-  return typeof userId === "string" ? userId : null;
-}
-
 router.get("/", async (req, res) => {
   const cookies = parseCookies(req.headers.cookie);
   const token = cookies[AUTH_COOKIE_NAME];
@@ -41,20 +31,12 @@ router.get("/", async (req, res) => {
   }
 
   try {
-    const verified = jwt.verify(token, JWT_SECRET);
-    const userId = getUserIdFromJwtPayload(verified as string | JwtPayload);
-    if (!userId) {
+    const result = await verifyAuthToken(token);
+    if (!result) {
       return res.json({ user: null });
     }
 
-    const user = await db.query.users.findFirst({
-      where: eq(users.id, userId),
-    });
-
-    if (!user) {
-      return res.json({ user: null });
-    }
-
+    const user = result.user;
     return res.json({
       user: {
         id: user.id,

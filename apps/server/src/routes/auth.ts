@@ -2,34 +2,70 @@ import express from "express";
 import crypto from "crypto";
 import rateLimit from "express-rate-limit";
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
 import { z, ZodError } from "zod";
 import { eq } from "drizzle-orm";
 import { db } from "../../../../packages/db/src/index.js";
 import { users } from "../../../../packages/db/src/schema.js";
-import { authenticate } from "../middleware/auth.js";
+import { authenticate, parseCookies } from "../middleware/auth.js";
+import {
+  AUTH_COOKIE_NAME,
+  cookieOptions,
+  createUserSession,
+  getSessionIdFromToken,
+  revokeAllUserSessions,
+  revokeSession,
+} from "../services/auth-session.js";
 
 const router = express.Router();
-
-const AUTH_COOKIE_NAME = "auth_token";
-const JWT_SECRET = process.env.JWT_SECRET!;
 
 const changePasswordSchema = z.object({
   currentPassword: z.string().min(1),
   newPassword: z.string().min(8).max(200),
 });
 
-// Auth endpoints rate limiter - more lenient for internal apps
+// Auth endpoints rate limiter
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 50, // 50 attempts (not 5) - employees may legitimately forget passwords
-  skipSuccessfulRequests: true, // Reset counter on successful login
-  message: { error: 'Too many authentication attempts' },
+  max: 30,
+  skipSuccessfulRequests: true,
+  message: { error: "Too many authentication attempts" },
   standardHeaders: true,
   legacyHeaders: false,
 });
 
 router.use(authLimiter);
+
+function setAuthCookie(res: express.Response, token: string) {
+  const isProd = process.env.NODE_ENV === "production";
+  res.cookie(AUTH_COOKIE_NAME, token, cookieOptions(isProd));
+}
+
+function clearAuthCookie(res: express.Response) {
+  const isProd = process.env.NODE_ENV === "production";
+  res.cookie(AUTH_COOKIE_NAME, "", {
+    ...cookieOptions(isProd),
+    maxAge: undefined,
+    expires: new Date(0),
+  });
+}
+
+function publicUser(user: {
+  id: string;
+  name: string | null;
+  displayName: string | null;
+  email: string;
+  language: string | null;
+  isGuest?: boolean | null;
+}) {
+  return {
+    id: user.id,
+    name: user.name,
+    displayName: user.displayName,
+    email: user.email,
+    language: user.language,
+    ...(user.isGuest ? { isGuest: true } : {}),
+  };
+}
 
 router.post("/login", async (req, res) => {
   const body: unknown = req.body ?? {};
@@ -56,39 +92,14 @@ router.post("/login", async (req, res) => {
 
     const user = matchingUsers[0];
 
-    if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+    if (!user || user.deletedAt || !(await bcrypt.compare(password, user.passwordHash))) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
-    const token = jwt.sign(
-      {
-        userId: user.id,
-        email: user.email,
-        name: user.name,
-        language: user.language,
-      },
-      JWT_SECRET,
-      { expiresIn: "30d" }
-    );
+    const { token } = await createUserSession(user.id);
+    setAuthCookie(res, token);
 
-    const isProd = process.env.NODE_ENV === "production";
-    res.cookie(AUTH_COOKIE_NAME, token, {
-      httpOnly: true,
-      secure: isProd,
-      sameSite: "lax",
-      maxAge: 30 * 24 * 60 * 60 * 1000,
-      path: "/",
-    });
-
-    res.json({
-      user: {
-        id: user.id,
-        name: user.name,
-        displayName: user.displayName,
-        email: user.email,
-        language: user.language,
-      },
-    });
+    res.json({ user: publicUser(user) });
   } catch (err) {
     res.status(500).json({ error: "Server error" });
   }
@@ -113,12 +124,20 @@ router.post("/register", async (req, res) => {
     return res.status(400).json({ error: "Missing fields" });
   }
 
-  if (password.length < 8) {
-    return res.status(400).json({ error: "Password must be at least 8 characters" });
+  if (password.length < 8 || password.length > 200) {
+    return res.status(400).json({ error: "Password must be between 8 and 200 characters" });
+  }
+
+  const trimmedName = name.trim();
+  if (trimmedName.length < 1 || trimmedName.length > 100) {
+    return res.status(400).json({ error: "Name must be between 1 and 100 characters" });
+  }
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 255) {
+    return res.status(400).json({ error: "Invalid email" });
   }
 
   try {
-    // Check if user already exists
     const existingUser = await db.query.users.findFirst({
       where: eq(users.email, email.toLowerCase()),
     });
@@ -127,50 +146,24 @@ router.post("/register", async (req, res) => {
       return res.status(409).json({ error: "User already exists" });
     }
 
-    // Hash password
     const passwordHash = await bcrypt.hash(password, 10);
 
-    // Create user
-    const newUser = await db.insert(users).values({
-      email: email.toLowerCase(),
-      name: name.trim(),
-      displayName: name.trim(),
-      passwordHash,
-      language: "en",
-    }).returning();
+    const newUser = await db
+      .insert(users)
+      .values({
+        email: email.toLowerCase(),
+        name: trimmedName,
+        displayName: trimmedName,
+        passwordHash,
+        language: "en",
+      })
+      .returning();
 
     const user = newUser[0];
+    const { token } = await createUserSession(user.id);
+    setAuthCookie(res, token);
 
-    // Generate token
-    const token = jwt.sign(
-      {
-        userId: user.id,
-        email: user.email,
-        name: user.name,
-        language: user.language,
-      },
-      JWT_SECRET,
-      { expiresIn: "30d" }
-    );
-
-    const isProd = process.env.NODE_ENV === "production";
-    res.cookie(AUTH_COOKIE_NAME, token, {
-      httpOnly: true,
-      secure: isProd,
-      sameSite: "lax",
-      maxAge: 30 * 24 * 60 * 60 * 1000,
-      path: "/",
-    });
-
-    res.json({
-      user: {
-        id: user.id,
-        name: user.name,
-        displayName: user.displayName,
-        email: user.email,
-        language: user.language,
-      },
-    });
+    res.json({ user: publicUser(user) });
   } catch (err) {
     res.status(500).json({ error: "Server error" });
   }
@@ -178,10 +171,11 @@ router.post("/register", async (req, res) => {
 
 router.post("/guest-login", async (req, res) => {
   const body: unknown = req.body ?? {};
-  const displayName =
+  const rawName =
     typeof body === "object" && body !== null && typeof (body as { displayName?: unknown }).displayName === "string"
       ? (body as { displayName: string }).displayName.trim()
       : "Guest";
+  const displayName = rawName.slice(0, 100) || "Guest";
 
   try {
     const randomId = crypto.randomUUID();
@@ -189,61 +183,38 @@ router.post("/guest-login", async (req, res) => {
     const password = crypto.randomUUID();
     const passwordHash = await bcrypt.hash(password, 10);
 
-    const newUser = await db.insert(users).values({
-      email,
-      name: displayName,
-      displayName,
-      passwordHash,
-      language: "en",
-      isGuest: true,
-    }).returning();
+    const newUser = await db
+      .insert(users)
+      .values({
+        email,
+        name: displayName,
+        displayName,
+        passwordHash,
+        language: "en",
+        isGuest: true,
+      })
+      .returning();
 
     const user = newUser[0];
+    const { token } = await createUserSession(user.id);
+    setAuthCookie(res, token);
 
-    const token = jwt.sign(
-      {
-        userId: user.id,
-        email: user.email,
-        name: user.name,
-        language: user.language,
-      },
-      JWT_SECRET,
-      { expiresIn: "30d" }
-    );
-
-    const isProd = process.env.NODE_ENV === "production";
-    res.cookie(AUTH_COOKIE_NAME, token, {
-      httpOnly: true,
-      secure: isProd,
-      sameSite: "lax",
-      maxAge: 30 * 24 * 60 * 60 * 1000,
-      path: "/",
-    });
-
-    res.json({
-      user: {
-        id: user.id,
-        name: user.name,
-        displayName: user.displayName,
-        email: user.email,
-        language: user.language,
-        isGuest: true,
-      },
-    });
+    res.json({ user: publicUser({ ...user, isGuest: true }) });
   } catch (err) {
     res.status(500).json({ error: "Server error during guest login" });
   }
 });
 
-router.post("/logout", (req, res) => {
-  const isProd = process.env.NODE_ENV === "production";
-  res.cookie(AUTH_COOKIE_NAME, "", {
-    httpOnly: true,
-    secure: isProd,
-    sameSite: "lax",
-    expires: new Date(0),
-    path: "/",
-  });
+router.post("/logout", async (req, res) => {
+  const cookies = parseCookies(req.headers.cookie);
+  const token = cookies[AUTH_COOKIE_NAME];
+  if (token) {
+    const sid = getSessionIdFromToken(token);
+    if (sid) {
+      await revokeSession(sid).catch(() => undefined);
+    }
+  }
+  clearAuthCookie(res);
   res.json({ message: "Logged out" });
 });
 
@@ -255,7 +226,7 @@ router.post("/change-password", authenticate, async (req, res) => {
       where: eq(users.id, req.user!.id),
     });
 
-    if (!user) {
+    if (!user || user.deletedAt) {
       return res.status(404).json({ error: "User not found" });
     }
 
@@ -267,25 +238,10 @@ router.post("/change-password", authenticate, async (req, res) => {
     const passwordHash = await bcrypt.hash(data.newPassword, 10);
     await db.update(users).set({ passwordHash }).where(eq(users.id, user.id));
 
-    const token = jwt.sign(
-      {
-        userId: user.id,
-        email: user.email,
-        name: user.name,
-        language: user.language,
-      },
-      JWT_SECRET,
-      { expiresIn: "30d" }
-    );
-
-    const isProd = process.env.NODE_ENV === "production";
-    res.cookie(AUTH_COOKIE_NAME, token, {
-      httpOnly: true,
-      secure: isProd,
-      sameSite: "lax",
-      maxAge: 30 * 24 * 60 * 60 * 1000,
-      path: "/",
-    });
+    // Revoke every existing session so other devices must re-login.
+    await revokeAllUserSessions(user.id);
+    const { token } = await createUserSession(user.id);
+    setAuthCookie(res, token);
 
     return res.json({ message: "Password updated" });
   } catch (err) {

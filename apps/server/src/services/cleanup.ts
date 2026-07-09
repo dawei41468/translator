@@ -4,6 +4,7 @@ import { db } from "../../../../packages/db/src/index.js";
 import { logger } from "../logger.js";
 import fs from "fs/promises";
 import path from "path";
+import { cleanupExpiredSessions } from "./auth-session.js";
 
 /**
  * Cleanup service for managing room lifecycles and file caches.
@@ -28,7 +29,23 @@ export class CleanupService {
       await this.cleanupTtsCache();
     });
 
+    // Prune expired auth sessions hourly (at :30)
+    cron.schedule('30 * * * *', async () => {
+      await this.cleanupExpiredAuthSessions();
+    });
+
     logger.info('Cleanup service initialized');
+  }
+
+  static async cleanupExpiredAuthSessions() {
+    try {
+      const count = await cleanupExpiredSessions();
+      if (count > 0) {
+        logger.info(`Auth session cleanup: deleted ${count} expired sessions`);
+      }
+    } catch (error) {
+      logger.error('Error cleaning up expired auth sessions', error);
+    }
   }
 
   /**

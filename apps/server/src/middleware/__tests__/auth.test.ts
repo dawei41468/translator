@@ -1,24 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import jwt from 'jsonwebtoken';
-import { db } from '../../../../../packages/db/src/index.js';
 import { parseCookies, authenticate } from '../auth.js';
 
-vi.mock('jsonwebtoken', () => ({
-  default: {
-    verify: vi.fn(),
-    sign: vi.fn(),
-  },
+vi.mock('../../services/auth-session.js', () => ({
+  AUTH_COOKIE_NAME: 'auth_token',
+  verifyAuthToken: vi.fn(),
 }));
 
-vi.mock('../../../../../packages/db/src/index.js', () => ({
-  db: {
-    query: {
-      users: {
-        findFirst: vi.fn(),
-      },
-    },
-  },
-}));
+import { verifyAuthToken } from '../../services/auth-session.js';
 
 describe('parseCookies', () => {
   it('returns empty object for undefined header', () => {
@@ -79,40 +67,29 @@ describe('authenticate middleware', () => {
     expect(res.json).toHaveBeenCalledWith({ error: 'Not authenticated' });
   });
 
-  it('returns 401 when token verification throws', async () => {
+  it('returns 401 when session verification fails', async () => {
     req.headers.cookie = 'auth_token=badtoken';
-    (jwt.verify as any).mockImplementation(() => {
-      throw new Error('invalid token');
-    });
+    (verifyAuthToken as any).mockResolvedValue(null);
     await authenticate(req, res, next);
     expect(res.status).toHaveBeenCalledWith(401);
     expect(res.json).toHaveBeenCalledWith({ error: 'Invalid token' });
   });
 
-  it('returns 401 when verified payload has no userId', async () => {
-    req.headers.cookie = 'auth_token=validtoken';
-    (jwt.verify as any).mockReturnValue({});
+  it('returns 401 when verifyAuthToken throws', async () => {
+    req.headers.cookie = 'auth_token=badtoken';
+    (verifyAuthToken as any).mockRejectedValue(new Error('db down'));
     await authenticate(req, res, next);
     expect(res.status).toHaveBeenCalledWith(401);
     expect(res.json).toHaveBeenCalledWith({ error: 'Invalid token' });
   });
 
-  it('returns 401 when user is not found in database', async () => {
+  it('calls next and sets req.user when token and session are valid', async () => {
     req.headers.cookie = 'auth_token=validtoken';
-    (jwt.verify as any).mockReturnValue({ userId: 'user-123' });
-    (db.query.users.findFirst as any).mockResolvedValue(null);
-    await authenticate(req, res, next);
-    expect(res.status).toHaveBeenCalledWith(401);
-    expect(res.json).toHaveBeenCalledWith({ error: 'User not found' });
-  });
-
-  it('calls next and sets req.user when token and user are valid', async () => {
-    req.headers.cookie = 'auth_token=validtoken';
-    (jwt.verify as any).mockReturnValue({ userId: 'user-123' });
     const user = { id: 'user-123', email: 'test@example.com' };
-    (db.query.users.findFirst as any).mockResolvedValue(user);
+    (verifyAuthToken as any).mockResolvedValue({ user, sessionId: 'sid-1' });
     await authenticate(req, res, next);
     expect(req.user).toBe(user);
+    expect(req.sessionId).toBe('sid-1');
     expect(next).toHaveBeenCalled();
     expect(res.status).not.toHaveBeenCalled();
   });

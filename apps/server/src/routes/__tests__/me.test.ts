@@ -1,15 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
 import express from 'express';
-import jwt from 'jsonwebtoken';
 import { db } from '../../../../../packages/db/src/index.js';
 import { meRouter } from '../me.js';
 
-vi.mock('jsonwebtoken', () => ({
-  default: {
-    sign: vi.fn().mockReturnValue('mock-token'),
-    verify: vi.fn(),
-  },
+vi.mock('../../services/auth-session.js', () => ({
+  AUTH_COOKIE_NAME: 'auth_token',
+  verifyAuthToken: vi.fn(),
 }));
 
 vi.mock('../../../../../packages/db/src/index.js', () => ({
@@ -42,6 +39,8 @@ vi.mock('../../middleware/auth.js', () => ({
   parseCookies: vi.fn(),
 }));
 
+import { verifyAuthToken } from '../../services/auth-session.js';
+
 function createApp() {
   const app = express();
   app.use(express.json());
@@ -68,7 +67,7 @@ describe('Me Routes', () => {
     it('returns null user when token is invalid', async () => {
       const { parseCookies } = await import('../../middleware/auth.js');
       (parseCookies as any).mockReturnValue({ auth_token: 'bad-token' });
-      (jwt.verify as any).mockImplementation(() => { throw new Error('invalid'); });
+      (verifyAuthToken as any).mockResolvedValue(null);
 
       const app = createApp();
       const res = await request(app).get('/api/me');
@@ -76,11 +75,10 @@ describe('Me Routes', () => {
       expect(res.body.user).toBeNull();
     });
 
-    it('returns null user when user not found in DB', async () => {
+    it('returns null user when session verification fails', async () => {
       const { parseCookies } = await import('../../middleware/auth.js');
       (parseCookies as any).mockReturnValue({ auth_token: 'valid-token' });
-      (jwt.verify as any).mockReturnValue({ userId: 'user-1' });
-      (db.query.users.findFirst as any).mockResolvedValue(null);
+      (verifyAuthToken as any).mockResolvedValue(null);
 
       const app = createApp();
       const res = await request(app).get('/api/me');
@@ -91,15 +89,17 @@ describe('Me Routes', () => {
     it('returns user data when authenticated', async () => {
       const { parseCookies } = await import('../../middleware/auth.js');
       (parseCookies as any).mockReturnValue({ auth_token: 'valid-token' });
-      (jwt.verify as any).mockReturnValue({ userId: 'user-1' });
-      (db.query.users.findFirst as any).mockResolvedValue({
-        id: 'user-1',
-        email: 'test@example.com',
-        name: 'Test',
-        displayName: 'Test',
-        language: 'en',
-        isGuest: false,
-        preferences: { sttEngine: 'grok-stt' },
+      (verifyAuthToken as any).mockResolvedValue({
+        sessionId: 'sid-1',
+        user: {
+          id: 'user-1',
+          email: 'test@example.com',
+          name: 'Test',
+          displayName: 'Test',
+          language: 'en',
+          isGuest: false,
+          preferences: { sttEngine: 'grok-stt' },
+        },
       });
 
       const app = createApp();
@@ -116,15 +116,17 @@ describe('Me Routes', () => {
     it('normalizes legacy web-speech-api preferences', async () => {
       const { parseCookies } = await import('../../middleware/auth.js');
       (parseCookies as any).mockReturnValue({ auth_token: 'valid-token' });
-      (jwt.verify as any).mockReturnValue({ userId: 'user-1' });
-      (db.query.users.findFirst as any).mockResolvedValue({
-        id: 'user-1',
-        email: 'test@example.com',
-        name: 'Test',
-        displayName: 'Test',
-        language: 'en',
-        isGuest: false,
-        preferences: { sttEngine: 'web-speech-api', ttsEngine: 'web-speech-api' },
+      (verifyAuthToken as any).mockResolvedValue({
+        sessionId: 'sid-1',
+        user: {
+          id: 'user-1',
+          email: 'test@example.com',
+          name: 'Test',
+          displayName: 'Test',
+          language: 'en',
+          isGuest: false,
+          preferences: { sttEngine: 'web-speech-api', ttsEngine: 'web-speech-api' },
+        },
       });
 
       const app = createApp();

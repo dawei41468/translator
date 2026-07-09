@@ -1,16 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
 import express from 'express';
-import jwt from 'jsonwebtoken';
 import { db } from '../../../../../packages/db/src/index.js';
 import { authRouter } from '../auth.js';
-
-vi.mock('jsonwebtoken', () => ({
-  default: {
-    sign: vi.fn().mockReturnValue('mock-token'),
-    verify: vi.fn(),
-  },
-}));
 
 vi.mock('../../../../../packages/db/src/index.js', () => ({
   db: {
@@ -18,6 +10,9 @@ vi.mock('../../../../../packages/db/src/index.js', () => ({
       users: {
         findFirst: vi.fn(),
         findMany: vi.fn(),
+      },
+      sessions: {
+        findFirst: vi.fn(),
       },
     },
     insert: vi.fn().mockReturnValue({
@@ -33,6 +28,9 @@ vi.mock('../../../../../packages/db/src/index.js', () => ({
         where: vi.fn().mockResolvedValue(undefined),
       }),
     }),
+    delete: vi.fn().mockReturnValue({
+      where: vi.fn().mockResolvedValue(undefined),
+    }),
   },
 }));
 
@@ -41,6 +39,28 @@ vi.mock('bcryptjs', () => ({
     compare: vi.fn(),
     hash: vi.fn().mockResolvedValue('hashed-password'),
   },
+}));
+
+vi.mock('../../services/auth-session.js', () => ({
+  AUTH_COOKIE_NAME: 'auth_token',
+  JWT_EXPIRES_IN: '7d',
+  JWT_MAX_AGE_MS: 7 * 24 * 60 * 60 * 1000,
+  cookieOptions: (isProd: boolean) => ({
+    httpOnly: true,
+    secure: isProd,
+    sameSite: 'lax',
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+    path: '/',
+  }),
+  createUserSession: vi.fn().mockResolvedValue({
+    token: 'mock-session-token',
+    sessionId: 'sid-1',
+    expiresAt: new Date(Date.now() + 86400000),
+  }),
+  getSessionIdFromToken: vi.fn().mockReturnValue(null),
+  revokeSession: vi.fn().mockResolvedValue(undefined),
+  revokeAllUserSessions: vi.fn().mockResolvedValue(undefined),
+  verifyAuthToken: vi.fn(),
 }));
 
 vi.mock('../../middleware/auth.js', () => ({
@@ -56,7 +76,7 @@ vi.mock('../../middleware/auth.js', () => ({
     };
     next();
   },
-  parseCookies: vi.fn(),
+  parseCookies: vi.fn().mockReturnValue({}),
 }));
 
 import bcrypt from 'bcryptjs';
@@ -155,7 +175,7 @@ describe('Auth Routes', () => {
         name: 'Test',
       });
       expect(res.status).toBe(400);
-      expect(res.body.error).toMatch(/at least 8 characters/);
+      expect(res.body.error).toMatch(/between 8 and 200 characters/);
     });
 
     it('returns 409 when user already exists', async () => {

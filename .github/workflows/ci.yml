@@ -10,8 +10,34 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: translator
+          POSTGRES_PASSWORD: translator
+          POSTGRES_DB: translator
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U translator -d translator"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://translator:translator@localhost:5432/translator
+      JWT_SECRET: ci-test-jwt-secret-not-for-production
+      NODE_ENV: test
+      GROK_API_KEY: ""
+
     steps:
     - uses: actions/checkout@v4
+
+    - name: Install pnpm
+      uses: pnpm/action-setup@v4
+      with:
+        version: 9
 
     - name: Setup Node.js
       uses: actions/setup-node@v4
@@ -20,13 +46,19 @@ jobs:
         cache: 'pnpm'
 
     - name: Install dependencies
-      run: pnpm install
+      run: pnpm install --frozen-lockfile
 
-    - name: Run linting
-      run: pnpm lint
+    - name: Apply database schema
+      run: pnpm db:push
 
-    - name: Run tests
+    - name: Typecheck / build
+      run: pnpm build
+
+    - name: Run unit tests
       run: pnpm test
 
-    - name: Build applications
-      run: pnpm build
+    # E2E needs a live API + web; keep optional until full env is wired in CI
+    # - name: Install Playwright browsers
+    #   run: pnpm -C apps/web exec playwright install --with-deps chromium
+    # - name: Run E2E
+    #   run: pnpm -C apps/web test:e2e -- --project=chromium

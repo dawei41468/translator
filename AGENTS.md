@@ -31,10 +31,12 @@ ssh hk-studio 'cd /home/ubuntu/translator && ./deploy.sh'
 
 1. `git pull --ff-only origin main`
 2. `pnpm install --frozen-lockfile`
-3. `pnpm db:push` (apply database schema changes)
-4. Build server and web (`turbo build`)
+3. Apply DB schema via `pnpm db:migrate` (falls back to `pnpm db:push` if migrate fails)
+4. Build server and web
 5. `pm2 restart translator --update-env`
-6. Wait for `http://127.0.0.1:4003/api/health` to return 200
+6. Wait for `http://127.0.0.1:4003/api/health` to return 200 with database up
+
+On failure, the script prints a **code rollback** hint (`git reset --hard <prev-sha> …`). Schema rollbacks are not automatic — take a DB backup before risky migrations.
 
 ### 3. Confirm success
 

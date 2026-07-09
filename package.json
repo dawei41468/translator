@@ -8,8 +8,8 @@
     "db:push": "drizzle-kit push",
     "test": "turbo test",
     "test:watch": "turbo test:watch",
-    "test:e2e": "turbo test:e2e",
-    "lint": "turbo lint",
+    "test:e2e": "pnpm -C apps/web test:e2e",
+    "lint": "pnpm -C apps/server exec tsc --noEmit && pnpm -C apps/web exec tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate"
   },
@@ -26,8 +26,6 @@
     "node": ">=20"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.948.0",
-    "@aws-sdk/s3-request-presigner": "^3.948.0",
     "bcryptjs": "^3.0.2",
     "dotenv": "^17.2.3",
     "drizzle-orm": "^0.45.1",

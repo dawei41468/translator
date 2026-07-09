@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { io, Socket } from "socket.io-client";
+import { useQueryClient } from "@tanstack/react-query";
 import { useRoom, useUpdateLanguage } from "@/lib/hooks";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
@@ -27,6 +28,7 @@ const Conversation = () => {
   const { t } = useTranslation();
   const { code } = useParams<{ code: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { user } = useAuth();
   const updateLanguageMutation = useUpdateLanguage();
   const tRef = useRef(t);
@@ -47,11 +49,19 @@ const Conversation = () => {
   const socketRef = useRef<Socket | null>(null);
 
   const [messages, setMessages] = useState<Message[]>(() => {
-    if (code) {
+    if (!code) return [];
+    try {
       const stored = sessionStorage.getItem(`translator_messages_${code}`);
-      return stored ? JSON.parse(stored) : [];
+      if (!stored) return [];
+      const parsed = JSON.parse(stored);
+      if (!Array.isArray(parsed)) return [];
+      return parsed.map((m: Message) => ({
+        ...m,
+        timestamp: m.timestamp ? new Date(m.timestamp) : new Date(),
+      }));
+    } catch {
+      return [];
     }
-    return [];
   });
 
   const [participantStatuses, setParticipantStatuses] = useState<Map<string, {
@@ -138,8 +148,12 @@ const Conversation = () => {
     s2sAudioPlayer.onPlaybackEmpty(() => {
       // Playback finished; UI is driven by utterance-done so nothing needed here.
     });
+    s2sAudioPlayer.onError((message) => {
+      toast.error(message);
+    });
     return () => {
       s2sAudioPlayer.onPlaybackEmpty(null);
+      s2sAudioPlayer.onError(null);
     };
   }, [s2sAudioPlayer]);
 
@@ -173,6 +187,20 @@ const Conversation = () => {
     }
   }, [roomData?.participantStatuses]);
 
+  // Keep a stable invalidate helper for socket presence events
+  const invalidateRoomRef = useRef(() => {
+    if (code) {
+      void queryClient.invalidateQueries({ queryKey: ["room", code] });
+    }
+  });
+  useEffect(() => {
+    invalidateRoomRef.current = () => {
+      if (code) {
+        void queryClient.invalidateQueries({ queryKey: ["room", code] });
+      }
+    };
+  }, [code, queryClient]);
+
   // Initialize Socket.io
   useEffect(() => {
     if (!code) return;
@@ -185,6 +213,10 @@ const Conversation = () => {
       forceNew: true,
     });
 
+    const joinRoom = () => {
+      socketInstance.emit('join-room', code);
+    };
+
     const connectionTimeout = setTimeout(() => {
       if (socketInstance.connected === false) {
         setConnectionStatus('disconnected');
@@ -195,13 +227,16 @@ const Conversation = () => {
     socketInstance.on('connect', () => {
       clearTimeout(connectionTimeout);
       setConnectionStatus('connected');
-      socketInstance.emit('join-room', code);
+      joinRoom();
     });
 
     socketInstance.on('disconnect', () => setConnectionStatus('disconnected'));
     socketInstance.on('reconnect_attempt', () => setConnectionStatus('reconnecting'));
     socketInstance.on('reconnect', () => {
       setConnectionStatus('connected');
+      // Socket.IO may not re-run join side effects; re-join the room after reconnect.
+      joinRoom();
+      invalidateRoomRef.current();
 
       if (isRecordingRef.current) {
         // Reconnecting mid-utterance is not automatically resumed; client stops the
@@ -214,6 +249,18 @@ const Conversation = () => {
     socketInstance.on('connect_error', (_error: any) => {
       setConnectionStatus('disconnected');
       toast.error('Unable to connect to conversation server.');
+    });
+
+    socketInstance.on('joined-room', () => {
+      invalidateRoomRef.current();
+    });
+
+    socketInstance.on('user-joined', () => {
+      invalidateRoomRef.current();
+    });
+
+    socketInstance.on('user-left', () => {
+      invalidateRoomRef.current();
     });
 
     socketInstance.on('utterance-started', (data: { utteranceId: string; speakerId: string; sourceLang: string }) => {
@@ -284,6 +331,10 @@ const Conversation = () => {
     setSocket(socketInstance);
 
     return () => {
+      // Best-effort leave so peers get user-left before the socket drops.
+      if (socketInstance.connected) {
+        socketInstance.emit('leave-room');
+      }
       socketInstance.disconnect();
     };
   }, [code, user?.id, s2sAudioPlayer]);
@@ -324,6 +375,14 @@ const Conversation = () => {
 
   const hasOtherParticipants = !!roomData?.participants?.some((p) => p.id !== user?.id);
   const canStartRecording = hasOtherParticipants;
+
+  const handleLeave = useCallback(() => {
+    if (socketRef.current?.connected) {
+      socketRef.current.emit('leave-room');
+    }
+    navigate('/dashboard');
+  }, [navigate]);
+
   const handleToggleRecording = () => {
     if (!isRecording && !canStartRecording) {
       return;
@@ -380,7 +439,7 @@ const Conversation = () => {
           connectionStatus={connectionStatus}
           audioEnabled={audioEnabled}
           toggleAudio={toggleAudio}
-          onLeave={() => navigate('/dashboard')}
+          onLeave={handleLeave}
           userLanguage={user?.language}
           onUpdateLanguage={handleUpdateLanguage}
           isUpdatingLanguage={updateLanguageMutation.isPending}

@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useJoinRoom } from "./hooks";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
@@ -14,17 +14,18 @@ export interface UseDashboardRoomJoinReturn {
   handleRecentJoin: (code: string) => void;
 }
 
-export const useDashboardRoomJoin = (isAuthenticated: boolean): UseDashboardRoomJoinReturn => {
+/**
+ * Room join helpers for the dashboard.
+ * Auth gating is the caller's responsibility (Dashboard guest funnel).
+ */
+export const useDashboardRoomJoin = (): UseDashboardRoomJoinReturn => {
   const { t } = useTranslation();
   const [manualCode, setManualCode] = useState("");
   const [isJoining, setIsJoining] = useState(false);
   const manualCodeInputRef = useRef<HTMLInputElement>(null);
   const joinRoomMutation = useJoinRoom();
 
-  const handleManualJoin = () => {
-    if (!isAuthenticated) {
-      return; // Handle by caller
-    }
+  const handleManualJoin = useCallback(() => {
     if (!manualCode.trim()) {
       toast.error(t('error.enterCode'));
       return;
@@ -38,17 +39,13 @@ export const useDashboardRoomJoin = (isAuthenticated: boolean): UseDashboardRoom
         setIsJoining(false);
       }
     });
-  };
+  }, [manualCode, isJoining, joinRoomMutation, t]);
 
-  const handleRecentJoin = (code: string) => {
+  const handleRecentJoin = useCallback((code: string) => {
     const normalized = code.trim().toUpperCase();
     if (!normalized) return;
 
     setManualCode(normalized);
-
-    if (!isAuthenticated) {
-      return; // Handle by caller
-    }
 
     if (isJoining) return;
     setIsJoining(true);
@@ -57,7 +54,7 @@ export const useDashboardRoomJoin = (isAuthenticated: boolean): UseDashboardRoom
         setIsJoining(false);
       }
     });
-  };
+  }, [isJoining, joinRoomMutation]);
 
   return {
     manualCode,

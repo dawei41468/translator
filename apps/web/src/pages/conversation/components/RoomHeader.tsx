@@ -259,6 +259,8 @@ export function RoomHeader({
             "[@media(hover:hover)]:hover:bg-accent [@media(hover:hover)]:hover:text-accent-foreground"
           )}
           aria-label={audioEnabled ? t('conversation.audioOn') : t('conversation.audioOff')}
+          aria-pressed={audioEnabled}
+          data-testid="toggle-audio"
         >
           {audioEnabled ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
         </Button>

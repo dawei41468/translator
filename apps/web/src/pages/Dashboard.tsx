@@ -1,4 +1,5 @@
 // Live Translator Dashboard
+import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { QRCodeCanvas } from "qrcode.react";
 import { useAuth } from "@/lib/auth";
@@ -32,14 +33,14 @@ const Dashboard = () => {
   const isIOS = typeof navigator !== 'undefined' && /iPhone|iPad|iPod/i.test(navigator.userAgent);
   const { canPrompt, promptToInstall } = usePwaInstallPrompt();
 
-  // Custom hooks
+  // Custom hooks (auth gating lives in the handlers below, not inside these hooks)
   const {
     createdRoom,
     createRoomMutation,
     handleStartConversation: baseHandleStartConversation,
     handleJoinConversation,
     resetRoom
-  } = useDashboardRoomCreation(isAuthenticated);
+  } = useDashboardRoomCreation();
 
   const {
     manualCode,
@@ -49,7 +50,7 @@ const Dashboard = () => {
     manualCodeInputRef,
     handleManualJoin: baseHandleManualJoin,
     handleRecentJoin: baseHandleRecentJoin
-  } = useDashboardRoomJoin(isAuthenticated);
+  } = useDashboardRoomJoin();
 
   const {
     showScanner,
@@ -73,6 +74,30 @@ const Dashboard = () => {
   const { recentRooms } = useRecentRooms();
   const { shouldShowPwaBanner, dismissPwaBannerForever, platform } = usePwaBanner();
   const { handleCopy } = useClipboard();
+
+  // After guest login, React re-renders with isAuthenticated=true.
+  // Run the pending action on that re-render so we never call create/join with a stale auth flag.
+  useEffect(() => {
+    if (!isAuthenticated || !pendingAction) return;
+
+    const action = pendingAction;
+    setPendingAction(null);
+
+    if (action === 'create') {
+      baseHandleStartConversation();
+    } else if (action === 'scan') {
+      baseHandleScanQR();
+    } else if (action === 'join') {
+      baseHandleManualJoin();
+    }
+  }, [
+    isAuthenticated,
+    pendingAction,
+    setPendingAction,
+    baseHandleStartConversation,
+    baseHandleScanQR,
+    baseHandleManualJoin,
+  ]);
 
   // Event handlers
   const handleStartConversation = () => {
@@ -113,15 +138,15 @@ const Dashboard = () => {
   };
 
   const handleGuestSubmitWrapper = async (e: React.FormEvent) => {
+    // loginAsGuest updates the me query; the useEffect above runs the pending action.
     await handleGuestSubmit(e);
+  };
 
-    // Perform pending action after successful guest login
-    if (pendingAction === 'create') {
-      baseHandleStartConversation();
-    } else if (pendingAction === 'scan') {
-      baseHandleScanQR();
-    } else if (pendingAction === 'join') {
-      baseHandleManualJoin();
+  const handleGuestDialogOpenChange = (open: boolean) => {
+    setIsGuestDialogOpen(open);
+    if (!open) {
+      // Cancelled without logging in — drop the pending action.
+      setPendingAction(null);
     }
   };
 
@@ -311,7 +336,7 @@ const Dashboard = () => {
 
               <div className="rounded-lg border bg-background p-3 text-center">
                 <div className="text-xs text-muted-foreground mb-1">{t("room.code")}</div>
-                <div className="font-mono text-xl font-bold tracking-widest">{createdRoom.code}</div>
+                <div className="font-mono text-xl font-bold tracking-widest" data-testid="room-code-display">{createdRoom.code}</div>
 
                 <div className="mt-3">
                   <Button
@@ -413,7 +438,7 @@ const Dashboard = () => {
           </DialogContent>
         </Dialog>
 
-          <Dialog open={isGuestDialogOpen} onOpenChange={setIsGuestDialogOpen}>
+          <Dialog open={isGuestDialogOpen} onOpenChange={handleGuestDialogOpenChange}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>{t('auth.guestJoin', 'Join as Guest')}</DialogTitle>

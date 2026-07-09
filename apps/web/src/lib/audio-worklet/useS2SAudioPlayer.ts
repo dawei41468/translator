@@ -16,6 +16,8 @@ export interface S2SAudioPlayer {
   isReady: boolean;
   /** Register a callback for when the playback queue drains. */
   onPlaybackEmpty: (callback: (() => void) | null) => void;
+  /** Register a callback when worklet setup fails (or play is impossible). */
+  onError: (callback: ((message: string) => void) | null) => void;
 }
 
 /**
@@ -32,59 +34,83 @@ export function useS2SAudioPlayer(
   const workletNodeRef = useRef<AudioWorkletNode | null>(null);
   const blobUrlRef = useRef<string | null>(null);
   const isReadyRef = useRef(false);
+  const initFailedRef = useRef(false);
   const onPlaybackEmptyRef = useRef<(() => void) | null>(null);
+  const onErrorRef = useRef<((message: string) => void) | null>(null);
+  const errorNotifiedRef = useRef(false);
+
+  const notifyError = useCallback((message: string) => {
+    if (errorNotifiedRef.current) return;
+    errorNotifiedRef.current = true;
+    onErrorRef.current?.(message);
+  }, []);
 
   const ensureContext = useCallback(async () => {
     if (audioContextRef.current) return audioContextRef.current;
 
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioContextClass) throw new Error("Web Audio API not supported");
+    if (!AudioContextClass) {
+      initFailedRef.current = true;
+      notifyError("Web Audio API is not supported in this browser.");
+      throw new Error("Web Audio API not supported");
+    }
 
     const ctx = new AudioContextClass({ sampleRate });
     audioContextRef.current = ctx;
 
-    if (ctx.audioWorklet) {
-      const blob = new Blob([processorSource], { type: "application/javascript" });
-      const blobUrl = URL.createObjectURL(blob);
-      blobUrlRef.current = blobUrl;
+    if (!ctx.audioWorklet) {
+      initFailedRef.current = true;
+      notifyError("Audio playback is not available in this browser.");
+      return ctx;
+    }
 
-      try {
-        await ctx.audioWorklet.addModule(blobUrl);
-        const node = new AudioWorkletNode(ctx, "practice-audio-processor", {
-          numberOfInputs: 0,
-          numberOfOutputs: 1,
-          outputChannelCount: [1],
-        });
-        node.port.onmessage = (event) => {
-          if (event.data?.type === "playback-empty") {
-            onPlaybackEmptyRef.current?.();
-          }
-        };
-        node.connect(ctx.destination);
-        workletNodeRef.current = node;
-        isReadyRef.current = true;
-      } catch (error) {
-        // Worklet setup failed; fall back to legacy path elsewhere.
-        isReadyRef.current = false;
-        if (import.meta.env.DEV) {
-          console.warn("[useS2SAudioPlayer] AudioWorklet setup failed", error);
+    const blob = new Blob([processorSource], { type: "application/javascript" });
+    const blobUrl = URL.createObjectURL(blob);
+    blobUrlRef.current = blobUrl;
+
+    try {
+      await ctx.audioWorklet.addModule(blobUrl);
+      const node = new AudioWorkletNode(ctx, "practice-audio-processor", {
+        numberOfInputs: 0,
+        numberOfOutputs: 1,
+        outputChannelCount: [1],
+      });
+      node.port.onmessage = (event) => {
+        if (event.data?.type === "playback-empty") {
+          onPlaybackEmptyRef.current?.();
         }
+      };
+      node.connect(ctx.destination);
+      workletNodeRef.current = node;
+      isReadyRef.current = true;
+    } catch (error) {
+      isReadyRef.current = false;
+      initFailedRef.current = true;
+      notifyError("Could not start audio playback. Try refreshing the page.");
+      if (import.meta.env.DEV) {
+        console.warn("[useS2SAudioPlayer] AudioWorklet setup failed", error);
       }
     }
 
     return ctx;
-  }, [sampleRate]);
+  }, [sampleRate, notifyError]);
 
   const playChunk = useCallback(async (base64Audio: string) => {
-    const ctx = await ensureContext();
-    if (ctx.state === "suspended") {
-      await ctx.resume();
+    try {
+      const ctx = await ensureContext();
+      if (ctx.state === "suspended") {
+        await ctx.resume();
+      }
+      const node = workletNodeRef.current;
+      if (node && isReadyRef.current) {
+        node.port.postMessage({ type: "audio", base64: base64Audio });
+      } else if (initFailedRef.current) {
+        notifyError("Could not start audio playback. Try refreshing the page.");
+      }
+    } catch {
+      notifyError("Could not start audio playback. Try refreshing the page.");
     }
-    const node = workletNodeRef.current;
-    if (node && isReadyRef.current) {
-      node.port.postMessage({ type: "audio", base64: base64Audio });
-    }
-  }, [ensureContext]);
+  }, [ensureContext, notifyError]);
 
   const initialize = useCallback(async () => {
     try {
@@ -111,6 +137,10 @@ export function useS2SAudioPlayer(
 
   const onPlaybackEmpty = useCallback((callback: (() => void) | null) => {
     onPlaybackEmptyRef.current = callback;
+  }, []);
+
+  const onError = useCallback((callback: ((message: string) => void) | null) => {
+    onErrorRef.current = callback;
   }, []);
 
   const dispose = useCallback(async () => {
@@ -151,8 +181,9 @@ export function useS2SAudioPlayer(
     clear,
     dispose,
     onPlaybackEmpty,
+    onError,
     get isReady() {
       return isReadyRef.current;
     },
-  }), [playChunk, resume, initialize, clear, dispose, onPlaybackEmpty]);
+  }), [playChunk, resume, initialize, clear, dispose, onPlaybackEmpty, onError]);
 }

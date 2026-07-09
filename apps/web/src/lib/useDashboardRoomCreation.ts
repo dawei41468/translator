@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCreateRoom } from "./hooks";
 import { addRecentRoom } from "./recentRooms";
@@ -17,15 +17,16 @@ export interface UseDashboardRoomCreationReturn {
   resetRoom: () => void;
 }
 
-export const useDashboardRoomCreation = (isAuthenticated: boolean): UseDashboardRoomCreationReturn => {
+/**
+ * Room creation helpers for the dashboard.
+ * Auth gating is the caller's responsibility (Dashboard guest funnel).
+ */
+export const useDashboardRoomCreation = (): UseDashboardRoomCreationReturn => {
   const navigate = useNavigate();
   const [createdRoom, setCreatedRoom] = useState<CreatedRoom | null>(null);
   const createRoomMutation = useCreateRoom();
 
-  const handleStartConversation = () => {
-    if (!isAuthenticated) {
-      return; // Handle by caller
-    }
+  const handleStartConversation = useCallback(() => {
     createRoomMutation.mutate(undefined, {
       onSuccess: (data) => {
         setCreatedRoom({ code: data.roomCode, id: data.roomId });
@@ -33,20 +34,20 @@ export const useDashboardRoomCreation = (isAuthenticated: boolean): UseDashboard
         // Note: getRecentRooms() is not called here as it's handled by useRecentRooms
       },
       onError: (_error) => {
-        // Room creation failed
+        // Room creation failed — toast is handled by useCreateRoom
       }
     });
-  };
+  }, [createRoomMutation]);
 
-  const handleJoinConversation = () => {
+  const handleJoinConversation = useCallback(() => {
     if (createdRoom) {
       navigate(`/room/${createdRoom.code}`);
     }
-  };
+  }, [createdRoom, navigate]);
 
-  const resetRoom = () => {
+  const resetRoom = useCallback(() => {
     setCreatedRoom(null);
-  };
+  }, []);
 
   return {
     createdRoom,

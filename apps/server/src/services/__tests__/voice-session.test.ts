@@ -120,9 +120,6 @@ describe("SpeakerVoiceSession", () => {
     expect(payload.session.instructions).toContain("Spanish");
     expect(payload.session.turn_detection).toEqual({
       type: "server_vad",
-      silence_duration_ms: 400,
-      threshold: 0.6,
-      prefix_padding_ms: 200,
     });
   });
 

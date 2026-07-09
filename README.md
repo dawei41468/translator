@@ -143,6 +143,6 @@ translator/
 
 ---
 
-**Current Progress**: 100% MVP COMPLETE (Auth/infra/deploy/db/backend-core/frontend-core complete — January 6, 2026)
+**Current Progress**: MVP + Practice + Rooms Grok Voice S2S (see [`docs/ARCHITECTURE-CURRENT.md`](docs/ARCHITECTURE-CURRENT.md)).
 
-See [`docs/project-translator.md`](docs/project-translator.md) for detailed roadmap and status.
+See [`docs/ROADMAP.md`](docs/ROADMAP.md) for remaining post-MVP work.

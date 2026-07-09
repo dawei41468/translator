@@ -1,26 +1,25 @@
 # First-Principles Redesign: Practice + Multi-User Rooms
 
-**Date**: 2026-07-04  
-**Status**: Practice implemented and polished (July 2026). Rooms architecture pending implementation.
-**Context**: Moving beyond the original 3-pillar (STT + Translation + TTS) architecture now that true speech-to-speech (Grok Voice `grok-voice-think-fast-1.0`) is available. User is willing to change the message UI and re-shape features.
+**Date**: 2026-07-04 (status refreshed 2026-07-09)  
+**Status**: Practice + Rooms selective S2S orchestration **implemented**. Remaining work is UX polish (utterance cards UI) and optional LiveKit path.
+**Context**: Moved beyond the original 3-pillar (STT + Translation + TTS) rooms path to Grok Voice speech-to-speech.
 
-## Status Update (July 4, 2026)
+## Status Update (July 2026)
 
 **Done**:
-- ✅ Practice mode fully implemented and working with direct Grok Voice S2S.
-- ✅ Replaced old "solo mode" toggle with dedicated first-class `/practice` experience.
-- ✅ Complete removal of Google Cloud dependencies across backend/frontend.
-- ✅ Grok Voice ephemeral token backend + realtime client integration.
-- ✅ Input transcription + output translated text + spoken audio working.
-- ✅ Bottom nav, routing, and basic UI in place.
-- ✅ Practice polish: real-time microphone waveform visualizer, improved live transcription streaming, explicit error-state UI with retry, and AudioWorklet playback path with legacy fallback.
+- ✅ Practice mode (`/practice`) via server WS proxy + AudioWorklet capture/playback.
+- ✅ Solo mode removed from conversation UI; Practice is first-class.
+- ✅ Google Cloud dependencies removed.
+- ✅ Rooms: `UtteranceOrchestrator` + `SpeakerVoiceSession` with language-aware text/audio fan-out.
+- ✅ Selective spoken audio (cross-language only) + source text for same-language listeners.
+- ✅ Presence: client handles `user-joined` / `user-left`, reconnect re-join, leave-room emit.
 
-**Still Left to Implement** (see sections below):
-- Full multi-user Rooms redesign with language-aware delivery.
-- Selective spoken audio (only cross-language) + text for same-language.
-- New voice-centric UI for rooms (utterance cards instead of traditional bubbles).
-- Per-speaker or orchestrated Voice sessions for rooms.
-- Integration of rooms architecture into actual code (currently design doc only).
+**Still Left to Implement** (UX / optional):
+- Voice-centric utterance cards UI (MessageList still chat-bubble oriented).
+- Optional LiveKit media plane (see `grok-voice-livekit-integration.md`).
+- Opus compression / IndexedDB caching (roadmap).
+
+See also: [`ARCHITECTURE-CURRENT.md`](./ARCHITECTURE-CURRENT.md).
 
 ## 1. Locked Naming
 

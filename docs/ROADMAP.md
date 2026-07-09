@@ -217,14 +217,14 @@
 - Used by mic controls: `apps/web/src/pages/conversation/components/ConversationControls.tsx`
 
 ### 8. **Monitoring & Observability**
-**Status**: Partially Complete (logging)  
+**Status**: Partially Complete (logging + health)  
 **Priority**: Medium  
 **Timeline**: Post-MVP
 
 - [ ] Add Prometheus metrics collection
 - [ ] Implement Sentry error tracking
 - [ ] Create performance monitoring dashboards
-- [ ] Add health check endpoints
+- [x] Add health check endpoints (`GET /api/health` includes DB status)
 
 ## 🔮 Low Priority (Future Enhancements)
 

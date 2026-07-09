@@ -3,6 +3,7 @@ import cors from "cors";
 import { json } from "express";
 import path from "path";
 import rateLimit from "express-rate-limit";
+import { sql } from "drizzle-orm";
 
 import { authRouter } from "./routes/auth.js";
 import { meRouter } from "./routes/me.js";
@@ -11,6 +12,7 @@ import { ttsRouter } from "./routes/tts.js";
 import { voiceRouter } from "./routes/voice.js";
 import { authenticate } from "./middleware/auth.js";
 import { requestLogger } from "./middleware/logger.js";
+import { db } from "../../../packages/db/src/index.js";
 
 export interface UserPreferences {
   sttEngine?: string;
@@ -86,6 +88,22 @@ const roomLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+const ttsLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  message: { error: "Too many TTS requests, please slow down." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const voiceLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  message: { error: "Too many voice token requests, please slow down." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 app.use(
   "/assets",
   express.static(path.join(WEB_DIST_DIR, "assets"), {
@@ -125,10 +143,25 @@ app.use("/api/me", meRouter);
 
 app.use("/api/rooms", roomLimiter, authenticate, roomsRouter);
 
-app.use("/api/tts", authenticate, ttsRouter);
-app.use("/api/voice", authenticate, voiceRouter);
+app.use("/api/tts", ttsLimiter, authenticate, ttsRouter);
+app.use("/api/voice", voiceLimiter, authenticate, voiceRouter);
 
-app.get("/api/health", (_, res) => res.json({ status: "ok" }));
+app.get("/api/health", async (_req, res) => {
+  try {
+    await db.execute(sql`SELECT 1`);
+    res.json({
+      status: "ok",
+      database: "up",
+      grokConfigured: Boolean(process.env.GROK_API_KEY),
+    });
+  } catch {
+    res.status(503).json({
+      status: "degraded",
+      database: "down",
+      grokConfigured: Boolean(process.env.GROK_API_KEY),
+    });
+  }
+});
 app.get("/favicon.ico", (_, res) => res.status(204).end());
 
 app.get("*", (_, res) => {

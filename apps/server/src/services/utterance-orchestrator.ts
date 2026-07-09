@@ -56,6 +56,8 @@ export class UtteranceOrchestrator {
   private voiceSession: SpeakerVoiceSession;
   private sourceTranscript = "";
   private translationTexts: Map<string, string> = new Map();
+  private doneLangs = new Set<string>();
+  private doneBroadcasted = false;
 
   constructor(
     utteranceId: string,
@@ -158,10 +160,17 @@ export class UtteranceOrchestrator {
   }
 
   private handleDone(targetLang: string) {
-    // When any target session finishes, we don't end the whole utterance because
-    // other target languages may still be streaming. In practice, all sessions
-    // receive the same input and should finish near the same time.
-    // For simplicity, broadcast done to everyone on the first done event.
+    if (this.doneBroadcasted) return;
+
+    this.doneLangs.add(normalizeLang(targetLang));
+    const targets = this.voiceSession.getTargetLangs();
+
+    // Wait until every target language has finished (or there are no targets).
+    if (targets.length > 0 && this.doneLangs.size < targets.length) {
+      return;
+    }
+
+    this.doneBroadcasted = true;
     for (const p of this.participants) {
       this.emitters.emitDone(p.userId, { utteranceId: this.utteranceId });
     }

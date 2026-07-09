@@ -21,7 +21,11 @@ router.post('/ephemeral', authenticate, async (req, res) => {
   }
 
   try {
-    const expiresAfter = req.body?.expires_after?.seconds || 300; // 5 minutes default
+    // Clamp client-supplied TTL — never trust unbounded values for cost control.
+    const rawExpires = Number(req.body?.expires_after?.seconds ?? 300);
+    const expiresAfter = Number.isFinite(rawExpires)
+      ? Math.min(300, Math.max(60, Math.floor(rawExpires)))
+      : 300;
 
     const response = await fetch(`${baseUrl.replace(/\/$/, '')}/realtime/client_secrets`, {
       method: 'POST',

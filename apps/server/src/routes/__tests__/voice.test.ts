@@ -69,7 +69,7 @@ describe('Voice Routes', () => {
       expect(res.body.expires_at).toBe('2026-01-01T00:00:00Z');
     });
 
-    it('passes custom expires_after to Grok API', async () => {
+    it('clamps expires_after to max 300 seconds', async () => {
       process.env.GROK_API_KEY = 'test-key';
 
       const mockFetch = vi.fn().mockResolvedValue({
@@ -82,7 +82,23 @@ describe('Voice Routes', () => {
       await request(app).post('/api/voice/ephemeral').send({ expires_after: { seconds: 600 } });
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-      expect(body.expires_after.seconds).toBe(600);
+      expect(body.expires_after.seconds).toBe(300);
+    });
+
+    it('passes allowed expires_after values through', async () => {
+      process.env.GROK_API_KEY = 'test-key';
+
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ client_secret: { value: 'token', expires_at: null } }),
+      });
+      vi.stubGlobal('fetch', mockFetch);
+
+      const app = createApp();
+      await request(app).post('/api/voice/ephemeral').send({ expires_after: { seconds: 120 } });
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.expires_after.seconds).toBe(120);
     });
 
     it('uses default 300s when expires_after not provided', async () => {

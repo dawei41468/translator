@@ -4,7 +4,8 @@ import { normalizeLang } from "./socket-utils.js";
 
 const GROK_VOICE_MODEL = "grok-voice-latest";
 const GROK_VOICE_WS_URL = "wss://api.x.ai/v1/realtime";
-const SAMPLE_RATE = 24000;
+/** Cap buffered audio chunks while a target WS is still connecting. */
+const MAX_PENDING_AUDIO_CHUNKS = 40;
 
 export interface VoiceSessionEvents {
   onSourceTranscript: (text: string) => void;
@@ -19,6 +20,10 @@ interface TargetSession {
   ws: WebSocket;
   state: "connecting" | "open" | "closed" | "error";
   currentTranslationText: string;
+  /** True after at least one translation delta was emitted for this response. */
+  emittedTranslationDelta: boolean;
+  /** Audio chunks that arrived before the socket was open. */
+  pendingAudio: string[];
 }
 
 /**
@@ -33,6 +38,8 @@ export class SpeakerVoiceSession {
   private sessions: Map<string, TargetSession> = new Map();
   private events: VoiceSessionEvents;
   private disposed = false;
+  /** Deduplicate identical source transcripts across multi-target sessions. */
+  private seenSourceTranscripts = new Set<string>();
 
   constructor(sourceLang: string, targetLangs: string[], events: VoiceSessionEvents) {
     this.apiKey = process.env.GROK_API_KEY || "";
@@ -65,6 +72,8 @@ export class SpeakerVoiceSession {
       ws,
       state: "connecting",
       currentTranslationText: "",
+      emittedTranslationDelta: false,
+      pendingAudio: [],
     };
 
     this.sessions.set(targetLang, session);
@@ -73,6 +82,7 @@ export class SpeakerVoiceSession {
       if (this.disposed) return;
       session.state = "open";
       this.configureSession(session);
+      this.flushPendingAudio(session);
     });
 
     ws.on("message", (rawData) => {
@@ -87,9 +97,26 @@ export class SpeakerVoiceSession {
 
     ws.on("close", () => {
       session.state = "closed";
+      session.pendingAudio = [];
     });
 
     return session;
+  }
+
+  private flushPendingAudio(session: TargetSession) {
+    if (session.state !== "open" || session.pendingAudio.length === 0) return;
+
+    for (const base64Audio of session.pendingAudio) {
+      try {
+        session.ws.send(JSON.stringify({
+          type: "input_audio_buffer.append",
+          audio: base64Audio,
+        }));
+      } catch {
+        // ignore per-chunk failures
+      }
+    }
+    session.pendingAudio = [];
   }
 
   private configureSession(session: TargetSession) {
@@ -118,7 +145,6 @@ export class SpeakerVoiceSession {
   }
 
   private getLangName(code: string): string {
-    // Simple mapping; can be expanded later.
     const names: Record<string, string> = {
       en: "English",
       zh: "Chinese",
@@ -130,6 +156,7 @@ export class SpeakerVoiceSession {
       ko: "Korean",
       pt: "Portuguese",
       ru: "Russian",
+      nl: "Dutch",
     };
     return names[code] || code;
   }
@@ -139,17 +166,27 @@ export class SpeakerVoiceSession {
       const data = JSON.parse(rawData.toString());
 
       if (data.type === "conversation.item.input_audio_transcription.completed" && data.transcript) {
-        this.events.onSourceTranscript(data.transcript);
+        // Multi-target sessions receive the same source completion — emit once.
+        if (!this.seenSourceTranscripts.has(data.transcript)) {
+          this.seenSourceTranscripts.add(data.transcript);
+          this.events.onSourceTranscript(data.transcript);
+        }
       }
 
       if (data.type === "response.output_audio_transcript.delta" && data.transcript) {
         session.currentTranslationText += data.transcript;
+        session.emittedTranslationDelta = true;
         this.events.onTranslationText(data.transcript, session.targetLang);
       }
 
       if (data.type === "response.output_audio_transcript.done" && data.transcript) {
         session.currentTranslationText = data.transcript;
-        this.events.onTranslationText(data.transcript, session.targetLang);
+        // Deltas already streamed the text. Only emit on done when no deltas arrived
+        // (some providers send a single full transcript at the end).
+        if (!session.emittedTranslationDelta) {
+          this.events.onTranslationText(data.transcript, session.targetLang);
+        }
+        session.emittedTranslationDelta = false;
       }
 
       if (data.type === "response.output_audio.delta" && data.delta) {
@@ -158,6 +195,7 @@ export class SpeakerVoiceSession {
 
       if (data.type === "input_audio_buffer.speech_started") {
         session.currentTranslationText = "";
+        session.emittedTranslationDelta = false;
       }
 
       if (data.type === "response.done") {
@@ -177,6 +215,7 @@ export class SpeakerVoiceSession {
 
   /**
    * Append base64-encoded PCM16 audio to every target-language session.
+   * Chunks that arrive while a session is still connecting are buffered and flushed on open.
    */
   appendAudio(base64Audio: string) {
     if (this.disposed) return;
@@ -189,6 +228,10 @@ export class SpeakerVoiceSession {
     for (const session of this.sessions.values()) {
       if (session.state === "open") {
         session.ws.send(message);
+      } else if (session.state === "connecting") {
+        if (session.pendingAudio.length < MAX_PENDING_AUDIO_CHUNKS) {
+          session.pendingAudio.push(base64Audio);
+        }
       }
     }
   }
@@ -202,6 +245,8 @@ export class SpeakerVoiceSession {
     for (const session of this.sessions.values()) {
       if (session.state === "open") {
         try {
+          // Flush any remaining buffer before commit
+          this.flushPendingAudio(session);
           session.ws.send(JSON.stringify({ type: "input_audio_buffer.commit" }));
         } catch {
           // ignore
@@ -228,9 +273,11 @@ export class SpeakerVoiceSession {
       } catch {
         // ignore
       }
+      session.pendingAudio = [];
     }
 
     this.sessions.clear();
+    this.seenSourceTranscripts.clear();
   }
 
   getTargetLangs(): string[] {

@@ -1,12 +1,15 @@
 import { Server, Socket } from "socket.io";
-import jwt from "jsonwebtoken";
 import { db } from "../../../packages/db/src/index.js";
-import { users, rooms, roomParticipants } from "../../../packages/db/src/schema.js";
+import { rooms, roomParticipants } from "../../../packages/db/src/schema.js";
 import { eq, and } from "drizzle-orm";
 import { logger } from "./logger.js";
 import { parseCookies } from "./middleware/auth.js";
+import { AUTH_COOKIE_NAME, verifyAuthToken } from "./services/auth-session.js";
 import { withRetry, validateSocketData, handleSocketError, isUniqueViolation } from "./services/socket-utils.js";
 import { UtteranceOrchestrator, generateUtteranceId, Participant } from "./services/utterance-orchestrator.js";
+
+/** Max base64 length for a single utterance-audio chunk (~75KB binary). */
+const MAX_UTTERANCE_AUDIO_B64 = 100_000;
 
 // Handle automatic disconnect after background timeout
 async function handleAutoDisconnect(socket: AuthenticatedSocket) {
@@ -41,15 +44,13 @@ const utteranceStartSchema = {
 };
 
 const utteranceAudioSchema = {
-  base64Audio: (v: any) => typeof v === 'string' && v.length > 0,
+  base64Audio: (v: any) =>
+    typeof v === "string" && v.length > 0 && v.length <= MAX_UTTERANCE_AUDIO_B64,
 };
 
 const roomCodeSchema = {
   roomCode: (v: any) => typeof v === 'string' && v.length === 6 && /^[A-Z0-9]+$/.test(v),
 };
-
-const JWT_SECRET = process.env.JWT_SECRET!;
-const AUTH_COOKIE_NAME = "auth_token";
 
 // Rate limiting for socket events
 const rateLimits = new Map<string, { count: number; resetTime: number }>();
@@ -113,22 +114,12 @@ export function setupSocketIO(io: Server) {
     if (!token) return next(new Error("Authentication error"));
 
     try {
-      const verified = jwt.verify(token, JWT_SECRET) as any;
-      const userId = verified.userId;
-      if (!userId) {
-        return next(new Error("Invalid token"));
+      const result = await withRetry(() => verifyAuthToken(token), 2, 500);
+      if (!result) {
+        return next(new Error("Authentication error"));
       }
 
-      const user = await withRetry(() =>
-        db.query.users.findFirst({
-          where: eq(users.id, userId),
-        }), 2, 500
-      );
-      if (!user) {
-        return next(new Error("User not found"));
-      }
-
-      socket.userId = userId;
+      socket.userId = result.user.id;
       next();
     } catch (err) {
       logger.warn("Socket authentication failed", {
@@ -413,39 +404,52 @@ export function setupSocketIO(io: Server) {
       });
     });
 
+    const clearBackgroundTimeout = () => {
+      if (socket.backgroundTimeout) {
+        clearTimeout(socket.backgroundTimeout);
+        socket.backgroundTimeout = undefined;
+      }
+    };
+
     // Handle participant status updates
     socket.on("participant-status-update", async (data: { status: 'active' | 'away' | 'disconnected' }) => {
       if (!socket.userId || !socket.roomId) return;
 
+      const allowed = data?.status === 'active' || data?.status === 'away' || data?.status === 'disconnected';
+      if (!allowed) return;
+
       socket.participantStatus = data.status;
 
-      // Update database
-      await db.update(roomParticipants)
-        .set({
+      try {
+        // Update database
+        await db.update(roomParticipants)
+          .set({
+            status: data.status,
+            lastSeen: new Date(),
+            backgroundedAt: data.status === 'away' ? new Date() : null
+          })
+          .where(and(
+            eq(roomParticipants.roomId, socket.roomId!),
+            eq(roomParticipants.userId, socket.userId!)
+          ));
+
+        // Broadcast status change to room
+        socket.to(socket.roomId).emit("participant-status-changed", {
+          userId: socket.userId,
           status: data.status,
-          lastSeen: new Date(),
-          backgroundedAt: data.status === 'away' ? new Date() : null
-        })
-        .where(and(
-          eq(roomParticipants.roomId, socket.roomId!),
-          eq(roomParticipants.userId, socket.userId!)
-        ));
+          lastSeen: new Date()
+        });
 
-      // Broadcast status change to room
-      socket.to(socket.roomId).emit("participant-status-changed", {
-        userId: socket.userId,
-        status: data.status,
-        lastSeen: new Date()
-      });
-
-      // Handle auto-disconnect for away status
-      if (data.status === 'away') {
-        socket.backgroundTimeout = setTimeout(async () => {
-          await handleAutoDisconnect(socket);
-        }, 5 * 60 * 1000); // 5 minutes
-      } else if (data.status === 'active' && socket.backgroundTimeout) {
-        clearTimeout(socket.backgroundTimeout);
-        socket.backgroundTimeout = undefined;
+        // Handle auto-disconnect for away status (always clear before setting)
+        clearBackgroundTimeout();
+        if (data.status === 'away') {
+          socket.backgroundTimeout = setTimeout(async () => {
+            socket.backgroundTimeout = undefined;
+            await handleAutoDisconnect(socket);
+          }, 5 * 60 * 1000); // 5 minutes
+        }
+      } catch (error) {
+        handleSocketError(socket, "participant-status-update", error, "Failed to update status");
       }
     });
 
@@ -462,6 +466,7 @@ export function setupSocketIO(io: Server) {
 
     socket.on("disconnect", async (reason) => {
       clearInterval(heartbeat);
+      clearBackgroundTimeout();
 
       logger.info(`User disconnected from socket`, {
         userId: socket.userId,

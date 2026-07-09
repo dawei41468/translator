@@ -9,14 +9,20 @@ const router = express.Router();
  * POST /api/tts/synthesize
  * Synthesizes text to speech using the user's preferred TTS engine.
  */
+const MAX_TTS_TEXT_LENGTH = 2000;
+
 router.post('/synthesize', authenticate, async (req, res) => {
   const { text, languageCode, voiceName, ssmlGender } = req.body;
 
-  if (!text) {
+  if (!text || typeof text !== 'string') {
     return res.status(400).json({ error: 'Text is required' });
   }
 
-  if (!languageCode) {
+  if (text.length > MAX_TTS_TEXT_LENGTH) {
+    return res.status(400).json({ error: `Text must be at most ${MAX_TTS_TEXT_LENGTH} characters` });
+  }
+
+  if (!languageCode || typeof languageCode !== 'string') {
     return res.status(400).json({ error: 'Language code is required' });
   }
 

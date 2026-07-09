@@ -40,4 +40,13 @@ i18n
     },
   });
 
+// Keep <html lang> in sync for a11y and SEO
+const syncHtmlLang = (lng: string) => {
+  if (typeof document !== 'undefined') {
+    document.documentElement.lang = lng.split('-')[0] || 'en';
+  }
+};
+syncHtmlLang(i18n.language);
+i18n.on('languageChanged', syncHtmlLang);
+
 export default i18n;

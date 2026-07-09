@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { Mic, MicOff, Volume2, AlertCircle, RotateCcw } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { LANGUAGES, formatLanguageLabel } from "@/lib/languages";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,6 +15,8 @@ import {
 import { AudioWaveform } from "@/components/AudioWaveform";
 import { useAudioVisualizer } from "@/lib/useAudioVisualizer";
 import { useS2SAudioPlayer } from "@/lib/audio-worklet/useS2SAudioPlayer";
+import { useWakeLock } from "@/lib/useWakeLock";
+import { haptics } from "@/lib/haptics";
 import captureProcessorSource from "@/lib/audio-worklet/practice-capture-processor.js?raw";
 import { cn } from "@/lib/utils";
 
@@ -26,6 +29,7 @@ type PracticeError = {
 };
 
 const Practice = () => {
+  const { t } = useTranslation();
   const [homeLang, setHomeLang] = useState("en");
   const [targetLang, setTargetLang] = useState("zh");
   const [isPracticing, setIsPracticing] = useState(false);
@@ -34,6 +38,8 @@ const Practice = () => {
   const [translatedText, setTranslatedText] = useState<string>("");
   const [error, setError] = useState<PracticeError | null>(null);
   const [visualizerValues, setVisualizerValues] = useState<number[]>([]);
+
+  useWakeLock(isPracticing);
 
   const homeLanguage = LANGUAGES.find(l => l.code === homeLang);
   const targetLanguage = LANGUAGES.find(l => l.code === targetLang);
@@ -198,16 +204,16 @@ const Practice = () => {
 
         if (data.type === "error") {
           console.error('[Practice] Grok Voice error:', data);
-          const message = data.error?.message || data.message || "An error occurred in the voice session.";
-          setFatalError("Voice error", message);
+          const message = data.error?.message || data.message || t('error.generic');
+          setFatalError(t('practice.error.voiceTitle'), message);
         }
       };
 
       ws.onerror = (err) => {
         console.error('[Practice] WebSocket error:', err);
         setFatalError(
-          "Voice connection failed",
-          "Could not connect to the voice service. Please check your network and try again."
+          t('practice.error.connectionTitle'),
+          t('practice.error.connectionMessage')
         );
       };
 
@@ -215,16 +221,16 @@ const Practice = () => {
         console.log('[Practice] WebSocket closed:', event.code, event.reason);
         if (isPracticingRef.current) {
           setFatalError(
-            "Voice session ended",
-            "The connection to the voice service closed unexpectedly."
+            t('practice.error.sessionEndedTitle'),
+            t('practice.error.sessionEndedMessage')
           );
         }
       };
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to start voice practice.";
-      setFatalError("Could not start practice", message);
+      const message = err instanceof Error ? err.message : t('error.generic');
+      setFatalError(t('practice.error.startTitle'), message);
     }
-  }, [homeLang, targetLang, playAudioChunk, setFatalError]);
+  }, [homeLang, targetLang, playAudioChunk, setFatalError, t]);
 
   const startAudioCapture = async (ws: WebSocket) => {
     try {
@@ -291,15 +297,17 @@ const Practice = () => {
 
       setStatus("listening");
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Microphone access was denied or unavailable.";
-      setFatalError("Microphone error", message);
+      const message = err instanceof Error ? err.message : t('practice.error.micMessage');
+      setFatalError(t('practice.error.micTitle'), message);
     }
   };
 
   const togglePractice = async () => {
     if (isPracticing) {
+      haptics.heavy();
       stopPractice();
     } else {
+      haptics.medium();
       setError(null);
       isPracticingRef.current = true;
       setIsPracticing(true);
@@ -317,33 +325,32 @@ const Practice = () => {
   }, [stopPracticeInternal]);
 
   const statusLabel = {
-    idle: "Ready",
-    connecting: "Connecting...",
-    listening: "Listening...",
-    processing: "Translating...",
-    speaking: "Speaking back...",
+    idle: t('practice.status.idle'),
+    connecting: t('practice.status.connecting'),
+    listening: t('practice.status.listening'),
+    processing: t('practice.status.processing'),
+    speaking: t('practice.status.speaking'),
   }[status];
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-2xl">
       <div className="flex items-center gap-3 mb-8">
         <Mic className="h-8 w-8" />
-        <h1 className="text-3xl font-bold">Practice</h1>
+        <h1 className="text-3xl font-bold">{t('practice.title')}</h1>
       </div>
 
       <p className="text-muted-foreground mb-8">
-        Speak in your language. Hear the natural translation spoken back in the target language.
-        Perfect for testing and deliberate language practice.
+        {t('practice.description')}
       </p>
 
       {/* Language Pair Selection */}
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle>Language Pair</CardTitle>
+          <CardTitle>{t('practice.languagePair')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
           <div>
-            <Label htmlFor="home-lang">I speak (Home language)</Label>
+            <Label htmlFor="home-lang">{t('practice.iSpeak')}</Label>
             <Select value={homeLang} onValueChange={setHomeLang} disabled={isPracticing}>
               <SelectTrigger id="home-lang" className="mt-2">
                 <SelectValue />
@@ -359,7 +366,7 @@ const Practice = () => {
           </div>
 
           <div>
-            <Label htmlFor="target-lang">I want to hear (Target language)</Label>
+            <Label htmlFor="target-lang">{t('practice.iHear')}</Label>
             <Select value={targetLang} onValueChange={setTargetLang} disabled={isPracticing}>
               <SelectTrigger id="target-lang" className="mt-2">
                 <SelectValue />
@@ -396,6 +403,7 @@ const Practice = () => {
                 variant={isPracticing ? "destructive" : "default"}
                 onClick={togglePractice}
                 disabled={status === "connecting"}
+                aria-label={isPracticing ? t('practice.micStop') : t('practice.micStart')}
               >
                 {isPracticing ? (
                   <MicOff className="h-8 w-8" />
@@ -411,9 +419,9 @@ const Practice = () => {
 
             <div className="text-center">
               <div className="text-sm text-muted-foreground">
-                {isPracticing ? "Tap to stop" : "Tap to start practicing"}
+                {isPracticing ? t('practice.tapToStop') : t('practice.tapToStart')}
               </div>
-              <div className="mt-1 text-lg font-medium capitalize">
+              <div className="mt-1 text-lg font-medium">
                 {statusLabel}
               </div>
             </div>
@@ -436,7 +444,7 @@ const Practice = () => {
               {error.canRetry && (
                 <Button variant="outline" onClick={togglePractice}>
                   <RotateCcw className="h-4 w-4 mr-2" />
-                  Try again
+                  {t('practice.tryAgain')}
                 </Button>
               )}
             </div>
@@ -449,14 +457,14 @@ const Practice = () => {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Volume2 className="h-5 w-5" /> Last Exchange
+              <Volume2 className="h-5 w-5" /> {t('practice.lastExchange')}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {lastUtterance && (
               <div>
                 <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">
-                  You said ({homeLanguage?.nativeName})
+                  {t('practice.youSaid', { language: homeLanguage?.nativeName })}
                 </div>
                 <div className="rounded-md bg-muted p-3 text-sm">{lastUtterance}</div>
               </div>
@@ -465,7 +473,7 @@ const Practice = () => {
             {translatedText && (
               <div>
                 <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">
-                  Heard in {targetLanguage?.nativeName}
+                  {t('practice.heardIn', { language: targetLanguage?.nativeName })}
                 </div>
                 <div className="rounded-md bg-primary/10 p-3 text-sm font-medium">
                   {translatedText}
@@ -477,7 +485,7 @@ const Practice = () => {
       )}
 
       <div className="mt-8 text-center text-xs text-muted-foreground">
-        Powered by Grok Voice speech-to-speech. Uses server VAD for natural turn-taking.
+        {t('practice.footer')}
       </div>
     </div>
   );

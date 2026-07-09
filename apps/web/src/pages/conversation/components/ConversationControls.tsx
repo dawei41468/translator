@@ -162,7 +162,11 @@ export function ConversationControls({
         />
       )}
 
-      <footer className="relative z-40 p-4 pb-8 sm:p-6 overscroll-contain touch-none" role="contentinfo">
+      <footer
+        className="relative z-40 p-4 sm:p-6 overscroll-contain touch-none"
+        style={{ paddingBottom: "max(2rem, env(safe-area-inset-bottom))" }}
+        role="contentinfo"
+      >
       <div className="mb-4 flex flex-col items-center gap-2">
         {!canStartRecording && (
           <div className="text-center">

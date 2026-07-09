@@ -15,7 +15,10 @@ const BottomNav = () => {
 
   return (
     <>
-      <nav className="fixed bottom-0 left-0 right-0 border-t border-border z-50 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/70">
+      <nav
+        className="fixed bottom-0 left-0 right-0 border-t border-border z-50 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/70"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
         <div className="flex justify-around items-center h-16 px-4">
           {navItems.map(({ to, label, icon: Icon }) => {
             const isActive = location.pathname === to;
@@ -23,6 +26,7 @@ const BottomNav = () => {
               <Link
                 key={to}
                 to={to}
+                aria-current={isActive ? "page" : undefined}
                 className={cn(
                   "flex flex-col items-center justify-center flex-1 py-2 px-1 text-xs font-medium transition-colors",
                   isActive

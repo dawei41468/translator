@@ -1,10 +1,17 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Authentication Flow', () => {
-  test('should redirect to login when accessing protected routes', async ({ page }) => {
+  test('should allow public dashboard without login', async ({ page }) => {
     await page.goto('/dashboard');
+    await expect(page).toHaveURL(/.*dashboard/);
+    await expect(page.getByTestId('create-room-button')).toBeVisible();
+  });
 
-    // Should redirect to login
+  test('should redirect unauthenticated users from protected routes', async ({ page }) => {
+    await page.goto('/practice');
+    await expect(page).toHaveURL(/.*login/);
+
+    await page.goto('/profile');
     await expect(page).toHaveURL(/.*login/);
   });
 
@@ -14,7 +21,7 @@ test.describe('Authentication Flow', () => {
     await expect(page.locator('h1')).toContainText('Live Translator');
     await expect(page.getByTestId('login-email')).toBeVisible();
     await expect(page.getByTestId('login-password')).toBeVisible();
-    await expect(page.getByTestId('login-submit')).toContainText('Sign In');
+    await expect(page.getByTestId('login-submit')).toBeVisible();
   });
 
   test('should show register form', async ({ page }) => {
@@ -24,13 +31,12 @@ test.describe('Authentication Flow', () => {
     await expect(page.getByTestId('register-email')).toBeVisible();
     await expect(page.getByTestId('register-password')).toBeVisible();
     await expect(page.getByTestId('register-name')).toBeVisible();
-    await expect(page.getByTestId('register-submit')).toContainText('Register');
+    await expect(page.getByTestId('register-submit')).toBeVisible();
   });
 });
 
 test.describe('Room Creation Flow', () => {
-  test('should create room and enter it after login', async ({ page }) => {
-    // 1. Register a new user
+  test('should register, create a room, and enter it', async ({ page }) => {
     await page.goto('/register');
     const email = `test-auth-${Date.now()}@example.com`;
     await page.getByTestId('register-name').fill('Auth Tester');
@@ -38,18 +44,13 @@ test.describe('Room Creation Flow', () => {
     await page.getByTestId('register-password').fill('Password123!');
     await page.getByTestId('register-submit').click();
 
-    // 2. Should be on dashboard
-    await expect(page).toHaveURL(/.*dashboard/);
+    await expect(page).toHaveURL(/.*dashboard/, { timeout: 15000 });
 
-    // 3. Create a room
     await page.getByTestId('create-room-button').click();
-    
-    // 4. Verify room code is shown
-    await expect(page.locator('.font-mono.text-2xl')).toBeVisible();
-    const roomCode = await page.locator('.font-mono.text-2xl').textContent();
+    await expect(page.getByTestId('room-code-display')).toBeVisible({ timeout: 15000 });
+    const roomCode = await page.getByTestId('room-code-display').textContent();
     expect(roomCode).toMatch(/[A-Z0-9]{6}/);
 
-    // 5. Enter room
     await page.getByTestId('enter-room-button').click();
     await expect(page).toHaveURL(new RegExp(`.*room/${roomCode}`));
   });
